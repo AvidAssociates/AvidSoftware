@@ -1,23 +1,28 @@
-# Avid Leaderboard
+# Avid Send-Out Tracker
 
-A sendout and billing tracker for Avid Associates, meant to replace the paper
-sendout log and whiteboard. Built with Next.js and Netlify DB (Postgres).
+A send-out pipeline tracker for Avid Associates: log candidates as they move
+through sent → interview → offer → placed, or mark them declined. Built with
+Next.js and Netlify DB (Postgres).
 
-## Pages
+## App
 
-- `/` — TV leaderboard. Auto-refreshes every 30 seconds; ranks recruiters by
-  total cash-in YTD (billings + retainers) and shows progress toward the
-  annual team goal. Intended to be left open full-screen on the office TV.
-- `/entry` — form to log a sendout, billing, or retainer.
-- `/log` — table of all sendouts and billings, with delete support.
-- `/settings` — manage the recruiter roster and the annual team goal.
+Single page at `/`. Sign in by picking (or typing) a name — stays signed in
+on that device. From there:
+
+- Log a new send-out with candidate, company, role, interview type/round,
+  and the team members working it.
+- Advance an entry's stage by clicking a dot on its progress track, or mark
+  it declined.
+- Filter by team member, stage, or search text; switch months with the
+  header arrows.
+- Toggle light/dark theme (persisted per device).
 
 ## Data model
 
 Postgres database provisioned automatically via Netlify DB (`@netlify/database`).
-Schema and seed data live in `netlify/database/migrations/`. Four tables:
-`recruiters`, `sendouts`, `billings`, `retainers`, plus a `settings` key/value
-table for the annual goal.
+Schema lives in `netlify/database/migrations/`. Single `pipeline_entries` table
+holding each send-out's candidate/company/role, interview details, team,
+stage, and declined flag.
 
 ## Running locally
 
@@ -26,8 +31,7 @@ npm install
 netlify dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). For the TV, open `/`
-in a browser in kiosk/full-screen mode.
+Open [http://localhost:3000](http://localhost:3000).
 
 ## Deployment
 

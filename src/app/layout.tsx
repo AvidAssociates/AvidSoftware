@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import NavBar from "@/components/NavBar";
 
 export const metadata: Metadata = {
-  title: "Avid Leaderboard",
-  description: "Sendout and billing tracker for Avid Associates",
+  title: "Avid Associates — Send-Out Tracker",
+  description: "Send-out pipeline tracker for Avid Associates",
 };
 
 export default function RootLayout({
@@ -14,10 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col bg-slate-950 text-slate-100">
-        <NavBar />
-        <main className="flex-1">{children}</main>
-      </body>
+      <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
 }

@@ -4,3 +4,16 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial,
     Helvetica, sans-serif;
 }
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+select::-ms-expand {
+  display: none;
+}
+::placeholder {
+  color: inherit;
+  opacity: 0.45;
+}
