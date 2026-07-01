@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createSendout, listSendouts } from "@/lib/queries";
 
 export async function GET() {
-  return NextResponse.json(listSendouts());
+  return NextResponse.json(await listSendouts());
 }
 
 export async function POST(request: Request) {
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  const sendout = createSendout({
+  const sendout = await createSendout({
     date: body.date,
     candidate: body.candidate,
     company: body.company,

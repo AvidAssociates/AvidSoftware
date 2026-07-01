@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAnnualGoal, setAnnualGoal } from "@/lib/queries";
 
 export async function GET() {
-  return NextResponse.json({ annualGoal: getAnnualGoal() });
+  return NextResponse.json({ annualGoal: await getAnnualGoal() });
 }
 
 export async function POST(request: Request) {
@@ -14,6 +14,6 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  setAnnualGoal(value);
+  await setAnnualGoal(value);
   return NextResponse.json({ annualGoal: value });
 }

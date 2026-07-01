@@ -3,10 +3,10 @@ import LogTables from "./LogTables";
 
 export const dynamic = "force-dynamic";
 
-export default function LogPage() {
-  const recruiters = listRecruiters(false);
-  const sendouts = listSendouts();
-  const billings = listBillings();
+export default async function LogPage() {
+  const recruiters = await listRecruiters(false);
+  const sendouts = await listSendouts();
+  const billings = await listBillings();
   return (
     <LogTables
       recruiters={recruiters}

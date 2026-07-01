@@ -1,7 +1,7 @@
 # Avid Leaderboard
 
 A sendout and billing tracker for Avid Associates, meant to replace the paper
-sendout log and whiteboard. Built with Next.js and a local SQLite database.
+sendout log and whiteboard. Built with Next.js and Netlify DB (Postgres).
 
 ## Pages
 
@@ -14,26 +14,23 @@ sendout log and whiteboard. Built with Next.js and a local SQLite database.
 
 ## Data model
 
-SQLite database stored at `data/avid.db` (created automatically on first
-run, ignored by git). Four tables: `recruiters`, `sendouts`, `billings`,
-`retainers`, plus a `settings` key/value table for the annual goal.
+Postgres database provisioned automatically via Netlify DB (`@netlify/database`).
+Schema and seed data live in `netlify/database/migrations/`. Four tables:
+`recruiters`, `sendouts`, `billings`, `retainers`, plus a `settings` key/value
+table for the annual goal.
 
 ## Running locally
 
 ```bash
 npm install
-npm run dev
+netlify dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). For the TV, open `/`
 in a browser in kiosk/full-screen mode.
 
-## Production
+## Deployment
 
-```bash
-npm run build
-npm run start
-```
-
-Set `DATA_DIR` to control where the SQLite file is stored (defaults to
-`./data`).
+Deployed on Netlify. Pushing to the linked branch triggers a build; database
+migrations run automatically before each deploy is published. Each deploy
+preview gets its own isolated database branch.

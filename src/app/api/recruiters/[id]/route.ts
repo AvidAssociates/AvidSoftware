@@ -7,6 +7,6 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const body = await request.json();
-  setRecruiterActive(Number(id), Boolean(body.active));
+  await setRecruiterActive(Number(id), Boolean(body.active));
   return NextResponse.json({ ok: true });
 }

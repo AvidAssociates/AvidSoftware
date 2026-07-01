@@ -1,43 +1,41 @@
 import { getDb } from "./db";
 import { Recruiter, Sendout, Billing, Retainer, LeaderboardRow } from "./types";
 
-export function listRecruiters(activeOnly = true): Recruiter[] {
+export async function listRecruiters(activeOnly = true): Promise<Recruiter[]> {
   const db = getDb();
-  const sql = activeOnly
-    ? "SELECT * FROM recruiters WHERE active = 1 ORDER BY sort_order, name"
-    : "SELECT * FROM recruiters ORDER BY sort_order, name";
-  return db.prepare(sql).all() as Recruiter[];
+  const rows = activeOnly
+    ? await db.sql`SELECT * FROM recruiters WHERE active = 1 ORDER BY sort_order, name`
+    : await db.sql`SELECT * FROM recruiters ORDER BY sort_order, name`;
+  return rows as Recruiter[];
 }
 
-export function createRecruiter(name: string): Recruiter {
+export async function createRecruiter(name: string): Promise<Recruiter> {
   const db = getDb();
-  const maxOrder = db
-    .prepare("SELECT COALESCE(MAX(sort_order), -1) as m FROM recruiters")
-    .get() as { m: number };
-  const info = db
-    .prepare("INSERT INTO recruiters (name, sort_order) VALUES (?, ?)")
-    .run(name, maxOrder.m + 1);
-  return db
-    .prepare("SELECT * FROM recruiters WHERE id = ?")
-    .get(info.lastInsertRowid) as Recruiter;
+  const [maxOrder] = (await db.sql`
+    SELECT COALESCE(MAX(sort_order), -1) as m FROM recruiters
+  `) as { m: number }[];
+  const [recruiter] = (await db.sql`
+    INSERT INTO recruiters (name, sort_order)
+    VALUES (${name}, ${maxOrder.m + 1})
+    RETURNING *
+  `) as Recruiter[];
+  return recruiter;
 }
 
-export function setRecruiterActive(id: number, active: boolean) {
+export async function setRecruiterActive(id: number, active: boolean) {
   const db = getDb();
-  db.prepare("UPDATE recruiters SET active = ? WHERE id = ?").run(
-    active ? 1 : 0,
-    id
-  );
+  await db.sql`UPDATE recruiters SET active = ${active ? 1 : 0} WHERE id = ${id}`;
 }
 
-export function listSendouts(limit = 500): Sendout[] {
+export async function listSendouts(limit = 500): Promise<Sendout[]> {
   const db = getDb();
-  return db
-    .prepare("SELECT * FROM sendouts ORDER BY date DESC, id DESC LIMIT ?")
-    .all(limit) as Sendout[];
+  const rows = await db.sql`
+    SELECT * FROM sendouts ORDER BY date DESC, id DESC LIMIT ${limit}
+  `;
+  return rows as Sendout[];
 }
 
-export function createSendout(input: {
+export async function createSendout(input: {
   date: string;
   candidate: string;
   company: string;
@@ -46,40 +44,38 @@ export function createSendout(input: {
   recruiter_id: number;
   am_recruiter_id?: number | null;
   notes?: string;
-}): Sendout {
+}): Promise<Sendout> {
   const db = getDb();
-  const info = db
-    .prepare(
-      `INSERT INTO sendouts (date, candidate, company, role, type, recruiter_id, am_recruiter_id, notes)
-       VALUES (@date, @candidate, @company, @role, @type, @recruiter_id, @am_recruiter_id, @notes)`
+  const [sendout] = (await db.sql`
+    INSERT INTO sendouts (date, candidate, company, role, type, recruiter_id, am_recruiter_id, notes)
+    VALUES (
+      ${input.date},
+      ${input.candidate},
+      ${input.company},
+      ${input.role ?? null},
+      ${input.type ?? null},
+      ${input.recruiter_id},
+      ${input.am_recruiter_id ?? null},
+      ${input.notes ?? null}
     )
-    .run({
-      date: input.date,
-      candidate: input.candidate,
-      company: input.company,
-      role: input.role ?? null,
-      type: input.type ?? null,
-      recruiter_id: input.recruiter_id,
-      am_recruiter_id: input.am_recruiter_id ?? null,
-      notes: input.notes ?? null,
-    });
-  return db
-    .prepare("SELECT * FROM sendouts WHERE id = ?")
-    .get(info.lastInsertRowid) as Sendout;
+    RETURNING *
+  `) as Sendout[];
+  return sendout;
 }
 
-export function deleteSendout(id: number) {
-  getDb().prepare("DELETE FROM sendouts WHERE id = ?").run(id);
+export async function deleteSendout(id: number) {
+  await getDb().sql`DELETE FROM sendouts WHERE id = ${id}`;
 }
 
-export function listBillings(limit = 500): Billing[] {
+export async function listBillings(limit = 500): Promise<Billing[]> {
   const db = getDb();
-  return db
-    .prepare("SELECT * FROM billings ORDER BY date DESC, id DESC LIMIT ?")
-    .all(limit) as Billing[];
+  const rows = await db.sql`
+    SELECT * FROM billings ORDER BY date DESC, id DESC LIMIT ${limit}
+  `;
+  return rows as Billing[];
 }
 
-export function createBilling(input: {
+export async function createBilling(input: {
   date: string;
   recruiter_id: number;
   amount: number;
@@ -88,77 +84,73 @@ export function createBilling(input: {
   candidate?: string;
   company?: string;
   notes?: string;
-}): Billing {
+}): Promise<Billing> {
   const db = getDb();
-  const info = db
-    .prepare(
-      `INSERT INTO billings (date, recruiter_id, amount, category, personal, candidate, company, notes)
-       VALUES (@date, @recruiter_id, @amount, @category, @personal, @candidate, @company, @notes)`
+  const [billing] = (await db.sql`
+    INSERT INTO billings (date, recruiter_id, amount, category, personal, candidate, company, notes)
+    VALUES (
+      ${input.date},
+      ${input.recruiter_id},
+      ${input.amount},
+      ${input.category ?? "placement"},
+      ${input.personal === false ? 0 : 1},
+      ${input.candidate ?? null},
+      ${input.company ?? null},
+      ${input.notes ?? null}
     )
-    .run({
-      date: input.date,
-      recruiter_id: input.recruiter_id,
-      amount: input.amount,
-      category: input.category ?? "placement",
-      personal: input.personal === false ? 0 : 1,
-      candidate: input.candidate ?? null,
-      company: input.company ?? null,
-      notes: input.notes ?? null,
-    });
-  return db
-    .prepare("SELECT * FROM billings WHERE id = ?")
-    .get(info.lastInsertRowid) as Billing;
+    RETURNING *
+  `) as Billing[];
+  return billing;
 }
 
-export function deleteBilling(id: number) {
-  getDb().prepare("DELETE FROM billings WHERE id = ?").run(id);
+export async function deleteBilling(id: number) {
+  await getDb().sql`DELETE FROM billings WHERE id = ${id}`;
 }
 
-export function listRetainers(limit = 500): Retainer[] {
+export async function listRetainers(limit = 500): Promise<Retainer[]> {
   const db = getDb();
-  return db
-    .prepare("SELECT * FROM retainers ORDER BY date DESC, id DESC LIMIT ?")
-    .all(limit) as Retainer[];
+  const rows = await db.sql`
+    SELECT * FROM retainers ORDER BY date DESC, id DESC LIMIT ${limit}
+  `;
+  return rows as Retainer[];
 }
 
-export function createRetainer(input: {
+export async function createRetainer(input: {
   date: string;
   recruiter_id: number;
   amount: number;
   company?: string;
   notes?: string;
-}): Retainer {
+}): Promise<Retainer> {
   const db = getDb();
-  const info = db
-    .prepare(
-      `INSERT INTO retainers (date, recruiter_id, amount, company, notes)
-       VALUES (@date, @recruiter_id, @amount, @company, @notes)`
+  const [retainer] = (await db.sql`
+    INSERT INTO retainers (date, recruiter_id, amount, company, notes)
+    VALUES (
+      ${input.date},
+      ${input.recruiter_id},
+      ${input.amount},
+      ${input.company ?? null},
+      ${input.notes ?? null}
     )
-    .run({
-      date: input.date,
-      recruiter_id: input.recruiter_id,
-      amount: input.amount,
-      company: input.company ?? null,
-      notes: input.notes ?? null,
-    });
-  return db
-    .prepare("SELECT * FROM retainers WHERE id = ?")
-    .get(info.lastInsertRowid) as Retainer;
+    RETURNING *
+  `) as Retainer[];
+  return retainer;
 }
 
-export function getAnnualGoal(): number {
+export async function getAnnualGoal(): Promise<number> {
   const db = getDb();
-  const row = db
-    .prepare("SELECT value FROM settings WHERE key = 'annual_goal'")
-    .get() as { value: string } | undefined;
+  const [row] = (await db.sql`
+    SELECT value FROM settings WHERE key = 'annual_goal'
+  `) as { value: string }[];
   return row ? Number(row.value) : 1300000;
 }
 
-export function setAnnualGoal(value: number) {
+export async function setAnnualGoal(value: number) {
   const db = getDb();
-  db.prepare(
-    "INSERT INTO settings (key, value) VALUES ('annual_goal', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
-  ).run(String(value));
+  await db.sql`
+    INSERT INTO settings (key, value) VALUES ('annual_goal', ${String(value)})
+    ON CONFLICT (key) DO UPDATE SET value = excluded.value
+  `;
 }
 
 function monthBounds(ref = new Date()) {
@@ -176,66 +168,64 @@ function yearBounds(ref = new Date()) {
   return { start, end };
 }
 
-export function getLeaderboard(): {
+export async function getLeaderboard(): Promise<{
   rows: LeaderboardRow[];
   annualGoal: number;
   teamCashYtd: number;
   teamBillingsMonth: number;
-} {
+}> {
   const db = getDb();
-  const recruiters = listRecruiters(true);
+  const recruiters = await listRecruiters(true);
   const { start: mStart, end: mEnd } = monthBounds();
   const { start: yStart, end: yEnd } = yearBounds();
 
-  const sendoutCount = db.prepare(
-    `SELECT COUNT(*) as c FROM sendouts WHERE recruiter_id = ? AND date >= ? AND date < ?`
-  );
-  const billingSum = db.prepare(
-    `SELECT COALESCE(SUM(amount),0) as s FROM billings WHERE recruiter_id = ? AND date >= ? AND date < ?`
-  );
-  const billingSumPersonal = db.prepare(
-    `SELECT COALESCE(SUM(amount),0) as s FROM billings WHERE recruiter_id = ? AND personal = 1 AND date >= ? AND date < ?`
-  );
-  const retainerSum = db.prepare(
-    `SELECT COALESCE(SUM(amount),0) as s FROM retainers WHERE recruiter_id = ? AND date >= ? AND date < ?`
-  );
+  const rows: LeaderboardRow[] = await Promise.all(
+    recruiters.map(async (recruiter) => {
+      const [sendoutsMonthRow] = (await db.sql`
+        SELECT COUNT(*) as c FROM sendouts
+        WHERE recruiter_id = ${recruiter.id} AND date >= ${mStart} AND date < ${mEnd}
+      `) as { c: number }[];
+      const [sendoutsYtdRow] = (await db.sql`
+        SELECT COUNT(*) as c FROM sendouts
+        WHERE recruiter_id = ${recruiter.id} AND date >= ${yStart} AND date < ${yEnd}
+      `) as { c: number }[];
+      const [billingsMonthRow] = (await db.sql`
+        SELECT COALESCE(SUM(amount),0) as s FROM billings
+        WHERE recruiter_id = ${recruiter.id} AND date >= ${mStart} AND date < ${mEnd}
+      `) as { s: number }[];
+      const [billingsYtdTotalRow] = (await db.sql`
+        SELECT COALESCE(SUM(amount),0) as s FROM billings
+        WHERE recruiter_id = ${recruiter.id} AND date >= ${yStart} AND date < ${yEnd}
+      `) as { s: number }[];
+      const [billingsYtdPersonalRow] = (await db.sql`
+        SELECT COALESCE(SUM(amount),0) as s FROM billings
+        WHERE recruiter_id = ${recruiter.id} AND personal = 1 AND date >= ${yStart} AND date < ${yEnd}
+      `) as { s: number }[];
+      const [retainersYtdRow] = (await db.sql`
+        SELECT COALESCE(SUM(amount),0) as s FROM retainers
+        WHERE recruiter_id = ${recruiter.id} AND date >= ${yStart} AND date < ${yEnd}
+      `) as { s: number }[];
 
-  const rows: LeaderboardRow[] = recruiters.map((recruiter) => {
-    const sendoutsMonth = (
-      sendoutCount.get(recruiter.id, mStart, mEnd) as { c: number }
-    ).c;
-    const sendoutsYtd = (
-      sendoutCount.get(recruiter.id, yStart, yEnd) as { c: number }
-    ).c;
-    const billingsMonth = (
-      billingSum.get(recruiter.id, mStart, mEnd) as { s: number }
-    ).s;
-    const billingsYtdTotal = (
-      billingSum.get(recruiter.id, yStart, yEnd) as { s: number }
-    ).s;
-    const billingsYtdPersonal = (
-      billingSumPersonal.get(recruiter.id, yStart, yEnd) as { s: number }
-    ).s;
-    const retainersYtd = (
-      retainerSum.get(recruiter.id, yStart, yEnd) as { s: number }
-    ).s;
+      const billingsYtdTotal = Number(billingsYtdTotalRow.s);
+      const retainersYtd = Number(retainersYtdRow.s);
 
-    return {
-      recruiter,
-      sendoutsMonth,
-      sendoutsYtd,
-      billingsMonth,
-      billingsYtdPersonal,
-      billingsYtdTotal,
-      retainersYtd,
-      totalCashYtd: billingsYtdTotal + retainersYtd,
-    };
-  });
+      return {
+        recruiter,
+        sendoutsMonth: Number(sendoutsMonthRow.c),
+        sendoutsYtd: Number(sendoutsYtdRow.c),
+        billingsMonth: Number(billingsMonthRow.s),
+        billingsYtdPersonal: Number(billingsYtdPersonalRow.s),
+        billingsYtdTotal,
+        retainersYtd,
+        totalCashYtd: billingsYtdTotal + retainersYtd,
+      };
+    })
+  );
 
   rows.sort((a, b) => b.totalCashYtd - a.totalCashYtd);
 
   const teamCashYtd = rows.reduce((sum, r) => sum + r.totalCashYtd, 0);
   const teamBillingsMonth = rows.reduce((sum, r) => sum + r.billingsMonth, 0);
 
-  return { rows, annualGoal: getAnnualGoal(), teamCashYtd, teamBillingsMonth };
+  return { rows, annualGoal: await getAnnualGoal(), teamCashYtd, teamBillingsMonth };
 }

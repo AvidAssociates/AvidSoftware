@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createRetainer, listRetainers } from "@/lib/queries";
 
 export async function GET() {
-  return NextResponse.json(listRetainers());
+  return NextResponse.json(await listRetainers());
 }
 
 export async function POST(request: Request) {
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  const retainer = createRetainer({
+  const retainer = await createRetainer({
     date: body.date,
     recruiter_id: Number(body.recruiter_id),
     amount,

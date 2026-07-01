@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createRecruiter, listRecruiters } from "@/lib/queries";
 
 export async function GET() {
-  return NextResponse.json(listRecruiters(false));
+  return NextResponse.json(await listRecruiters(false));
 }
 
 export async function POST(request: Request) {
@@ -11,6 +11,6 @@ export async function POST(request: Request) {
   if (!name) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
   }
-  const recruiter = createRecruiter(name);
+  const recruiter = await createRecruiter(name);
   return NextResponse.json(recruiter, { status: 201 });
 }

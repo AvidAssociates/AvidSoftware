@@ -3,7 +3,7 @@ import EntryForm from "./EntryForm";
 
 export const dynamic = "force-dynamic";
 
-export default function EntryPage() {
-  const recruiters = listRecruiters(true);
+export default async function EntryPage() {
+  const recruiters = await listRecruiters(true);
   return <EntryForm recruiters={recruiters} />;
 }

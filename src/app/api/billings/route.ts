@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createBilling, listBillings } from "@/lib/queries";
 
 export async function GET() {
-  return NextResponse.json(listBillings());
+  return NextResponse.json(await listBillings());
 }
 
 export async function POST(request: Request) {
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  const billing = createBilling({
+  const billing = await createBilling({
     date: body.date,
     recruiter_id: Number(body.recruiter_id),
     amount,

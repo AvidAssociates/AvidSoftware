@@ -3,8 +3,8 @@ import SettingsForm from "./SettingsForm";
 
 export const dynamic = "force-dynamic";
 
-export default function SettingsPage() {
-  const recruiters = listRecruiters(false);
-  const annualGoal = getAnnualGoal();
+export default async function SettingsPage() {
+  const recruiters = await listRecruiters(false);
+  const annualGoal = await getAnnualGoal();
   return <SettingsForm recruiters={recruiters} annualGoal={annualGoal} />;
 }
