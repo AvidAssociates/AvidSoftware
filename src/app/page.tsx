@@ -245,39 +245,84 @@ function Dashboard({
   const goPrevMonth = () => setMonthCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   const goNextMonth = () => setMonthCursor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
 
-  const loadData = async () => {
-    setLoading(true);
+  // Loads in the background without ever blanking the current view — only
+  // the very first mount shows the loading state.
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     const [e, b] = await Promise.all([
       getJSON<Entry[]>("/api/entries", []),
       getJSON<Billing[]>("/api/billings", []),
     ]);
     setEntries(e);
     setBillings(b);
-    setLoading(false);
+    if (!silent) setLoading(false);
   };
 
   useEffect(() => {
     // Initial fetch on mount — an effect is required here.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
+    const poll = setInterval(() => loadData(true), 30000);
+    return () => clearInterval(poll);
   }, []);
 
+  const applyEntry = (entry: Entry) =>
+    setEntries((prev) => {
+      const idx = prev.findIndex((e) => e.id === entry.id);
+      if (idx === -1) return [entry, ...prev];
+      const next = [...prev];
+      next[idx] = entry;
+      return next;
+    });
+  const applyBilling = (billing: Billing) =>
+    setBillings((prev) => {
+      const idx = prev.findIndex((b) => b.id === billing.id);
+      if (idx === -1) return [billing, ...prev];
+      const next = [...prev];
+      next[idx] = billing;
+      return next;
+    });
+
+  // Every mutation updates local state immediately (no reload, no flicker),
+  // then reconciles with the server's response in the background.
   const saveEntry = async (entry: Entry, isNew: boolean) => {
+    applyEntry(entry);
     const body = isNew ? entry : { ...entry, updatedBy: user };
-    await send(isNew ? "/api/entries" : `/api/entries/${entry.id}`, isNew ? "POST" : "PUT", body);
-    await loadData();
+    const res = await send(isNew ? "/api/entries" : `/api/entries/${entry.id}`, isNew ? "POST" : "PUT", body);
+    if (res.ok) applyEntry(await res.json());
+  };
+  const advanceStage = async (entry: Entry, stage: Stage) => {
+    const optimistic: Entry = {
+      ...entry,
+      stage,
+      declined: false,
+      stageHistory:
+        stage === entry.stage
+          ? entry.stageHistory
+          : [...entry.stageHistory, { stage, date: todayISO(), by: user }],
+    };
+    applyEntry(optimistic);
+    const res = await send(`/api/entries/${entry.id}`, "PUT", { ...optimistic, updatedBy: user });
+    if (res.ok) applyEntry(await res.json());
+  };
+  const toggleDeclined = async (entry: Entry) => {
+    const optimistic = { ...entry, declined: !entry.declined };
+    applyEntry(optimistic);
+    const res = await send(`/api/entries/${entry.id}`, "PUT", { ...optimistic, updatedBy: user });
+    if (res.ok) applyEntry(await res.json());
   };
   const deleteEntry = async (id: string) => {
+    setEntries((prev) => prev.filter((e) => e.id !== id));
     await send(`/api/entries/${id}`, "DELETE");
-    await loadData();
   };
   const saveBilling = async (billing: Billing, isNew: boolean) => {
-    await send(isNew ? "/api/billings" : `/api/billings/${billing.id}`, isNew ? "POST" : "PUT", billing);
-    await loadData();
+    applyBilling(billing);
+    const res = await send(isNew ? "/api/billings" : `/api/billings/${billing.id}`, isNew ? "POST" : "PUT", billing);
+    if (res.ok) applyBilling(await res.json());
   };
   const deleteBilling = async (id: string) => {
+    setBillings((prev) => prev.filter((b) => b.id !== id));
     await send(`/api/billings/${id}`, "DELETE");
-    await loadData();
   };
 
   const monthEntries = useMemo(() => entries.filter((e) => e.date?.startsWith(monthKey)), [entries, monthKey]);
@@ -349,27 +394,27 @@ function Dashboard({
           <span style={S.wordmarkSmall}>Avid</span>
         </div>
         <div style={S.monthSwitcher}>
-          <button style={S.iconGhost} onClick={goPrevMonth} title="Previous month">
+          <button className="avid-btn" style={S.iconGhost} onClick={goPrevMonth} title="Previous month">
             <ChevronLeft size={16} />
           </button>
           <span style={S.monthLabel}>{monthLabel}</span>
-          <button style={S.iconGhost} onClick={goNextMonth} title="Next month">
+          <button className="avid-btn" style={S.iconGhost} onClick={goNextMonth} title="Next month">
             <ChevronRight size={16} />
           </button>
         </div>
         <div style={S.headerRight}>
-          <button style={S.iconGhost} onClick={() => setTvOpen(true)} title="TV mode">
+          <button className="avid-btn" style={S.iconGhost} onClick={() => setTvOpen(true)} title="TV mode">
             <Tv size={17} />
           </button>
-          <button style={S.iconGhost} onClick={onToggleTheme} title={isDark ? "Light mode" : "Dark mode"}>
+          <button className="avid-btn" style={S.iconGhost} onClick={onToggleTheme} title={isDark ? "Light mode" : "Dark mode"}>
             {isDark ? <Sun size={16} /> : <Moon size={16} />}
           </button>
           {isAdmin && (
-            <button style={S.iconGhost} onClick={() => setShowUserMgr(true)} title="Manage users">
+            <button className="avid-btn" style={S.iconGhost} onClick={() => setShowUserMgr(true)} title="Manage users">
               <Settings size={16} />
             </button>
           )}
-          <button style={S.iconGhost} onClick={onSwitchUser} title="Switch user">
+          <button className="avid-btn" style={S.iconGhost} onClick={onSwitchUser} title="Switch user">
             <LogOut size={15} />
           </button>
         </div>
@@ -399,12 +444,14 @@ function Dashboard({
       <div style={S.toolbar}>
         <div style={S.segWrap}>
           <button
+            className="avid-btn"
             style={view === "sendouts" ? S.segBtnActive : S.segBtn}
             onClick={() => setView("sendouts")}
           >
             Send-Outs
           </button>
           <button
+            className="avid-btn"
             style={view === "billings" ? S.segBtnActive : S.segBtn}
             onClick={() => setView("billings")}
           >
@@ -431,7 +478,7 @@ function Dashboard({
           />
         )}
         <button
-          style={S.primaryBtn}
+          className="avid-btn" style={S.primaryBtn}
           onClick={() => {
             if (view === "sendouts") {
               setEditingEntry(null);
@@ -474,8 +521,8 @@ function Dashboard({
                     setShowEntryForm(true);
                   }}
                   onDelete={() => deleteEntry(e.id)}
-                  onSetStage={(stage) => saveEntry({ ...e, stage, declined: false }, false)}
-                  onToggleDeclined={() => saveEntry({ ...e, declined: !e.declined }, false)}
+                  onSetStage={(stage) => advanceStage(e, stage)}
+                  onToggleDeclined={() => toggleDeclined(e)}
                 />
               ))}
             </div>
@@ -606,7 +653,7 @@ function EntryRow({
   onToggleDeclined: () => void;
 }) {
   return (
-    <div style={S.cardRow}>
+    <div className="avid-row avid-row-enter" style={S.cardRow}>
       <div style={S.colCandidate}>
         <div style={S.cardPrimary}>{entry.candidate}</div>
         <div style={S.cardSub}>
@@ -635,10 +682,10 @@ function EntryRow({
         <div style={S.cardSub}>{(entry.team || []).join(", ") || "—"}</div>
       </div>
       <div style={S.colActions}>
-        <button style={S.iconGhost} onClick={onEdit} title="Edit">
+        <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
           <Pencil size={14} />
         </button>
-        <button style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
+        <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
           <Trash2 size={14} />
         </button>
       </div>
@@ -660,7 +707,7 @@ function BillingRow({
   onDelete: () => void;
 }) {
   return (
-    <div style={S.billingRow}>
+    <div className="avid-row avid-row-enter" style={S.billingRow}>
       <div style={S.colRecruiter}>
         <div style={S.cardPrimary}>{billing.recruiter}</div>
       </div>
@@ -675,10 +722,10 @@ function BillingRow({
         <div style={S.cardSub}>{fmtDate(billing.date)}</div>
       </div>
       <div style={S.colActions}>
-        <button style={S.iconGhost} onClick={onEdit} title="Edit">
+        <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
           <Pencil size={14} />
         </button>
-        <button style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
+        <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
           <Trash2 size={14} />
         </button>
       </div>
@@ -738,6 +785,7 @@ function StageProgress({
             }}
           />
           <div
+            className="avid-stage-fill"
             style={{
               position: "absolute",
               top: "50%",
@@ -748,57 +796,62 @@ function StageProgress({
               borderRadius: lineH,
               background: declined ? t.trackBg : color,
               transform: "translateY(-50%)",
-              transition: "width .15s ease",
             }}
           />
           <div style={{ position: "relative", display: "flex", justifyContent: "space-between" }}>
-            {PIPELINE.map((s, i) => (
-              <div
-                key={s.key}
-                style={{ position: "relative" }}
-                onMouseEnter={() => setHoverIdx(i)}
-                onMouseLeave={() => setHoverIdx((cur) => (cur === i ? null : cur))}
-              >
-                {hoverIdx === i && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      bottom: "100%",
-                      left: "50%",
-                      transform: "translate(-50%, -8px)",
-                      background: t.ink,
-                      color: t.bg,
-                      fontSize: 11.5,
-                      fontWeight: 600,
-                      padding: "6px 10px",
-                      borderRadius: 7,
-                      whiteSpace: "nowrap",
-                      boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
-                      zIndex: 5,
-                      pointerEvents: "none",
-                    }}
-                  >
-                    {stageTooltipText(s, i, idx, history)}
-                  </div>
-                )}
-                <button
-                  onClick={() => onSetStage(s.key)}
-                  title={s.label}
-                  style={{
-                    width: dotSize,
-                    height: dotSize,
-                    borderRadius: "50%",
-                    border: `2px solid ${declined ? t.trackBg : i <= idx ? color : t.trackBg}`,
-                    background: declined ? t.surface : i <= idx ? color : t.surface,
-                    cursor: "pointer",
-                    padding: 0,
-                    boxShadow: large && i === idx && !declined ? `0 0 0 5px ${color}22` : "none",
-                    transition: "box-shadow .15s ease, transform .15s ease",
-                    transform: hoverIdx === i ? "scale(1.15)" : "scale(1)",
-                  }}
-                />
-              </div>
-            ))}
+            {PIPELINE.map((s, i) => {
+              const isActive = i === idx && !declined;
+              return (
+                <div
+                  key={isActive ? `dot-${i}-active-${idx}` : `dot-${i}`}
+                  style={{ position: "relative" }}
+                  onMouseEnter={() => setHoverIdx(i)}
+                  onMouseLeave={() => setHoverIdx((cur) => (cur === i ? null : cur))}
+                >
+                  {hoverIdx === i && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        bottom: "100%",
+                        left: "50%",
+                        transform: "translate(-50%, -8px)",
+                        background: t.ink,
+                        color: t.bg,
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        padding: "6px 10px",
+                        borderRadius: 7,
+                        whiteSpace: "nowrap",
+                        boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
+                        zIndex: 5,
+                        pointerEvents: "none",
+                      }}
+                    >
+                      {stageTooltipText(s, i, idx, history)}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => onSetStage(s.key)}
+                    title={s.label}
+                    className={`avid-stage-dot avid-stage-pop${large && isActive ? " avid-stage-active" : ""}`}
+                    style={
+                      {
+                        width: dotSize,
+                        height: dotSize,
+                        borderRadius: "50%",
+                        border: `2px solid ${declined ? t.trackBg : i <= idx ? color : t.trackBg}`,
+                        background: declined ? t.surface : i <= idx ? color : t.surface,
+                        cursor: "pointer",
+                        padding: 0,
+                        boxShadow: large && isActive ? `0 0 0 5px ${color}22` : "none",
+                        transform: hoverIdx === i ? "scale(1.15)" : "scale(1)",
+                        "--pulse-color": `${color}40`,
+                      } as React.CSSProperties
+                    }
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
         {large && (
@@ -889,11 +942,11 @@ function EntryForm({
   const valid = form.candidate.trim() && form.company.trim() && form.date;
 
   return (
-    <div style={S.modalOverlay} onClick={onClose}>
-      <div style={S.modal} onClick={(e) => e.stopPropagation()}>
+    <div className="avid-overlay" style={S.modalOverlay} onClick={onClose}>
+      <div className="avid-modal" style={S.modal} onClick={(e) => e.stopPropagation()}>
         <div style={S.modalHeader}>
           <div style={S.modalTitle}>{initial ? "Edit send-out" : "New send-out"}</div>
-          <button style={S.iconGhost} onClick={onClose}>
+          <button className="avid-btn" style={S.iconGhost} onClick={onClose}>
             <X size={18} />
           </button>
         </div>
@@ -933,6 +986,7 @@ function EntryForm({
                 <button
                   type="button"
                   key={name}
+                  className="avid-chip"
                   onClick={() => toggleTeam(name)}
                   style={{
                     ...S.chip,
@@ -969,10 +1023,10 @@ function EntryForm({
         </div>
 
         <div style={S.modalFooter}>
-          <button style={S.ghostBtn} onClick={onClose}>
+          <button className="avid-btn" style={S.ghostBtn} onClick={onClose}>
             Cancel
           </button>
-          <button style={{ ...S.primaryBtn, opacity: valid ? 1 : 0.5 }} disabled={!valid} onClick={() => onSave(form, !initial)}>
+          <button className="avid-btn" style={{ ...S.primaryBtn, opacity: valid ? 1 : 0.5 }} disabled={!valid} onClick={() => onSave(form, !initial)}>
             {initial ? "Save changes" : "Log send-out"}
           </button>
         </div>
@@ -1017,11 +1071,11 @@ function BillingForm({
   const valid = form.recruiter && form.amount > 0 && form.date;
 
   return (
-    <div style={S.modalOverlay} onClick={onClose}>
-      <div style={S.modal} onClick={(e) => e.stopPropagation()}>
+    <div className="avid-overlay" style={S.modalOverlay} onClick={onClose}>
+      <div className="avid-modal" style={S.modal} onClick={(e) => e.stopPropagation()}>
         <div style={S.modalHeader}>
           <div style={S.modalTitle}>{initial ? "Edit billing" : "Log billing"}</div>
-          <button style={S.iconGhost} onClick={onClose}>
+          <button className="avid-btn" style={S.iconGhost} onClick={onClose}>
             <X size={18} />
           </button>
         </div>
@@ -1065,10 +1119,10 @@ function BillingForm({
         </div>
 
         <div style={S.modalFooter}>
-          <button style={S.ghostBtn} onClick={onClose}>
+          <button className="avid-btn" style={S.ghostBtn} onClick={onClose}>
             Cancel
           </button>
-          <button style={{ ...S.primaryBtn, opacity: valid ? 1 : 0.5 }} disabled={!valid} onClick={() => onSave(form, !initial)}>
+          <button className="avid-btn" style={{ ...S.primaryBtn, opacity: valid ? 1 : 0.5 }} disabled={!valid} onClick={() => onSave(form, !initial)}>
             {initial ? "Save changes" : "Log billing"}
           </button>
         </div>
@@ -1122,11 +1176,11 @@ function UserManager({
   };
 
   return (
-    <div style={S.modalOverlay} onClick={onClose}>
-      <div style={{ ...S.modal, maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
+    <div className="avid-overlay" style={S.modalOverlay} onClick={onClose}>
+      <div className="avid-modal" style={{ ...S.modal, maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
         <div style={S.modalHeader}>
           <div style={S.modalTitle}>Manage users</div>
-          <button style={S.iconGhost} onClick={onClose}>
+          <button className="avid-btn" style={S.iconGhost} onClick={onClose}>
             <X size={18} />
           </button>
         </div>
@@ -1140,13 +1194,13 @@ function UserManager({
                 onChange={(e) => setDrafts((d) => ({ ...d, [m.id]: e.target.value }))}
               />
               <button
-                style={{ ...S.ghostBtn, opacity: nameOf(m).trim() && nameOf(m) !== m.name ? 1 : 0.4, padding: "8px 12px" }}
+                className="avid-btn" style={{ ...S.ghostBtn, opacity: nameOf(m).trim() && nameOf(m) !== m.name ? 1 : 0.4, padding: "8px 12px" }}
                 disabled={busy || !(nameOf(m).trim() && nameOf(m) !== m.name)}
                 onClick={() => rename(m)}
               >
                 Save
               </button>
-              <button style={{ ...S.iconGhost, color: t.danger }} disabled={busy} onClick={() => remove(m)} title="Remove">
+              <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} disabled={busy} onClick={() => remove(m)} title="Remove">
                 <Trash2 size={15} />
               </button>
             </div>
@@ -1162,7 +1216,7 @@ function UserManager({
                 if (e.key === "Enter") add();
               }}
             />
-            <button style={{ ...S.primaryBtn, opacity: newName.trim() ? 1 : 0.5 }} disabled={busy || !newName.trim()} onClick={add}>
+            <button className="avid-btn" style={{ ...S.primaryBtn, opacity: newName.trim() ? 1 : 0.5 }} disabled={busy || !newName.trim()} onClick={add}>
               <Plus size={15} /> Add
             </button>
           </div>
