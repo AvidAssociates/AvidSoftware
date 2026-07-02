@@ -19,7 +19,7 @@ import {
   Tv,
 } from "lucide-react";
 import { LOGO_ICON_SRC, LOGO_FULL_SRC } from "@/lib/logos";
-import { Billing, DeclineReason, Entry, RosterMember, Stage, StageEvent } from "@/lib/types";
+import { Billing, DeclineReason, Entry, RosterMember, Stage } from "@/lib/types";
 import {
   ADMIN,
   DEFAULT_TEAM,
@@ -311,19 +311,10 @@ function Dashboard({
     const res = await send(`/api/entries/${entry.id}`, "PUT", optimistic);
     if (res.ok) applyEntry(await res.json());
   };
-  // The single way a stage date gets set: correcting an already-recorded
-  // date, or moving the pipeline forward to a stage it hasn't reached yet
-  // (which requires a date — there's no default).
-  const setStageDate = async (entry: Entry, stage: Stage, date: string) => {
-    const idx = entry.stageHistory.map((h) => h.stage).lastIndexOf(stage);
-    const stageHistory =
-      idx === -1
-        ? [...entry.stageHistory, { stage, date }]
-        : entry.stageHistory.map((h, i) => (i === idx ? { ...h, date } : h));
-    const order: Stage[] = ["sent", "interview", "offer", "placed"];
-    const newStage = order.indexOf(stage) > order.indexOf(entry.stage) ? stage : entry.stage;
-    applyEntry({ ...entry, stage: newStage, stageHistory });
-    const res = await send(`/api/entries/${entry.id}/stage-date`, "PATCH", { stage, date });
+  const advanceStage = async (entry: Entry, stage: Stage) => {
+    const optimistic = { ...entry, stage, declined: false };
+    applyEntry(optimistic);
+    const res = await send(`/api/entries/${entry.id}`, "PUT", optimistic);
     if (res.ok) applyEntry(await res.json());
   };
   const deleteEntry = async (id: string) => {
@@ -536,9 +527,9 @@ function Dashboard({
                     setShowEntryForm(true);
                   }}
                   onDelete={() => deleteEntry(e.id)}
+                  onSetStage={(stage) => advanceStage(e, stage)}
                   onRestore={() => setDeclined(e, false)}
                   onDecline={(reason) => setDeclined(e, true, reason)}
-                  onEditDate={(stage, date) => setStageDate(e, stage, date)}
                 />
               ))}
             </div>
@@ -657,18 +648,18 @@ function EntryRow({
   entry,
   onEdit,
   onDelete,
+  onSetStage,
   onRestore,
   onDecline,
-  onEditDate,
 }: {
   S: Styles;
   t: Theme;
   entry: Entry;
   onEdit: () => void;
   onDelete: () => void;
+  onSetStage: (stage: Stage) => void;
   onRestore: () => void;
   onDecline: (reason: DeclineReason) => void;
-  onEditDate: (stage: Stage, date: string) => void;
 }) {
   return (
     <div className="avid-row avid-row-enter" style={S.cardRow}>
@@ -691,10 +682,9 @@ function EntryRow({
           stage={entry.stage}
           declined={entry.declined}
           declinedReason={entry.declinedReason}
-          history={entry.stageHistory}
+          onSetStage={onSetStage}
           onRestore={onRestore}
           onDecline={onDecline}
-          onEditDate={onEditDate}
           large
         />
       </div>
@@ -754,18 +744,8 @@ function BillingRow({
 }
 
 // ---------- stage progress indicator ----------
-function stageTooltipText(s: { key: Stage; label: string }, history: StageEvent[]) {
-  const date = lastEventDate(history, s.key);
-  return `${s.label} · ${date ? fmtDate(date) : "—"}`;
-}
-
-function lastEventDate(history: StageEvent[], stage: Stage): string | null {
-  const event = [...history].reverse().find((h) => h.stage === stage);
-  return event?.date ?? null;
-}
-
-// Fixed dark-gray pill for the stage tooltip/date editor — same look in
-// both light and dark theme, not tied to the app's theme colors.
+// Fixed dark-gray pill for the decline-reason popover — same look in both
+// light and dark theme, not tied to the app's theme colors.
 const STAGE_POPOVER_BG = "#2A2A28";
 const STAGE_POPOVER_FG = "#F0EDE7";
 
@@ -779,28 +759,23 @@ function StageProgress({
   stage,
   declined,
   declinedReason,
-  history = [],
   onSetStage,
   onToggleDeclined,
   onRestore,
   onDecline,
-  onEditDate,
   large,
 }: {
   t: Theme;
   stage: Stage;
   declined: boolean;
   declinedReason?: DeclineReason | null;
-  history?: StageEvent[];
   onSetStage?: (stage: Stage) => void;
   onToggleDeclined?: () => void;
   onRestore?: () => void;
   onDecline?: (reason: DeclineReason) => void;
-  onEditDate?: (stage: Stage, date: string) => void;
   large?: boolean;
 }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-  const [openIdx, setOpenIdx] = useState<number | null>(null);
   const [declineMenuOpen, setDeclineMenuOpen] = useState(false);
   const idx = Math.max(0, PIPELINE.findIndex((s) => s.key === stage));
   const color = declined ? t.danger : STAGE_COLOR[stage];
@@ -850,73 +825,8 @@ function StageProgress({
                   onMouseEnter={() => setHoverIdx(i)}
                   onMouseLeave={() => setHoverIdx((cur) => (cur === i ? null : cur))}
                 >
-                  {(openIdx === i && onEditDate) || hoverIdx === i ? (
-                    <div
-                      style={{
-                        position: "absolute",
-                        bottom: "100%",
-                        left: "50%",
-                        transform: "translate(-50%, -8px)",
-                        background: STAGE_POPOVER_BG,
-                        color: STAGE_POPOVER_FG,
-                        fontSize: 11.5,
-                        fontWeight: 600,
-                        padding: "6px 10px",
-                        borderRadius: 7,
-                        whiteSpace: "nowrap",
-                        boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
-                        zIndex: 6,
-                        pointerEvents: openIdx === i && onEditDate ? "auto" : "none",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                      }}
-                    >
-                      {openIdx === i && onEditDate ? (
-                        <>
-                          <span>{s.label} ·</span>
-                          <input
-                            type="date"
-                            autoFocus
-                            defaultValue={lastEventDate(history, s.key) || ""}
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                onEditDate(s.key, e.target.value);
-                                window.setTimeout(() => setOpenIdx(null), 150);
-                              }
-                            }}
-                            onBlur={() => setOpenIdx(null)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Escape" || e.key === "Enter") {
-                                (e.target as HTMLInputElement).blur();
-                              }
-                            }}
-                            style={{
-                              background: "transparent",
-                              border: "none",
-                              color: STAGE_POPOVER_FG,
-                              fontSize: 11.5,
-                              fontWeight: 600,
-                              fontFamily: "inherit",
-                              outline: "none",
-                              padding: 0,
-                              colorScheme: "dark",
-                            }}
-                          />
-                        </>
-                      ) : (
-                        stageTooltipText(s, history)
-                      )}
-                    </div>
-                  ) : null}
                   <button
-                    onClick={() => {
-                      if (!onEditDate) {
-                        onSetStage?.(s.key);
-                        return;
-                      }
-                      setOpenIdx(i);
-                    }}
+                    onClick={() => onSetStage?.(s.key)}
                     title={s.label}
                     className={`avid-stage-dot avid-stage-pop${large && isActive ? " avid-stage-active" : ""}`}
                     style={
@@ -1157,7 +1067,6 @@ function EntryForm({
                 t={t}
                 stage={form.stage}
                 declined={form.declined}
-                history={form.stageHistory}
                 onSetStage={(stage) => setForm((f) => ({ ...f, stage, declined: false }))}
                 onToggleDeclined={() => setForm((f) => ({ ...f, declined: !f.declined }))}
               />
