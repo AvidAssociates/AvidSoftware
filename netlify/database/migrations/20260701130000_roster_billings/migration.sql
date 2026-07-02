@@ -1,3 +1,14 @@
+-- The initial migration created tables for the earlier cash-in leaderboard
+-- design that this app replaced (recruiters/sendouts/billings/retainers/
+-- settings). Drop the obsolete ones (they hold no real data) so the new
+-- schema is clean — in particular the old `billings` table has an
+-- incompatible column layout that collides with the new one below.
+DROP TABLE IF EXISTS sendouts CASCADE;
+DROP TABLE IF EXISTS billings CASCADE;
+DROP TABLE IF EXISTS retainers CASCADE;
+DROP TABLE IF EXISTS recruiters CASCADE;
+DROP TABLE IF EXISTS settings CASCADE;
+
 -- Roster of team members (managed by Brad in the app)
 CREATE TABLE IF NOT EXISTS roster (
   id SERIAL PRIMARY KEY,
