@@ -125,19 +125,23 @@ export default function TVMode({
             AVID <span style={{ color: C.red }}>ASSOCIATES</span>
           </span>
         </div>
-        <div style={S.clockWrap}>
-          <div style={S.clock}>{now.toLocaleTimeString("en-US")}</div>
-          <div style={S.clockDate}>
-            {now.toLocaleDateString("en-US", {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-            })}
+        <div style={S.headerRight}>
+          <div style={S.clockWrap}>
+            <div style={S.clock}>
+              {now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+            </div>
+            <div style={S.clockDate}>
+              {now.toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+              })}
+            </div>
           </div>
+          <button style={S.exitBtn} onClick={onExit} title="Exit TV mode">
+            <X size={20} />
+          </button>
         </div>
-        <button style={S.exitBtn} onClick={onExit} title="Exit TV mode">
-          <X size={20} />
-        </button>
       </div>
 
       {/* scene */}
@@ -293,7 +297,8 @@ const S: Record<string, React.CSSProperties> = {
   },
   brand: { display: "flex", alignItems: "center", gap: 12 },
   brandText: { fontSize: "clamp(18px, 2vw, 30px)", fontWeight: 900, letterSpacing: -0.5 },
-  clockWrap: { textAlign: "center" },
+  headerRight: { display: "flex", alignItems: "center", gap: "1.4vw" },
+  clockWrap: { textAlign: "right" },
   clock: {
     fontSize: "clamp(20px, 2.4vw, 38px)",
     fontWeight: 800,
