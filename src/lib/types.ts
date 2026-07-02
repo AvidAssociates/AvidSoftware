@@ -5,6 +5,8 @@ export type StageEvent = {
   date: string;
 };
 
+export type DeclineReason = "candidate" | "client";
+
 export type Entry = {
   id: string;
   date: string;
@@ -17,6 +19,7 @@ export type Entry = {
   stage: Stage;
   stageHistory: StageEvent[];
   declined: boolean;
+  declinedReason: DeclineReason | null;
   notes: string | null;
   addedBy: string | null;
   createdAt: string;

@@ -17,6 +17,7 @@ export async function PUT(
     team: Array.isArray(body.team) ? body.team : [],
     stage: body.stage || "sent",
     declined: Boolean(body.declined),
+    declinedReason: body.declinedReason,
     notes: body.notes,
   });
   if (!entry) {

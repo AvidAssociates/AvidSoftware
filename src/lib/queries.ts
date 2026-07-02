@@ -13,6 +13,7 @@ type EntryRow = {
   stage: string;
   stage_history: StageEvent[];
   declined: boolean;
+  declined_reason: string | null;
   notes: string | null;
   added_by: string | null;
   created_at: string;
@@ -31,6 +32,7 @@ function toEntry(row: EntryRow): Entry {
     stage: row.stage as Entry["stage"],
     stageHistory: row.stage_history ?? [],
     declined: row.declined,
+    declinedReason: row.declined_reason as Entry["declinedReason"],
     notes: row.notes,
     addedBy: row.added_by,
     createdAt: row.created_at,
@@ -60,6 +62,7 @@ export async function createEntry(input: {
   team: string[];
   stage: string;
   declined: boolean;
+  declinedReason?: string | null;
   notes?: string | null;
   addedBy?: string | null;
 }): Promise<Entry> {
@@ -67,7 +70,7 @@ export async function createEntry(input: {
   // The Sent date defaults to the send-out's own date — no other default.
   const history: StageEvent[] = [{ stage: input.stage as Entry["stage"], date: input.date }];
   const [row] = (await db.sql`
-    INSERT INTO pipeline_entries (id, date, candidate, company, role, interview_type, round, team, stage, stage_history, declined, notes, added_by)
+    INSERT INTO pipeline_entries (id, date, candidate, company, role, interview_type, round, team, stage, stage_history, declined, declined_reason, notes, added_by)
     VALUES (
       ${input.id},
       ${input.date},
@@ -80,6 +83,7 @@ export async function createEntry(input: {
       ${input.stage},
       ${JSON.stringify(history)},
       ${input.declined},
+      ${input.declinedReason ?? null},
       ${input.notes ?? null},
       ${input.addedBy ?? null}
     )
@@ -100,6 +104,7 @@ export async function updateEntry(
     team: string[];
     stage: string;
     declined: boolean;
+    declinedReason?: string | null;
     notes?: string | null;
   }
 ): Promise<Entry | null> {
@@ -126,6 +131,7 @@ export async function updateEntry(
       stage = ${input.stage},
       stage_history = ${JSON.stringify(history)},
       declined = ${input.declined},
+      declined_reason = ${input.declined ? input.declinedReason ?? null : null},
       notes = ${input.notes ?? null}
     WHERE id = ${id}
     RETURNING *

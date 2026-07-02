@@ -102,6 +102,13 @@ select::-ms-expand {
   transform: translateY(-1px);
 }
 
+.avid-decline-option {
+  transition: background-color 0.12s ease;
+}
+.avid-decline-option:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
 @keyframes overlayIn {
   from {
     opacity: 0;

@@ -19,7 +19,7 @@ import {
   Tv,
 } from "lucide-react";
 import { LOGO_ICON_SRC, LOGO_FULL_SRC } from "@/lib/logos";
-import { Billing, Entry, RosterMember, Stage, StageEvent } from "@/lib/types";
+import { Billing, DeclineReason, Entry, RosterMember, Stage, StageEvent } from "@/lib/types";
 import {
   ADMIN,
   DEFAULT_TEAM,
@@ -305,8 +305,8 @@ function Dashboard({
     const res = await send(isNew ? "/api/entries" : `/api/entries/${entry.id}`, isNew ? "POST" : "PUT", entry);
     if (res.ok) applyEntry(await res.json());
   };
-  const toggleDeclined = async (entry: Entry) => {
-    const optimistic = { ...entry, declined: !entry.declined };
+  const setDeclined = async (entry: Entry, declined: boolean, reason: DeclineReason | null = null) => {
+    const optimistic = { ...entry, declined, declinedReason: declined ? reason : null };
     applyEntry(optimistic);
     const res = await send(`/api/entries/${entry.id}`, "PUT", optimistic);
     if (res.ok) applyEntry(await res.json());
@@ -536,7 +536,8 @@ function Dashboard({
                     setShowEntryForm(true);
                   }}
                   onDelete={() => deleteEntry(e.id)}
-                  onToggleDeclined={() => toggleDeclined(e)}
+                  onRestore={() => setDeclined(e, false)}
+                  onDecline={(reason) => setDeclined(e, true, reason)}
                   onEditDate={(stage, date) => setStageDate(e, stage, date)}
                 />
               ))}
@@ -656,7 +657,8 @@ function EntryRow({
   entry,
   onEdit,
   onDelete,
-  onToggleDeclined,
+  onRestore,
+  onDecline,
   onEditDate,
 }: {
   S: Styles;
@@ -664,7 +666,8 @@ function EntryRow({
   entry: Entry;
   onEdit: () => void;
   onDelete: () => void;
-  onToggleDeclined: () => void;
+  onRestore: () => void;
+  onDecline: (reason: DeclineReason) => void;
   onEditDate: (stage: Stage, date: string) => void;
 }) {
   return (
@@ -687,8 +690,10 @@ function EntryRow({
           t={t}
           stage={entry.stage}
           declined={entry.declined}
+          declinedReason={entry.declinedReason}
           history={entry.stageHistory}
-          onToggleDeclined={onToggleDeclined}
+          onRestore={onRestore}
+          onDecline={onDecline}
           onEditDate={onEditDate}
           large
         />
@@ -764,27 +769,39 @@ function lastEventDate(history: StageEvent[], stage: Stage): string | null {
 const STAGE_POPOVER_BG = "#2A2A28";
 const STAGE_POPOVER_FG = "#F0EDE7";
 
+const DECLINE_REASONS: { key: DeclineReason; label: string }[] = [
+  { key: "candidate", label: "Rejected by candidate" },
+  { key: "client", label: "Rejected by client" },
+];
+
 function StageProgress({
   t,
   stage,
   declined,
+  declinedReason,
   history = [],
   onSetStage,
   onToggleDeclined,
+  onRestore,
+  onDecline,
   onEditDate,
   large,
 }: {
   t: Theme;
   stage: Stage;
   declined: boolean;
+  declinedReason?: DeclineReason | null;
   history?: StageEvent[];
   onSetStage?: (stage: Stage) => void;
-  onToggleDeclined: () => void;
+  onToggleDeclined?: () => void;
+  onRestore?: () => void;
+  onDecline?: (reason: DeclineReason) => void;
   onEditDate?: (stage: Stage, date: string) => void;
   large?: boolean;
 }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [openIdx, setOpenIdx] = useState<number | null>(null);
+  const [declineMenuOpen, setDeclineMenuOpen] = useState(false);
   const idx = Math.max(0, PIPELINE.findIndex((s) => s.key === stage));
   const color = declined ? t.danger : STAGE_COLOR[stage];
   const fillPct = (idx / (PIPELINE.length - 1)) * 100;
@@ -794,7 +811,7 @@ function StageProgress({
   const inset = dotSize / 2;
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: large ? 22 : 14 }}>
+    <div style={{ display: "flex", alignItems: "flex-start", gap: large ? 22 : 14 }}>
       <div style={{ width: trackWidth }}>
         <div style={{ position: "relative", height: dotSize + 4 }}>
           <div
@@ -943,19 +960,84 @@ function StageProgress({
           </div>
         )}
       </div>
-      {!large && (
-        <span style={{ fontSize: 12.5, fontWeight: 600, color, minWidth: 64 }}>
-          {declined ? "Declined" : PIPELINE[idx].label}
-        </span>
-      )}
-      {large && declined && <span style={{ fontSize: 13.5, fontWeight: 700, color: t.danger }}>Declined</span>}
-      <button
-        onClick={onToggleDeclined}
-        title={declined ? "Restore to pipeline" : "Mark declined / dead"}
-        style={{ border: "none", background: "none", cursor: "pointer", color: declined ? t.danger : t.trackBg, display: "flex", padding: 0 }}
-      >
-        <Ban size={large ? 18 : 14} />
-      </button>
+      <div style={{ display: "flex", alignItems: "center", gap: large ? 10 : 8, height: dotSize + 4 }}>
+        {!large && (
+          <span style={{ fontSize: 12.5, fontWeight: 600, color, minWidth: 64 }}>
+            {declined ? "Declined" : PIPELINE[idx].label}
+          </span>
+        )}
+        {large && declined && <span style={{ fontSize: 13.5, fontWeight: 700, color: t.danger }}>Declined</span>}
+        <div
+          style={{ position: "relative", display: "flex", alignItems: "center" }}
+          onMouseLeave={() => setDeclineMenuOpen(false)}
+        >
+          {declineMenuOpen && (
+            <div
+              style={{
+                position: "absolute",
+                bottom: "100%",
+                right: 0,
+                transform: "translateY(-8px)",
+                background: STAGE_POPOVER_BG,
+                borderRadius: 9,
+                padding: 4,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+                zIndex: 7,
+                display: "flex",
+                flexDirection: "column",
+                minWidth: 176,
+              }}
+            >
+              {DECLINE_REASONS.map((r) => (
+                <button
+                  key={r.key}
+                  onClick={() => {
+                    onDecline?.(r.key);
+                    setDeclineMenuOpen(false);
+                  }}
+                  className="avid-decline-option"
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: STAGE_POPOVER_FG,
+                    textAlign: "left",
+                    padding: "8px 10px",
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={() => {
+              if (declined) {
+                if (onRestore) onRestore();
+                else onToggleDeclined?.();
+                return;
+              }
+              if (onDecline) {
+                setDeclineMenuOpen((v) => !v);
+                return;
+              }
+              onToggleDeclined?.();
+            }}
+            title={
+              declined
+                ? `Restore to pipeline${declinedReason ? ` (${DECLINE_REASONS.find((r) => r.key === declinedReason)?.label})` : ""}`
+                : "Mark declined / dead"
+            }
+            style={{ border: "none", background: "none", cursor: "pointer", color: declined ? t.danger : t.trackBg, display: "flex", padding: 0 }}
+          >
+            <Ban size={large ? 18 : 14} />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -991,6 +1073,7 @@ function EntryForm({
       stage: "sent",
       stageHistory: [],
       declined: false,
+      declinedReason: null,
       notes: "",
       addedBy: user,
       createdAt: "",
