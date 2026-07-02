@@ -19,7 +19,7 @@ import {
   Tv,
 } from "lucide-react";
 import { LOGO_ICON_SRC, LOGO_FULL_SRC } from "@/lib/logos";
-import { Billing, DeclineReason, Entry, RosterMember, Stage } from "@/lib/types";
+import { Billing, DeclineReason, Entry, RosterMember, Stage, StageEvent } from "@/lib/types";
 import {
   ADMIN,
   DEFAULT_TEAM,
@@ -317,6 +317,18 @@ function Dashboard({
     const res = await send(`/api/entries/${entry.id}`, "PUT", optimistic);
     if (res.ok) applyEntry(await res.json());
   };
+  // Double-clicking a stage sets/corrects its date without changing which
+  // stage is current (that's what a single click does).
+  const setStageDate = async (entry: Entry, stage: Stage, date: string) => {
+    const idx = entry.stageHistory.map((h) => h.stage).lastIndexOf(stage);
+    const stageHistory =
+      idx === -1
+        ? [...entry.stageHistory, { stage, date }]
+        : entry.stageHistory.map((h, i) => (i === idx ? { ...h, date } : h));
+    applyEntry({ ...entry, stageHistory });
+    const res = await send(`/api/entries/${entry.id}/stage-date`, "PATCH", { stage, date });
+    if (res.ok) applyEntry(await res.json());
+  };
   const deleteEntry = async (id: string) => {
     setEntries((prev) => prev.filter((e) => e.id !== id));
     await send(`/api/entries/${id}`, "DELETE");
@@ -528,6 +540,7 @@ function Dashboard({
                   }}
                   onDelete={() => deleteEntry(e.id)}
                   onSetStage={(stage) => advanceStage(e, stage)}
+                  onEditDate={(stage, date) => setStageDate(e, stage, date)}
                   onRestore={() => setDeclined(e, false)}
                   onDecline={(reason) => setDeclined(e, true, reason)}
                 />
@@ -649,6 +662,7 @@ function EntryRow({
   onEdit,
   onDelete,
   onSetStage,
+  onEditDate,
   onRestore,
   onDecline,
 }: {
@@ -658,6 +672,7 @@ function EntryRow({
   onEdit: () => void;
   onDelete: () => void;
   onSetStage: (stage: Stage) => void;
+  onEditDate: (stage: Stage, date: string) => void;
   onRestore: () => void;
   onDecline: (reason: DeclineReason) => void;
 }) {
@@ -682,7 +697,9 @@ function EntryRow({
           stage={entry.stage}
           declined={entry.declined}
           declinedReason={entry.declinedReason}
+          history={entry.stageHistory}
           onSetStage={onSetStage}
+          onEditDate={onEditDate}
           onRestore={onRestore}
           onDecline={onDecline}
           large
@@ -744,8 +761,13 @@ function BillingRow({
 }
 
 // ---------- stage progress indicator ----------
-// Fixed dark-gray pill for the decline-reason popover — same look in both
-// light and dark theme, not tied to the app's theme colors.
+function lastEventDate(history: StageEvent[], stage: Stage): string | null {
+  const event = [...history].reverse().find((h) => h.stage === stage);
+  return event?.date ?? null;
+}
+
+// Fixed dark-gray pill for the stage tooltip/decline-reason popover — same
+// look in both light and dark theme, not tied to the app's theme colors.
 const STAGE_POPOVER_BG = "#2A2A28";
 const STAGE_POPOVER_FG = "#F0EDE7";
 
@@ -759,8 +781,10 @@ function StageProgress({
   stage,
   declined,
   declinedReason,
+  history = [],
   onSetStage,
   onToggleDeclined,
+  onEditDate,
   onRestore,
   onDecline,
   large,
@@ -769,13 +793,16 @@ function StageProgress({
   stage: Stage;
   declined: boolean;
   declinedReason?: DeclineReason | null;
+  history?: StageEvent[];
   onSetStage?: (stage: Stage) => void;
   onToggleDeclined?: () => void;
+  onEditDate?: (stage: Stage, date: string) => void;
   onRestore?: () => void;
   onDecline?: (reason: DeclineReason) => void;
   large?: boolean;
 }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const [openIdx, setOpenIdx] = useState<number | null>(null);
   const [declineMenuOpen, setDeclineMenuOpen] = useState(false);
   const idx = Math.max(0, PIPELINE.findIndex((s) => s.key === stage));
   const color = declined ? t.danger : STAGE_COLOR[stage];
@@ -838,10 +865,78 @@ function StageProgress({
                   key={`dot-${i}`}
                   style={{ position: "relative" }}
                   onMouseEnter={() => setHoverIdx(i)}
-                  onMouseLeave={() => setHoverIdx((cur) => (cur === i ? null : cur))}
+                  onMouseLeave={() => {
+                    setHoverIdx((cur) => (cur === i ? null : cur));
+                    if (openIdx === i) setOpenIdx(null);
+                  }}
                 >
+                  {onEditDate && (openIdx === i || hoverIdx === i) && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        bottom: "100%",
+                        left: "50%",
+                        transform: "translate(-50%, -8px)",
+                        background: STAGE_POPOVER_BG,
+                        color: STAGE_POPOVER_FG,
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        padding: "6px 10px",
+                        borderRadius: 7,
+                        whiteSpace: "nowrap",
+                        boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
+                        zIndex: 6,
+                        pointerEvents: openIdx === i ? "auto" : "none",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
+                      {openIdx === i ? (
+                        <>
+                          <span>{s.label} ·</span>
+                          <input
+                            type="date"
+                            autoFocus
+                            defaultValue={lastEventDate(history, s.key) || ""}
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                onEditDate(s.key, e.target.value);
+                                window.setTimeout(() => setOpenIdx(null), 150);
+                              }
+                            }}
+                            onBlur={() => setOpenIdx(null)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape" || e.key === "Enter") {
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: STAGE_POPOVER_FG,
+                              fontSize: 11.5,
+                              fontWeight: 600,
+                              fontFamily: "inherit",
+                              outline: "none",
+                              padding: 0,
+                              colorScheme: "dark",
+                            }}
+                          />
+                        </>
+                      ) : (
+                        "Double click to set date"
+                      )}
+                    </div>
+                  )}
                   <button
-                    onClick={() => onSetStage?.(s.key)}
+                    onClick={(e) => {
+                      if (e.detail >= 2) {
+                        if (onEditDate) setOpenIdx(i);
+                        return;
+                      }
+                      onSetStage?.(s.key);
+                    }}
                     title={s.label}
                     className={`avid-stage-dot${poppedIdx === i ? " avid-stage-pop" : ""}${large && isActive ? " avid-stage-active" : ""}`}
                     style={
