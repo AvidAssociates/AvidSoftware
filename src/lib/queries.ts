@@ -64,9 +64,8 @@ export async function createEntry(input: {
   addedBy?: string | null;
 }): Promise<Entry> {
   const db = getDb();
-  const history: StageEvent[] = [
-    { stage: input.stage as Entry["stage"], date: input.date, by: input.addedBy ?? null },
-  ];
+  // The Sent date defaults to the send-out's own date — no other default.
+  const history: StageEvent[] = [{ stage: input.stage as Entry["stage"], date: input.date }];
   const [row] = (await db.sql`
     INSERT INTO pipeline_entries (id, date, candidate, company, role, interview_type, round, team, stage, stage_history, declined, notes, added_by)
     VALUES (
@@ -102,7 +101,6 @@ export async function updateEntry(
     stage: string;
     declined: boolean;
     notes?: string | null;
-    updatedBy?: string | null;
   }
 ): Promise<Entry | null> {
   const db = getDb();
@@ -112,11 +110,8 @@ export async function updateEntry(
   if (!existing) return null;
 
   let history = existing.stage_history ?? [];
-  if (input.stage !== existing.stage) {
-    history = [
-      ...history,
-      { stage: input.stage as Entry["stage"], date: todayISO(), by: input.updatedBy ?? null },
-    ];
+  if (input.stage !== existing.stage && !history.some((h) => h.stage === input.stage)) {
+    history = [...history, { stage: input.stage as Entry["stage"], date: todayISO() }];
   }
 
   const [row] = (await db.sql`
@@ -142,33 +137,36 @@ export async function deleteEntry(id: string) {
   await getDb().sql`DELETE FROM pipeline_entries WHERE id = ${id}`;
 }
 
-// Corrects the recorded date of a stage event after the fact (e.g. the
-// send-out actually hit "interview" a few days before it was logged).
-// Updates the most recent history entry for that stage; does not touch
-// the entry's current `stage`.
-export async function updateStageEventDate(
+const PIPELINE_ORDER: Entry["stage"][] = ["sent", "interview", "offer", "placed"];
+
+// The single entry point for setting a stage's date, whether that's
+// correcting an already-recorded date or moving the pipeline forward to a
+// stage it hasn't reached yet (which requires a date — there's no default).
+export async function setStageEventDate(
   id: string,
   stage: string,
   date: string
 ): Promise<Entry | null> {
   const db = getDb();
   const [existing] = (await db.sql`
-    SELECT stage_history FROM pipeline_entries WHERE id = ${id}
-  `) as { stage_history: StageEvent[] }[];
+    SELECT stage, stage_history FROM pipeline_entries WHERE id = ${id}
+  `) as { stage: string; stage_history: StageEvent[] }[];
   if (!existing) return null;
 
   const history = existing.stage_history ?? [];
-  let lastIdx = -1;
-  history.forEach((h, i) => {
-    if (h.stage === stage) lastIdx = i;
-  });
-  if (lastIdx === -1) return null;
+  const idx = history.map((h) => h.stage).lastIndexOf(stage as Entry["stage"]);
+  const updatedHistory =
+    idx === -1
+      ? [...history, { stage: stage as Entry["stage"], date }]
+      : history.map((h, i) => (i === idx ? { ...h, date } : h));
 
-  const updatedHistory = [...history];
-  updatedHistory[lastIdx] = { ...updatedHistory[lastIdx], date };
+  const newStage =
+    PIPELINE_ORDER.indexOf(stage as Entry["stage"]) > PIPELINE_ORDER.indexOf(existing.stage as Entry["stage"])
+      ? stage
+      : existing.stage;
 
   const [row] = (await db.sql`
-    UPDATE pipeline_entries SET stage_history = ${JSON.stringify(updatedHistory)}
+    UPDATE pipeline_entries SET stage_history = ${JSON.stringify(updatedHistory)}, stage = ${newStage}
     WHERE id = ${id}
     RETURNING *
   `) as EntryRow[];

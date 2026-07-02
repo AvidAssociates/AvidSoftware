@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { updateStageEventDate } from "@/lib/queries";
+import { setStageEventDate } from "@/lib/queries";
 
 export async function PATCH(
   request: Request,
@@ -13,7 +13,7 @@ export async function PATCH(
       { status: 400 }
     );
   }
-  const entry = await updateStageEventDate(id, body.stage, body.date);
+  const entry = await setStageEventDate(id, body.stage, body.date);
   if (!entry) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

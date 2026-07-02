@@ -18,7 +18,6 @@ export async function PUT(
     stage: body.stage || "sent",
     declined: Boolean(body.declined),
     notes: body.notes,
-    updatedBy: body.updatedBy,
   });
   if (!entry) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

@@ -3,7 +3,6 @@ export type Stage = "sent" | "interview" | "offer" | "placed";
 export type StageEvent = {
   stage: Stage;
   date: string;
-  by: string | null;
 };
 
 export type Entry = {
