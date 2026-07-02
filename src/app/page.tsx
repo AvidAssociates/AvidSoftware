@@ -1172,7 +1172,6 @@ function StageProgress({
             {declined ? "Declined" : PIPELINE[idx].label}
           </span>
         )}
-        {large && declined && <span style={{ fontSize: 13.5, fontWeight: 700, color: t.danger }}>Declined</span>}
         <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
           {declineMenuOpen &&
             declinePos &&
@@ -1246,6 +1245,20 @@ function StageProgress({
             <Ban size={large ? 18 : 14} />
           </button>
         </div>
+        {large && (
+          <span
+            style={{
+              fontSize: 13.5,
+              fontWeight: 700,
+              color: t.danger,
+              width: 62,
+              flexShrink: 0,
+              opacity: declined ? 1 : 0,
+            }}
+          >
+            Declined
+          </span>
+        )}
       </div>
     </div>
   );
