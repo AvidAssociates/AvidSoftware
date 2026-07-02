@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import type { ChangeEvent, ReactNode } from "react";
 import {
   Plus,
@@ -776,6 +777,93 @@ const DECLINE_REASONS: { key: DeclineReason; label: string }[] = [
   { key: "client", label: "Rejected by client" },
 ];
 
+const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
+
+function MiniCalendar({ value, onSelect }: { value: string | null; onSelect: (iso: string) => void }) {
+  const initial = value ? new Date(`${value}T00:00:00`) : new Date();
+  const [viewYear, setViewYear] = useState(initial.getFullYear());
+  const [viewMonth, setViewMonth] = useState(initial.getMonth());
+
+  const first = new Date(viewYear, viewMonth, 1);
+  const startWeekday = first.getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const monthLabel = first.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const today = todayISO();
+  const isoFor = (day: number) => `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+
+  const goPrev = () => {
+    if (viewMonth === 0) {
+      setViewMonth(11);
+      setViewYear((y) => y - 1);
+    } else {
+      setViewMonth((m) => m - 1);
+    }
+  };
+  const goNext = () => {
+    if (viewMonth === 11) {
+      setViewMonth(0);
+      setViewYear((y) => y + 1);
+    } else {
+      setViewMonth((m) => m + 1);
+    }
+  };
+
+  const cells: (number | null)[] = [
+    ...Array(startWeekday).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+
+  return (
+    <div style={{ width: 208 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <button onClick={goPrev} className="avid-cal-nav" style={{ border: "none", background: "none", color: STAGE_POPOVER_FG, cursor: "pointer", display: "flex", padding: 3, borderRadius: 5 }}>
+          <ChevronLeft size={13} />
+        </button>
+        <span style={{ fontSize: 11.5, fontWeight: 700 }}>{monthLabel}</span>
+        <button onClick={goNext} className="avid-cal-nav" style={{ border: "none", background: "none", color: STAGE_POPOVER_FG, cursor: "pointer", display: "flex", padding: 3, borderRadius: 5 }}>
+          <ChevronRight size={13} />
+        </button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 3 }}>
+        {WEEKDAY_LABELS.map((d, i) => (
+          <div key={i} style={{ fontSize: 9.5, fontWeight: 700, textAlign: "center", opacity: 0.5 }}>
+            {d}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+        {cells.map((day, i) => {
+          if (day === null) return <div key={i} />;
+          const iso = isoFor(day);
+          const isSelected = value === iso;
+          const isToday = today === iso;
+          return (
+            <button
+              key={i}
+              onClick={() => onSelect(iso)}
+              className="avid-cal-day"
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: 7,
+                border: "none",
+                background: isSelected ? STAGE_POPOVER_FG : "transparent",
+                color: isSelected ? STAGE_POPOVER_BG : STAGE_POPOVER_FG,
+                fontSize: 11,
+                fontWeight: isToday ? 800 : 500,
+                cursor: "pointer",
+                boxShadow: isToday && !isSelected ? `inset 0 0 0 1px ${STAGE_POPOVER_FG}66` : "none",
+              }}
+            >
+              {day}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function StageProgress({
   t,
   stage,
@@ -804,6 +892,8 @@ function StageProgress({
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [openIdx, setOpenIdx] = useState<number | null>(null);
   const [declineMenuOpen, setDeclineMenuOpen] = useState(false);
+  const dotRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
   const idx = Math.max(0, PIPELINE.findIndex((s) => s.key === stage));
   const color = declined ? t.danger : STAGE_COLOR[stage];
   const fillPct = (idx / (PIPELINE.length - 1)) * 100;
@@ -826,6 +916,57 @@ function StageProgress({
     const timer = setTimeout(() => setPoppedIdx(null), 400);
     return () => clearTimeout(timer);
   }, [poppedIdx]);
+
+  // The date popover closes on an outside click or Escape — not on mouse
+  // movement, so it stays put while you pick a date.
+  useEffect(() => {
+    if (openIdx === null) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (!(e.target instanceof Element) || !e.target.closest("[data-stage-popover]")) {
+        setOpenIdx(null);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenIdx(null);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [openIdx]);
+
+  // The popover is portaled to <body> (so it's never clipped by the table's
+  // rounded-corner overflow:hidden) and positioned from the anchor dot's
+  // real screen position, clamped to stay fully on-screen.
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- measures real DOM
+       layout (getBoundingClientRect), which is only available in an effect */
+    if (openIdx === null) {
+      setPopoverPos(null);
+      return;
+    }
+    const place = () => {
+      const el = dotRefs.current[openIdx];
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const width = 228;
+      const height = 260;
+      const left = Math.min(Math.max(rect.left + rect.width / 2, width / 2 + 8), window.innerWidth - width / 2 - 8);
+      const top =
+        rect.bottom + height + 10 <= window.innerHeight ? rect.bottom + 10 : Math.max(8, rect.top - height - 10);
+      setPopoverPos({ top, left });
+    };
+    place();
+    /* eslint-enable react-hooks/set-state-in-effect */
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [openIdx]);
 
   return (
     <div style={{ display: "flex", alignItems: "flex-start", gap: large ? 22 : 14 }}>
@@ -865,12 +1006,40 @@ function StageProgress({
                   key={`dot-${i}`}
                   style={{ position: "relative" }}
                   onMouseEnter={() => setHoverIdx(i)}
-                  onMouseLeave={() => {
-                    setHoverIdx((cur) => (cur === i ? null : cur));
-                    if (openIdx === i) setOpenIdx(null);
-                  }}
+                  onMouseLeave={() => setHoverIdx((cur) => (cur === i ? null : cur))}
                 >
-                  {onEditDate && (openIdx === i || hoverIdx === i) && (
+                  {onEditDate &&
+                    i === idx &&
+                    openIdx === i &&
+                    popoverPos &&
+                    typeof document !== "undefined" &&
+                    createPortal(
+                      <div
+                        data-stage-popover
+                        style={{
+                          position: "fixed",
+                          top: popoverPos.top,
+                          left: popoverPos.left,
+                          transform: "translateX(-50%)",
+                          background: STAGE_POPOVER_BG,
+                          color: STAGE_POPOVER_FG,
+                          padding: "10px",
+                          borderRadius: 12,
+                          boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
+                          zIndex: 1000,
+                        }}
+                      >
+                        <MiniCalendar
+                          value={lastEventDate(history, s.key)}
+                          onSelect={(iso) => {
+                            onEditDate(s.key, iso);
+                            setOpenIdx(null);
+                          }}
+                        />
+                      </div>,
+                      document.body
+                    )}
+                  {onEditDate && i === idx && openIdx !== i && hoverIdx === i && (
                     <div
                       style={{
                         position: "absolute",
@@ -885,53 +1054,19 @@ function StageProgress({
                         borderRadius: 7,
                         whiteSpace: "nowrap",
                         boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
-                        zIndex: 6,
-                        pointerEvents: openIdx === i ? "auto" : "none",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
+                        zIndex: 5,
+                        pointerEvents: "none",
                       }}
                     >
-                      {openIdx === i ? (
-                        <>
-                          <span>{s.label} ·</span>
-                          <input
-                            type="date"
-                            autoFocus
-                            defaultValue={lastEventDate(history, s.key) || ""}
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                onEditDate(s.key, e.target.value);
-                                window.setTimeout(() => setOpenIdx(null), 150);
-                              }
-                            }}
-                            onBlur={() => setOpenIdx(null)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Escape" || e.key === "Enter") {
-                                (e.target as HTMLInputElement).blur();
-                              }
-                            }}
-                            style={{
-                              background: "transparent",
-                              border: "none",
-                              color: STAGE_POPOVER_FG,
-                              fontSize: 11.5,
-                              fontWeight: 600,
-                              fontFamily: "inherit",
-                              outline: "none",
-                              padding: 0,
-                              colorScheme: "dark",
-                            }}
-                          />
-                        </>
-                      ) : (
-                        "Double click to set date"
-                      )}
+                      Click to set date
                     </div>
                   )}
                   <button
-                    onClick={(e) => {
-                      if (e.detail >= 2) {
+                    ref={(el) => {
+                      dotRefs.current[i] = el;
+                    }}
+                    onClick={() => {
+                      if (i === idx) {
                         if (onEditDate) setOpenIdx(i);
                         return;
                       }

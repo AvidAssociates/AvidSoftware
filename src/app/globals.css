@@ -109,6 +109,15 @@ select::-ms-expand {
   background-color: rgba(255, 255, 255, 0.1);
 }
 
+.avid-cal-day,
+.avid-cal-nav {
+  transition: background-color 0.12s ease;
+}
+.avid-cal-day:hover,
+.avid-cal-nav:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
 @keyframes overlayIn {
   from {
     opacity: 0;
