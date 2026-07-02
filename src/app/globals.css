@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/* Matches the default (dark) theme so pull-to-refresh/overscroll bounce on
+   mobile shows theme-colored background instead of a flash of white. Kept
+   in sync with the live theme via JS in page.tsx (see applyDocumentTheme). */
+html,
+body {
+  background-color: #191918;
+  color-scheme: dark;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial,
     Helvetica, sans-serif;

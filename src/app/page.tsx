@@ -106,6 +106,15 @@ export default function App() {
   const t = getTheme(isDark);
   const teamNames = roster.length ? roster.map((r) => r.name) : DEFAULT_TEAM;
 
+  useEffect(() => {
+    // Keeps the actual <html>/<body> background in sync with the current
+    // theme, so mobile pull-to-refresh / overscroll bounce shows the
+    // theme color instead of flashing white behind the app.
+    document.documentElement.style.backgroundColor = t.bg;
+    document.body.style.backgroundColor = t.bg;
+    document.documentElement.style.colorScheme = isDark ? "dark" : "light";
+  }, [t.bg, isDark]);
+
   if (booting) {
     return (
       <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: t.bg }}>
