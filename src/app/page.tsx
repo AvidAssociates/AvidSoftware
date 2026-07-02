@@ -19,7 +19,7 @@ import {
   Tv,
 } from "lucide-react";
 import { LOGO_ICON_SRC, LOGO_FULL_SRC } from "@/lib/logos";
-import { Billing, Entry, RosterMember, Stage } from "@/lib/types";
+import { Billing, Entry, RosterMember, Stage, StageEvent } from "@/lib/types";
 import {
   ADMIN,
   DEFAULT_TEAM,
@@ -263,7 +263,8 @@ function Dashboard({
   }, []);
 
   const saveEntry = async (entry: Entry, isNew: boolean) => {
-    await send(isNew ? "/api/entries" : `/api/entries/${entry.id}`, isNew ? "POST" : "PUT", entry);
+    const body = isNew ? entry : { ...entry, updatedBy: user };
+    await send(isNew ? "/api/entries" : `/api/entries/${entry.id}`, isNew ? "POST" : "PUT", body);
     await loadData();
   };
   const deleteEntry = async (id: string) => {
@@ -620,7 +621,15 @@ function EntryRow({
         </div>
       </div>
       <div style={S.colProgress}>
-        <StageProgress t={t} stage={entry.stage} declined={entry.declined} onSetStage={onSetStage} onToggleDeclined={onToggleDeclined} large />
+        <StageProgress
+          t={t}
+          stage={entry.stage}
+          declined={entry.declined}
+          history={entry.stageHistory}
+          onSetStage={onSetStage}
+          onToggleDeclined={onToggleDeclined}
+          large
+        />
       </div>
       <div style={S.colTeam}>
         <div style={S.cardSub}>{(entry.team || []).join(", ") || "—"}</div>
@@ -678,10 +687,19 @@ function BillingRow({
 }
 
 // ---------- stage progress indicator ----------
+function stageTooltipText(s: { key: Stage; label: string }, i: number, idx: number, history: StageEvent[]) {
+  const event = [...history].reverse().find((h) => h.stage === s.key);
+  if (event) {
+    return `${s.label} · ${fmtDate(event.date)}${event.by ? ` · ${event.by}` : ""}`;
+  }
+  return i <= idx ? `${s.label} · date not recorded` : `${s.label} · not reached yet`;
+}
+
 function StageProgress({
   t,
   stage,
   declined,
+  history = [],
   onSetStage,
   onToggleDeclined,
   large,
@@ -689,20 +707,22 @@ function StageProgress({
   t: Theme;
   stage: Stage;
   declined: boolean;
+  history?: StageEvent[];
   onSetStage: (stage: Stage) => void;
   onToggleDeclined: () => void;
   large?: boolean;
 }) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const idx = Math.max(0, PIPELINE.findIndex((s) => s.key === stage));
   const color = declined ? t.danger : STAGE_COLOR[stage];
   const fillPct = (idx / (PIPELINE.length - 1)) * 100;
-  const trackWidth = large ? 260 : 200;
-  const dotSize = large ? 15 : 10;
-  const lineH = large ? 3 : 2;
+  const trackWidth = large ? 340 : 220;
+  const dotSize = large ? 22 : 13;
+  const lineH = large ? 5 : 3;
   const inset = dotSize / 2;
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: large ? 18 : 12 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: large ? 22 : 14 }}>
       <div style={{ width: trackWidth }}>
         <div style={{ position: "relative", height: dotSize + 4 }}>
           <div
@@ -733,34 +753,64 @@ function StageProgress({
           />
           <div style={{ position: "relative", display: "flex", justifyContent: "space-between" }}>
             {PIPELINE.map((s, i) => (
-              <button
+              <div
                 key={s.key}
-                onClick={() => onSetStage(s.key)}
-                title={s.label}
-                style={{
-                  width: dotSize,
-                  height: dotSize,
-                  borderRadius: "50%",
-                  border: `2px solid ${declined ? t.trackBg : i <= idx ? color : t.trackBg}`,
-                  background: declined ? t.surface : i <= idx ? color : t.surface,
-                  cursor: "pointer",
-                  padding: 0,
-                  boxShadow: large && i === idx && !declined ? `0 0 0 4px ${color}22` : "none",
-                }}
-              />
+                style={{ position: "relative" }}
+                onMouseEnter={() => setHoverIdx(i)}
+                onMouseLeave={() => setHoverIdx((cur) => (cur === i ? null : cur))}
+              >
+                {hoverIdx === i && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: "100%",
+                      left: "50%",
+                      transform: "translate(-50%, -8px)",
+                      background: t.ink,
+                      color: t.bg,
+                      fontSize: 11.5,
+                      fontWeight: 600,
+                      padding: "6px 10px",
+                      borderRadius: 7,
+                      whiteSpace: "nowrap",
+                      boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
+                      zIndex: 5,
+                      pointerEvents: "none",
+                    }}
+                  >
+                    {stageTooltipText(s, i, idx, history)}
+                  </div>
+                )}
+                <button
+                  onClick={() => onSetStage(s.key)}
+                  title={s.label}
+                  style={{
+                    width: dotSize,
+                    height: dotSize,
+                    borderRadius: "50%",
+                    border: `2px solid ${declined ? t.trackBg : i <= idx ? color : t.trackBg}`,
+                    background: declined ? t.surface : i <= idx ? color : t.surface,
+                    cursor: "pointer",
+                    padding: 0,
+                    boxShadow: large && i === idx && !declined ? `0 0 0 5px ${color}22` : "none",
+                    transition: "box-shadow .15s ease, transform .15s ease",
+                    transform: hoverIdx === i ? "scale(1.15)" : "scale(1)",
+                  }}
+                />
+              </div>
             ))}
           </div>
         </div>
         {large && (
-          <div style={{ position: "relative", display: "flex", justifyContent: "space-between", marginTop: 8 }}>
+          <div style={{ position: "relative", display: "flex", justifyContent: "space-between", marginTop: 9 }}>
             {PIPELINE.map((s, i) => (
               <span
                 key={s.key}
                 style={{
-                  fontSize: 10.5,
+                  fontSize: 12.5,
                   fontWeight: i === idx && !declined ? 700 : 500,
                   color: i === idx && !declined ? color : t.mutedSoft,
-                  width: dotSize + 30,
+                  width: dotSize + 34,
                   textAlign: i === 0 ? "left" : i === PIPELINE.length - 1 ? "right" : "center",
                   marginLeft: i === 0 ? -dotSize / 2 : 0,
                   marginRight: i === PIPELINE.length - 1 ? -dotSize / 2 : 0,
@@ -777,13 +827,13 @@ function StageProgress({
           {declined ? "Declined" : PIPELINE[idx].label}
         </span>
       )}
-      {large && declined && <span style={{ fontSize: 12.5, fontWeight: 700, color: t.danger }}>Declined</span>}
+      {large && declined && <span style={{ fontSize: 13.5, fontWeight: 700, color: t.danger }}>Declined</span>}
       <button
         onClick={onToggleDeclined}
         title={declined ? "Restore to pipeline" : "Mark declined / dead"}
         style={{ border: "none", background: "none", cursor: "pointer", color: declined ? t.danger : t.trackBg, display: "flex", padding: 0 }}
       >
-        <Ban size={large ? 16 : 14} />
+        <Ban size={large ? 18 : 14} />
       </button>
     </div>
   );
@@ -818,6 +868,7 @@ function EntryForm({
       round: 1,
       team: [user],
       stage: "sent",
+      stageHistory: [],
       declined: false,
       notes: "",
       addedBy: user,
@@ -901,6 +952,7 @@ function EntryForm({
                 t={t}
                 stage={form.stage}
                 declined={form.declined}
+                history={form.stageHistory}
                 onSetStage={(stage) => setForm((f) => ({ ...f, stage, declined: false }))}
                 onToggleDeclined={() => setForm((f) => ({ ...f, declined: !f.declined }))}
               />

@@ -296,7 +296,7 @@ export function makeStyles(t: Theme) {
     },
     colCandidate: { width: 200, flexShrink: 0 },
     colRole: { width: 170, flexShrink: 0 },
-    colProgress: { flex: 1, display: "flex", justifyContent: "center", minWidth: 260 },
+    colProgress: { flex: 1, display: "flex", justifyContent: "center", minWidth: 420 },
     colTeam: { width: 150, flexShrink: 0 },
     colActions: { width: 56, flexShrink: 0, display: "flex", justifyContent: "flex-end" },
     colRecruiter: { width: 140, flexShrink: 0 },

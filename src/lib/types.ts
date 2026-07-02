@@ -1,5 +1,11 @@
 export type Stage = "sent" | "interview" | "offer" | "placed";
 
+export type StageEvent = {
+  stage: Stage;
+  date: string;
+  by: string | null;
+};
+
 export type Entry = {
   id: string;
   date: string;
@@ -10,6 +16,7 @@ export type Entry = {
   round: number;
   team: string[];
   stage: Stage;
+  stageHistory: StageEvent[];
   declined: boolean;
   notes: string | null;
   addedBy: string | null;

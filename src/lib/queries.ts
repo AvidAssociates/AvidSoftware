@@ -1,5 +1,5 @@
 import { getDb } from "./db";
-import { Billing, Entry, RosterMember } from "./types";
+import { Billing, Entry, RosterMember, StageEvent } from "./types";
 
 type EntryRow = {
   id: string;
@@ -11,6 +11,7 @@ type EntryRow = {
   round: number;
   team: string[];
   stage: string;
+  stage_history: StageEvent[];
   declined: boolean;
   notes: string | null;
   added_by: string | null;
@@ -28,11 +29,16 @@ function toEntry(row: EntryRow): Entry {
     round: row.round,
     team: row.team ?? [],
     stage: row.stage as Entry["stage"],
+    stageHistory: row.stage_history ?? [],
     declined: row.declined,
     notes: row.notes,
     addedBy: row.added_by,
     createdAt: row.created_at,
   };
+}
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 export async function listEntries(): Promise<Entry[]> {
@@ -58,8 +64,11 @@ export async function createEntry(input: {
   addedBy?: string | null;
 }): Promise<Entry> {
   const db = getDb();
+  const history: StageEvent[] = [
+    { stage: input.stage as Entry["stage"], date: input.date, by: input.addedBy ?? null },
+  ];
   const [row] = (await db.sql`
-    INSERT INTO pipeline_entries (id, date, candidate, company, role, interview_type, round, team, stage, declined, notes, added_by)
+    INSERT INTO pipeline_entries (id, date, candidate, company, role, interview_type, round, team, stage, stage_history, declined, notes, added_by)
     VALUES (
       ${input.id},
       ${input.date},
@@ -70,6 +79,7 @@ export async function createEntry(input: {
       ${input.round},
       ${input.team},
       ${input.stage},
+      ${JSON.stringify(history)},
       ${input.declined},
       ${input.notes ?? null},
       ${input.addedBy ?? null}
@@ -92,9 +102,23 @@ export async function updateEntry(
     stage: string;
     declined: boolean;
     notes?: string | null;
+    updatedBy?: string | null;
   }
-): Promise<Entry> {
+): Promise<Entry | null> {
   const db = getDb();
+  const [existing] = (await db.sql`
+    SELECT stage, stage_history FROM pipeline_entries WHERE id = ${id}
+  `) as { stage: string; stage_history: StageEvent[] }[];
+  if (!existing) return null;
+
+  let history = existing.stage_history ?? [];
+  if (input.stage !== existing.stage) {
+    history = [
+      ...history,
+      { stage: input.stage as Entry["stage"], date: todayISO(), by: input.updatedBy ?? null },
+    ];
+  }
+
   const [row] = (await db.sql`
     UPDATE pipeline_entries SET
       date = ${input.date},
@@ -105,6 +129,7 @@ export async function updateEntry(
       round = ${input.round},
       team = ${input.team},
       stage = ${input.stage},
+      stage_history = ${JSON.stringify(history)},
       declined = ${input.declined},
       notes = ${input.notes ?? null}
     WHERE id = ${id}
