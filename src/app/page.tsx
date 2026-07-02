@@ -785,6 +785,21 @@ function StageProgress({
   const lineH = large ? 5 : 3;
   const inset = dotSize / 2;
 
+  // Replays the "pop" bounce on whichever dot just became active, without
+  // ever remounting a dot — remounting skipped the color/border transition
+  // on the dot losing active status, which looked like it never faded.
+  const [poppedIdx, setPoppedIdx] = useState<number | null>(null);
+  const [prevIdx, setPrevIdx] = useState(idx);
+  if (prevIdx !== idx) {
+    setPrevIdx(idx);
+    setPoppedIdx(idx);
+  }
+  useEffect(() => {
+    if (poppedIdx === null) return;
+    const timer = setTimeout(() => setPoppedIdx(null), 400);
+    return () => clearTimeout(timer);
+  }, [poppedIdx]);
+
   return (
     <div style={{ display: "flex", alignItems: "flex-start", gap: large ? 22 : 14 }}>
       <div style={{ width: trackWidth }}>
@@ -820,7 +835,7 @@ function StageProgress({
               const isActive = i === idx && !declined;
               return (
                 <div
-                  key={isActive ? `dot-${i}-active-${idx}` : `dot-${i}`}
+                  key={`dot-${i}`}
                   style={{ position: "relative" }}
                   onMouseEnter={() => setHoverIdx(i)}
                   onMouseLeave={() => setHoverIdx((cur) => (cur === i ? null : cur))}
@@ -828,7 +843,7 @@ function StageProgress({
                   <button
                     onClick={() => onSetStage?.(s.key)}
                     title={s.label}
-                    className={`avid-stage-dot avid-stage-pop${large && isActive ? " avid-stage-active" : ""}`}
+                    className={`avid-stage-dot${poppedIdx === i ? " avid-stage-pop" : ""}${large && isActive ? " avid-stage-active" : ""}`}
                     style={
                       {
                         width: dotSize,
