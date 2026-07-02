@@ -15,3 +15,21 @@ export type Entry = {
   addedBy: string | null;
   createdAt: string;
 };
+
+export type Billing = {
+  id: string;
+  date: string;
+  recruiter: string;
+  amount: number;
+  company: string | null;
+  candidate: string | null;
+  notes: string | null;
+  addedBy: string | null;
+  createdAt: string;
+};
+
+export type RosterMember = {
+  id: number;
+  name: string;
+  sortOrder: number;
+};
