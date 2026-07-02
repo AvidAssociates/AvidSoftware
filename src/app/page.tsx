@@ -1058,7 +1058,7 @@ function StageProgress({
                         pointerEvents: "none",
                       }}
                     >
-                      Click to set date
+                      {lastEventDate(history, s.key) ? fmtDate(lastEventDate(history, s.key)!) : "Click to set date"}
                     </div>
                   )}
                   <button
