@@ -527,6 +527,7 @@ function Dashboard({
                 <div style={S.colRole}>Role</div>
                 <div style={S.colProgress}>Progress</div>
                 <div style={S.colTeam}>Team</div>
+                <div style={S.colDate}>Date</div>
                 <div style={S.colActions} />
               </div>
               {filteredEntries.map((e) => (
@@ -681,9 +682,7 @@ function EntryRow({
     <div className="avid-row avid-row-enter" style={S.cardRow}>
       <div style={S.colCandidate}>
         <div style={S.cardPrimary}>{entry.candidate}</div>
-        <div style={S.cardSub}>
-          {entry.company} <span style={S.cardSubDim}>· {fmtDate(entry.date)}</span>
-        </div>
+        <div style={S.cardSub}>{entry.company}</div>
       </div>
       <div style={S.colRole}>
         <div style={S.cardPrimary}>{entry.role || "—"}</div>
@@ -708,6 +707,9 @@ function EntryRow({
       </div>
       <div style={S.colTeam}>
         <div style={S.cardSub}>{(entry.team || []).join(", ") || "—"}</div>
+      </div>
+      <div style={S.colDate}>
+        <div style={S.cardSub}>{fmtDate(entry.date)}</div>
       </div>
       <div style={S.colActions}>
         <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
@@ -893,7 +895,9 @@ function StageProgress({
   const [openIdx, setOpenIdx] = useState<number | null>(null);
   const [declineMenuOpen, setDeclineMenuOpen] = useState(false);
   const dotRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const declineBtnRef = useRef<HTMLButtonElement | null>(null);
   const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
+  const [declinePos, setDeclinePos] = useState<{ top: number; left: number } | null>(null);
   const idx = Math.max(0, PIPELINE.findIndex((s) => s.key === stage));
   const color = declined ? t.danger : STAGE_COLOR[stage];
   const fillPct = (idx / (PIPELINE.length - 1)) * 100;
@@ -967,6 +971,53 @@ function StageProgress({
       window.removeEventListener("scroll", place, true);
     };
   }, [openIdx]);
+
+  // Decline-reason menu: opens to the right of the button, portaled to
+  // <body> so it isn't clipped, and stays open until an outside click,
+  // Escape, or picking an option.
+  useEffect(() => {
+    if (!declineMenuOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (!(e.target instanceof Element) || !e.target.closest("[data-decline-popover]")) {
+        setDeclineMenuOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDeclineMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [declineMenuOpen]);
+
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- measures real DOM
+       layout (getBoundingClientRect), which is only available in an effect */
+    if (!declineMenuOpen) {
+      setDeclinePos(null);
+      return;
+    }
+    const place = () => {
+      const el = declineBtnRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const width = 190;
+      const left = Math.min(rect.right + 10, window.innerWidth - width - 8);
+      const top = Math.min(Math.max(rect.top + rect.height / 2, 50), window.innerHeight - 90);
+      setDeclinePos({ top, left });
+    };
+    place();
+    /* eslint-enable react-hooks/set-state-in-effect */
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [declineMenuOpen]);
 
   return (
     <div style={{ display: "flex", alignItems: "flex-start", gap: large ? 22 : 14 }}>
@@ -1122,54 +1173,57 @@ function StageProgress({
           </span>
         )}
         {large && declined && <span style={{ fontSize: 13.5, fontWeight: 700, color: t.danger }}>Declined</span>}
-        <div
-          style={{ position: "relative", display: "flex", alignItems: "center" }}
-          onMouseLeave={() => setDeclineMenuOpen(false)}
-        >
-          {declineMenuOpen && (
-            <div
-              style={{
-                position: "absolute",
-                bottom: "100%",
-                right: 0,
-                transform: "translateY(-8px)",
-                background: STAGE_POPOVER_BG,
-                borderRadius: 9,
-                padding: 4,
-                boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
-                zIndex: 7,
-                display: "flex",
-                flexDirection: "column",
-                minWidth: 176,
-              }}
-            >
-              {DECLINE_REASONS.map((r) => (
-                <button
-                  key={r.key}
-                  onClick={() => {
-                    onDecline?.(r.key);
-                    setDeclineMenuOpen(false);
-                  }}
-                  className="avid-decline-option"
-                  style={{
-                    background: "transparent",
-                    border: "none",
-                    color: STAGE_POPOVER_FG,
-                    textAlign: "left",
-                    padding: "8px 10px",
-                    fontSize: 12.5,
-                    fontWeight: 600,
-                    borderRadius: 6,
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {r.label}
-                </button>
-              ))}
-            </div>
-          )}
+        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+          {declineMenuOpen &&
+            declinePos &&
+            typeof document !== "undefined" &&
+            createPortal(
+              <div
+                data-decline-popover
+                style={{
+                  position: "fixed",
+                  top: declinePos.top,
+                  left: declinePos.left,
+                  transform: "translateY(-50%)",
+                  background: STAGE_POPOVER_BG,
+                  borderRadius: 9,
+                  padding: 4,
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+                  zIndex: 1000,
+                  display: "flex",
+                  flexDirection: "column",
+                  minWidth: 176,
+                }}
+              >
+                {DECLINE_REASONS.map((r) => (
+                  <button
+                    key={r.key}
+                    onClick={() => {
+                      onDecline?.(r.key);
+                      setDeclineMenuOpen(false);
+                    }}
+                    className="avid-decline-option"
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: STAGE_POPOVER_FG,
+                      textAlign: "left",
+                      padding: "8px 10px",
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      borderRadius: 6,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {r.label}
+                  </button>
+                ))}
+              </div>,
+              document.body
+            )}
           <button
+            ref={declineBtnRef}
             onClick={() => {
               if (declined) {
                 if (onRestore) onRestore();
