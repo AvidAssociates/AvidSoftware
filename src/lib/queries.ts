@@ -142,6 +142,39 @@ export async function deleteEntry(id: string) {
   await getDb().sql`DELETE FROM pipeline_entries WHERE id = ${id}`;
 }
 
+// Corrects the recorded date of a stage event after the fact (e.g. the
+// send-out actually hit "interview" a few days before it was logged).
+// Updates the most recent history entry for that stage; does not touch
+// the entry's current `stage`.
+export async function updateStageEventDate(
+  id: string,
+  stage: string,
+  date: string
+): Promise<Entry | null> {
+  const db = getDb();
+  const [existing] = (await db.sql`
+    SELECT stage_history FROM pipeline_entries WHERE id = ${id}
+  `) as { stage_history: StageEvent[] }[];
+  if (!existing) return null;
+
+  const history = existing.stage_history ?? [];
+  let lastIdx = -1;
+  history.forEach((h, i) => {
+    if (h.stage === stage) lastIdx = i;
+  });
+  if (lastIdx === -1) return null;
+
+  const updatedHistory = [...history];
+  updatedHistory[lastIdx] = { ...updatedHistory[lastIdx], date };
+
+  const [row] = (await db.sql`
+    UPDATE pipeline_entries SET stage_history = ${JSON.stringify(updatedHistory)}
+    WHERE id = ${id}
+    RETURNING *
+  `) as EntryRow[];
+  return toEntry(row);
+}
+
 // ---------------- Roster ----------------
 
 type RosterRow = { id: number; name: string; sort_order: number };

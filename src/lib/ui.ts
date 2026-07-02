@@ -95,6 +95,7 @@ export function makeStyles(t: Theme) {
       padding: 32,
     },
     loginLogo: { width: 96, height: "auto", marginBottom: 22 },
+    loginMark: { width: 34, height: "auto", marginBottom: 14 },
     wordmark: { fontSize: 22, fontWeight: 800, color: t.ink, letterSpacing: -0.5, marginBottom: 22 },
     wordmarkSub: { fontSize: 13, color: t.muted, marginTop: 2, marginBottom: 24 },
     loginGrid: { display: "flex", flexDirection: "column" as const, gap: 8 },

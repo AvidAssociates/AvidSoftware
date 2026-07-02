@@ -169,7 +169,13 @@ function Login({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={LOGO_FULL_SRC} alt="Avid Associates" style={S.loginLogo} />
         ) : (
-          <div style={S.wordmark}>AVID ASSOCIATES</div>
+          <>
+            {LOGO_ICON_SRC && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={LOGO_ICON_SRC} alt="" style={S.loginMark} />
+            )}
+            <div style={S.wordmark}>AVID ASSOCIATES</div>
+          </>
         )}
         <div style={S.wordmarkSub}>Send-Out Tracker</div>
 
@@ -309,6 +315,21 @@ function Dashboard({
     const optimistic = { ...entry, declined: !entry.declined };
     applyEntry(optimistic);
     const res = await send(`/api/entries/${entry.id}`, "PUT", { ...optimistic, updatedBy: user });
+    if (res.ok) applyEntry(await res.json());
+  };
+  // Corrects the date of an already-recorded stage event (e.g. it actually
+  // hit "interview" a few days earlier than when it was logged) — doesn't
+  // change the entry's current stage.
+  const editStageDate = async (entry: Entry, stage: Stage, date: string) => {
+    let lastIdx = -1;
+    entry.stageHistory.forEach((h, i) => {
+      if (h.stage === stage) lastIdx = i;
+    });
+    if (lastIdx === -1) return;
+    const updatedHistory = [...entry.stageHistory];
+    updatedHistory[lastIdx] = { ...updatedHistory[lastIdx], date };
+    applyEntry({ ...entry, stageHistory: updatedHistory });
+    const res = await send(`/api/entries/${entry.id}/stage-date`, "PATCH", { stage, date });
     if (res.ok) applyEntry(await res.json());
   };
   const deleteEntry = async (id: string) => {
@@ -523,6 +544,8 @@ function Dashboard({
                   onDelete={() => deleteEntry(e.id)}
                   onSetStage={(stage) => advanceStage(e, stage)}
                   onToggleDeclined={() => toggleDeclined(e)}
+                  onEditDate={(stage, date) => editStageDate(e, stage, date)}
+                  isDark={isDark}
                 />
               ))}
             </div>
@@ -643,6 +666,8 @@ function EntryRow({
   onDelete,
   onSetStage,
   onToggleDeclined,
+  onEditDate,
+  isDark,
 }: {
   S: Styles;
   t: Theme;
@@ -651,6 +676,8 @@ function EntryRow({
   onDelete: () => void;
   onSetStage: (stage: Stage) => void;
   onToggleDeclined: () => void;
+  onEditDate: (stage: Stage, date: string) => void;
+  isDark: boolean;
 }) {
   return (
     <div className="avid-row avid-row-enter" style={S.cardRow}>
@@ -675,6 +702,8 @@ function EntryRow({
           history={entry.stageHistory}
           onSetStage={onSetStage}
           onToggleDeclined={onToggleDeclined}
+          onEditDate={onEditDate}
+          isDark={isDark}
           large
         />
       </div>
@@ -742,6 +771,11 @@ function stageTooltipText(s: { key: Stage; label: string }, i: number, idx: numb
   return i <= idx ? `${s.label} · date not recorded` : `${s.label} · not reached yet`;
 }
 
+function lastEventDate(history: StageEvent[], stage: Stage): string | null {
+  const event = [...history].reverse().find((h) => h.stage === stage);
+  return event?.date ?? null;
+}
+
 function StageProgress({
   t,
   stage,
@@ -749,6 +783,8 @@ function StageProgress({
   history = [],
   onSetStage,
   onToggleDeclined,
+  onEditDate,
+  isDark,
   large,
 }: {
   t: Theme;
@@ -757,9 +793,12 @@ function StageProgress({
   history?: StageEvent[];
   onSetStage: (stage: Stage) => void;
   onToggleDeclined: () => void;
+  onEditDate?: (stage: Stage, date: string) => void;
+  isDark?: boolean;
   large?: boolean;
 }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const [openIdx, setOpenIdx] = useState<number | null>(null);
   const idx = Math.max(0, PIPELINE.findIndex((s) => s.key === stage));
   const color = declined ? t.danger : STAGE_COLOR[stage];
   const fillPct = (idx / (PIPELINE.length - 1)) * 100;
@@ -808,30 +847,93 @@ function StageProgress({
                   onMouseEnter={() => setHoverIdx(i)}
                   onMouseLeave={() => setHoverIdx((cur) => (cur === i ? null : cur))}
                 >
-                  {hoverIdx === i && (
+                  {openIdx === i && onEditDate ? (
                     <div
                       style={{
                         position: "absolute",
                         bottom: "100%",
                         left: "50%",
                         transform: "translate(-50%, -8px)",
-                        background: t.ink,
-                        color: t.bg,
-                        fontSize: 11.5,
-                        fontWeight: 600,
-                        padding: "6px 10px",
-                        borderRadius: 7,
-                        whiteSpace: "nowrap",
-                        boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
-                        zIndex: 5,
-                        pointerEvents: "none",
+                        background: t.surfaceAlt,
+                        border: `1px solid ${t.border}`,
+                        borderRadius: 9,
+                        padding: "7px 10px",
+                        boxShadow: "0 8px 24px rgba(0,0,0,0.28)",
+                        zIndex: 6,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 3,
                       }}
                     >
-                      {stageTooltipText(s, i, idx, history)}
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                          letterSpacing: 0.4,
+                          color: t.mutedSoft,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {s.label} date
+                      </span>
+                      <input
+                        type="date"
+                        autoFocus
+                        defaultValue={lastEventDate(history, s.key) || todayISO()}
+                        onChange={(e) => {
+                          if (e.target.value) onEditDate(s.key, e.target.value);
+                        }}
+                        onBlur={() => setOpenIdx(null)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape" || e.key === "Enter") {
+                            (e.target as HTMLInputElement).blur();
+                          }
+                        }}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          borderBottom: `1px solid ${t.border}`,
+                          color: t.ink,
+                          fontSize: 12.5,
+                          fontFamily: "inherit",
+                          outline: "none",
+                          padding: "2px 0",
+                          colorScheme: isDark ? "dark" : "light",
+                        }}
+                      />
                     </div>
+                  ) : (
+                    hoverIdx === i && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: "100%",
+                          left: "50%",
+                          transform: "translate(-50%, -8px)",
+                          background: t.ink,
+                          color: t.bg,
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                          padding: "6px 10px",
+                          borderRadius: 7,
+                          whiteSpace: "nowrap",
+                          boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
+                          zIndex: 5,
+                          pointerEvents: "none",
+                        }}
+                      >
+                        {stageTooltipText(s, i, idx, history)}
+                        {onEditDate && i === idx ? " · click to edit date" : ""}
+                      </div>
+                    )
                   )}
                   <button
-                    onClick={() => onSetStage(s.key)}
+                    onClick={() => {
+                      if (i !== idx) onSetStage(s.key);
+                      if (onEditDate && i >= idx) setOpenIdx(i);
+                      else setOpenIdx(null);
+                    }}
                     title={s.label}
                     className={`avid-stage-dot avid-stage-pop${large && isActive ? " avid-stage-active" : ""}`}
                     style={
