@@ -9,7 +9,6 @@ import {
   Pencil,
   Trash2,
   X,
-  LogOut,
   Ban,
   ChevronDown,
   ChevronLeft,
@@ -19,7 +18,7 @@ import {
   Settings,
   Tv,
 } from "lucide-react";
-import { LOGO_ICON_SRC, LOGO_FULL_SRC } from "@/lib/logos";
+import { LOGO_ICON_SRC } from "@/lib/logos";
 import { Billing, DeclineReason, Entry, RosterMember, Stage, StageEvent } from "@/lib/types";
 import {
   ADMIN,
@@ -75,7 +74,6 @@ const send = (url: string, method: string, body?: unknown) =>
 
 // ============================================================
 export default function App() {
-  const [user, setUser] = useState<string | null>(null);
   const [isDark, setIsDark] = useState(true);
   const [booting, setBooting] = useState(true);
   const [roster, setRoster] = useState<RosterMember[]>([]);
@@ -88,9 +86,7 @@ export default function App() {
   useEffect(() => {
     // Browser-only prefs + initial roster fetch. An effect is required here.
     /* eslint-disable react-hooks/set-state-in-effect */
-    const storedUser = getLocal("current-user");
     const storedTheme = getLocal("theme-dark");
-    if (storedUser) setUser(storedUser);
     if (storedTheme !== null) setIsDark(storedTheme === "1");
     reloadRoster().finally(() => setBooting(false));
     /* eslint-enable react-hooks/set-state-in-effect */
@@ -133,86 +129,16 @@ export default function App() {
     );
   }
 
-  return user ? (
+  return (
     <Dashboard
-      user={user}
+      user={teamNames[0] || "Team"}
       t={t}
       isDark={isDark}
       roster={roster}
       teamNames={teamNames}
       reloadRoster={reloadRoster}
       onToggleTheme={toggleTheme}
-      onSwitchUser={() => {
-        setLocal("current-user", "");
-        setUser(null);
-      }}
     />
-  ) : (
-    <Login
-      t={t}
-      teamNames={teamNames}
-      onLogin={(name) => {
-        setLocal("current-user", name);
-        setUser(name);
-      }}
-    />
-  );
-}
-
-// ============================================================
-function Login({
-  t,
-  teamNames,
-  onLogin,
-}: {
-  t: Theme;
-  teamNames: string[];
-  onLogin: (name: string) => void;
-}) {
-  const [custom, setCustom] = useState("");
-  const S = makeStyles(t);
-
-  return (
-    <div style={S.loginWrap}>
-      <div style={S.loginCard}>
-        {LOGO_FULL_SRC ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={LOGO_FULL_SRC} alt="Avid Associates" style={S.loginLogo} />
-        ) : (
-          <>
-            {LOGO_ICON_SRC && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={LOGO_ICON_SRC} alt="" style={S.loginMark} />
-            )}
-            <div style={S.wordmark}>AVID ASSOCIATES</div>
-          </>
-        )}
-        <div style={S.wordmarkSub}>Send-Out Tracker</div>
-
-        <div style={S.loginGrid}>
-          {teamNames.map((name) => (
-            <button key={name} style={S.loginBtn} onClick={() => onLogin(name)}>
-              {name}
-            </button>
-          ))}
-        </div>
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (custom.trim()) onLogin(custom.trim());
-          }}
-          style={{ display: "flex", gap: 8, marginTop: 14 }}
-        >
-          <input style={S.loginInput} placeholder="Or type a name" value={custom} onChange={(e) => setCustom(e.target.value)} />
-          <button type="submit" style={S.loginGoBtn}>
-            Go
-          </button>
-        </form>
-
-        <div style={S.loginFoot}>Stays signed in on this device</div>
-      </div>
-    </div>
   );
 }
 
@@ -225,7 +151,6 @@ function Dashboard({
   teamNames,
   reloadRoster,
   onToggleTheme,
-  onSwitchUser,
 }: {
   user: string;
   t: Theme;
@@ -234,7 +159,6 @@ function Dashboard({
   teamNames: string[];
   reloadRoster: () => Promise<void>;
   onToggleTheme: () => void;
-  onSwitchUser: () => void;
 }) {
   const S = makeStyles(t);
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -433,9 +357,6 @@ function Dashboard({
               <Settings size={16} />
             </button>
           )}
-          <button className="avid-btn" style={S.iconGhost} onClick={onSwitchUser} title="Switch user">
-            <LogOut size={15} />
-          </button>
         </div>
       </header>
 
