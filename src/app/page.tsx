@@ -772,12 +772,9 @@ function BillingRow({
 }
 
 // ---------- stage progress indicator ----------
-function stageTooltipText(s: { key: Stage; label: string }, i: number, idx: number, history: StageEvent[]) {
-  const event = [...history].reverse().find((h) => h.stage === s.key);
-  if (event) {
-    return `${s.label} · ${fmtDate(event.date)}${event.by ? ` · ${event.by}` : ""}`;
-  }
-  return i <= idx ? `${s.label} · date not recorded` : `${s.label} · not reached yet`;
+function stageTooltipText(s: { key: Stage; label: string }, history: StageEvent[]) {
+  const date = lastEventDate(history, s.key);
+  return `${s.label} · ${date ? fmtDate(date) : "—"}`;
 }
 
 function lastEventDate(history: StageEvent[], stage: Stage): string | null {
@@ -856,91 +853,69 @@ function StageProgress({
                   onMouseEnter={() => setHoverIdx(i)}
                   onMouseLeave={() => setHoverIdx((cur) => (cur === i ? null : cur))}
                 >
-                  {openIdx === i && onEditDate ? (
+                  {(openIdx === i && onEditDate) || hoverIdx === i ? (
                     <div
                       style={{
                         position: "absolute",
                         bottom: "100%",
                         left: "50%",
                         transform: "translate(-50%, -8px)",
-                        background: t.surfaceAlt,
-                        border: `1px solid ${t.border}`,
-                        borderRadius: 9,
-                        padding: "7px 10px",
-                        boxShadow: "0 8px 24px rgba(0,0,0,0.28)",
+                        background: t.ink,
+                        color: t.bg,
+                        fontSize: 11.5,
+                        fontWeight: 600,
+                        padding: "6px 10px",
+                        borderRadius: 7,
+                        whiteSpace: "nowrap",
+                        boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
                         zIndex: 6,
+                        pointerEvents: openIdx === i && onEditDate ? "auto" : "none",
                         display: "flex",
-                        flexDirection: "column",
-                        gap: 3,
+                        alignItems: "center",
+                        gap: 6,
                       }}
                     >
-                      <span
-                        style={{
-                          fontSize: 10,
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          letterSpacing: 0.4,
-                          color: t.mutedSoft,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {s.label} date
-                      </span>
-                      <input
-                        type="date"
-                        autoFocus
-                        defaultValue={lastEventDate(history, s.key) || todayISO()}
-                        onChange={(e) => {
-                          if (e.target.value) onEditDate(s.key, e.target.value);
-                        }}
-                        onBlur={() => setOpenIdx(null)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Escape" || e.key === "Enter") {
-                            (e.target as HTMLInputElement).blur();
-                          }
-                        }}
-                        style={{
-                          background: "transparent",
-                          border: "none",
-                          borderBottom: `1px solid ${t.border}`,
-                          color: t.ink,
-                          fontSize: 12.5,
-                          fontFamily: "inherit",
-                          outline: "none",
-                          padding: "2px 0",
-                          colorScheme: isDark ? "dark" : "light",
-                        }}
-                      />
+                      {openIdx === i && onEditDate ? (
+                        <>
+                          <span>{s.label} ·</span>
+                          <input
+                            type="date"
+                            autoFocus
+                            defaultValue={lastEventDate(history, s.key) || todayISO()}
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                onEditDate(s.key, e.target.value);
+                                window.setTimeout(() => setOpenIdx(null), 150);
+                              }
+                            }}
+                            onBlur={() => setOpenIdx(null)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape" || e.key === "Enter") {
+                                (e.target as HTMLInputElement).blur();
+                              }
+                            }}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: t.bg,
+                              fontSize: 11.5,
+                              fontWeight: 600,
+                              fontFamily: "inherit",
+                              outline: "none",
+                              padding: 0,
+                              colorScheme: isDark ? "light" : "dark",
+                            }}
+                          />
+                        </>
+                      ) : (
+                        stageTooltipText(s, history)
+                      )}
                     </div>
-                  ) : (
-                    hoverIdx === i && (
-                      <div
-                        style={{
-                          position: "absolute",
-                          bottom: "100%",
-                          left: "50%",
-                          transform: "translate(-50%, -8px)",
-                          background: t.ink,
-                          color: t.bg,
-                          fontSize: 11.5,
-                          fontWeight: 600,
-                          padding: "6px 10px",
-                          borderRadius: 7,
-                          whiteSpace: "nowrap",
-                          boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
-                          zIndex: 5,
-                          pointerEvents: "none",
-                        }}
-                      >
-                        {stageTooltipText(s, i, idx, history)}
-                        {onEditDate && i === idx ? " · click to edit date" : ""}
-                      </div>
-                    )
-                  )}
+                  ) : null}
                   <button
                     onClick={() => {
-                      if (i !== idx) onSetStage(s.key);
-                      if (onEditDate && i >= idx) setOpenIdx(i);
+                      if (i > idx) onSetStage(s.key);
+                      if (onEditDate) setOpenIdx(i);
                       else setOpenIdx(null);
                     }}
                     title={s.label}
