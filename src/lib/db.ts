@@ -4,10 +4,11 @@ import { waddler } from "waddler/node-postgres";
 let pool: Pool | undefined;
 
 export function getDb() {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString =
+    process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? process.env.POSTGRES_URL_NON_POOLING;
   if (!connectionString) {
     throw new Error(
-      "DATABASE_URL is not set. Add it in your Vercel project's Environment Variables (Postgres connection string)."
+      "No database connection string set. Add DATABASE_URL (or POSTGRES_URL) in your Vercel project's Environment Variables."
     );
   }
   pool ??= new Pool({ connectionString });

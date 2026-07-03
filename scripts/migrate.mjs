@@ -9,9 +9,10 @@ import pg from "pg";
 const migrationsDir = fileURLToPath(new URL("../db/migrations", import.meta.url));
 
 async function main() {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString =
+    process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? process.env.POSTGRES_URL_NON_POOLING;
   if (!connectionString) {
-    throw new Error("DATABASE_URL is not set — cannot run migrations.");
+    throw new Error("No database connection string set (DATABASE_URL / POSTGRES_URL) — cannot run migrations.");
   }
 
   const dirs = readdirSync(migrationsDir, { withFileTypes: true })
