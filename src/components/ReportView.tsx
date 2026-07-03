@@ -174,7 +174,7 @@ export default function ReportView({
       </div>
 
       <div className="print-only" style={{ display: "none" }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: printT.ink }}>Avid Associates — Production Report</div>
+        <div style={{ fontSize: 20, fontWeight: 800, color: printT.ink }}>Avid Associates — Production Reports</div>
         <div style={{ fontSize: 13, color: printT.muted, marginTop: 4, marginBottom: 28 }}>
           {year} &middot; Billed {money(firmTotal)} &middot; {yearBillings.length} deals &middot; Top Producer: {topProducer}
         </div>

@@ -437,7 +437,7 @@ function Dashboard({
               ? "Billings"
               : view === "leaderboard"
                 ? "Leaderboard"
-                : "Production Report"}
+                : "Production Reports"}
         </h1>
         {view === "billings" ? (
           <div style={{ marginTop: 16 }}>
@@ -490,7 +490,7 @@ function Dashboard({
             style={view === "report" ? S.segBtnActive : S.segBtn}
             onClick={() => setView("report")}
           >
-            Report
+            Reports
           </button>
           <button
             className="avid-btn"
