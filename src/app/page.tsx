@@ -186,6 +186,10 @@ function Dashboard({
     yearlyGoal: null,
     monthlyGoal: null,
   });
+  const [reportGoals, setReportGoals] = useState<{ yearlyGoal: number | null; monthlyGoal: number | null }>({
+    yearlyGoal: null,
+    monthlyGoal: null,
+  });
 
   const isAdmin = user === ADMIN;
   const monthKey = `${monthCursor.getFullYear()}-${String(monthCursor.getMonth() + 1).padStart(2, "0")}`;
@@ -194,6 +198,22 @@ function Dashboard({
   const goNextMonth = () => setMonthCursor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
 
   const monthCursorYear = monthCursor.getFullYear();
+
+  // Fetched as soon as the app loads (not when the Report tab is opened) so
+  // the goal-line coloring is already correct the first time it's shown —
+  // no flash of the wrong bar color while the fetch is in flight.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/goals?year=${reportYear}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setReportGoals({ yearlyGoal: data.yearlyGoal ?? null, monthlyGoal: data.monthlyGoal ?? null });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [reportYear]);
 
   // The same production_goals row the Report tab charts read — editing it
   // here (next to Billings) carries straight over to Report.
@@ -209,6 +229,11 @@ function Dashboard({
       cancelled = true;
     };
   }, [monthCursorYear]);
+
+  const handleGoalsSaved = (goals: { yearlyGoal: number | null; monthlyGoal: number | null }) => {
+    setBillingsGoals(goals);
+    if (reportYear === monthCursorYear) setReportGoals(goals);
+  };
 
   // Loads in the background without ever blanking the current view — only
   // the very first mount shows the loading state.
@@ -538,7 +563,7 @@ function Dashboard({
           <div style={S.empty}>Loading…</div>
         ) : view === "report" ? (
           <div style={S.reportPad}>
-            <ReportView billings={billings} teamNames={teamNames} year={reportYear} t={t} isDark={isDark} />
+            <ReportView billings={billings} teamNames={teamNames} year={reportYear} goals={reportGoals} t={t} isDark={isDark} />
           </div>
         ) : view === "sendouts" ? (
           filteredEntries.length === 0 ? (
@@ -651,7 +676,7 @@ function Dashboard({
           year={monthCursorYear}
           initialYearly={billingsGoals.yearlyGoal}
           initialMonthly={billingsGoals.monthlyGoal}
-          onSavedGoals={setBillingsGoals}
+          onSavedGoals={handleGoalsSaved}
           onClose={() => setShowSettings(false)}
         />
       )}

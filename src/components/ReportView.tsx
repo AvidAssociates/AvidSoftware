@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Download } from "lucide-react";
 import { Billing } from "@/lib/types";
 import {
@@ -40,34 +40,19 @@ export default function ReportView({
   billings,
   teamNames,
   year,
+  goals,
   t,
   isDark,
 }: {
   billings: Billing[];
   teamNames: string[];
   year: number;
+  goals: { yearlyGoal: number | null; monthlyGoal: number | null };
   t: Theme;
   isDark: boolean;
 }) {
   const S = makeStyles(t);
   const [showTable, setShowTable] = useState(false);
-  const [goals, setGoals] = useState<{ yearlyGoal: number | null; monthlyGoal: number | null }>({
-    yearlyGoal: null,
-    monthlyGoal: null,
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/goals?year=${year}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (!cancelled && data) setGoals({ yearlyGoal: data.yearlyGoal ?? null, monthlyGoal: data.monthlyGoal ?? null });
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [year]);
 
   const yearBillings = useMemo(
     () => billings.filter((b) => b.date?.startsWith(String(year))),
@@ -117,6 +102,12 @@ export default function ReportView({
 
   const firmTotal = firmByMonth.reduce((a, b) => a + b, 0);
 
+  // Months that haven't happened yet shouldn't render as "$0" — that implies
+  // measured, confirmed zero production, not "no data yet". Only clip when
+  // viewing the current calendar year; a past year's December is real data.
+  const now = new Date();
+  const visibleMonths = year === now.getFullYear() ? now.getMonth() + 1 : 12;
+
   // A fixed light theme for the printed rendition — a PDF should always look
   // like clean print, independent of whatever theme the screen happens to
   // be in when Export is clicked.
@@ -143,13 +134,13 @@ export default function ReportView({
               <Download size={18} />
             </button>
           </div>
-          <FirmBarChart S={S} t={t} data={firmByMonth} color={STAGE_COLOR.placed} monthlyGoal={goals.monthlyGoal} />
+          <FirmBarChart S={S} t={t} data={firmByMonth} color={STAGE_COLOR.placed} monthlyGoal={goals.monthlyGoal} visibleMonths={visibleMonths} />
         </div>
 
         <div style={{ ...S.reportSection, marginBottom: 24 }}>
           <h3 style={S.chartTitle}>Production by Recruiter</h3>
           <p style={S.chartSubtitle}>Monthly billings per person, {year}</p>
-          <RecruiterLineChart S={S} t={t} series={series} />
+          <RecruiterLineChart S={S} t={t} series={series} visibleMonths={visibleMonths} />
           <div style={S.legendRow}>
             {series.map((s) => (
               <div key={s.name} style={S.legendItem}>
@@ -181,12 +172,12 @@ export default function ReportView({
         <div style={printS.reportSection}>
           <h3 style={printS.chartTitle}>Firm Production</h3>
           <p style={printS.chartSubtitle}>Total billings by month, {year}</p>
-          <FirmBarChart S={printS} t={printT} data={firmByMonth} color={STAGE_COLOR.placed} monthlyGoal={goals.monthlyGoal} />
+          <FirmBarChart S={printS} t={printT} data={firmByMonth} color={STAGE_COLOR.placed} monthlyGoal={goals.monthlyGoal} visibleMonths={visibleMonths} />
         </div>
         <div style={printS.reportSection}>
           <h3 style={printS.chartTitle}>Production by Recruiter</h3>
           <p style={printS.chartSubtitle}>Monthly billings per person, {year}</p>
-          <RecruiterLineChart S={printS} t={printT} series={printSeries} />
+          <RecruiterLineChart S={printS} t={printT} series={printSeries} visibleMonths={visibleMonths} />
           <div style={printS.legendRow}>
             {printSeries.map((s) => (
               <div key={s.name} style={printS.legendItem}>
@@ -210,21 +201,24 @@ function FirmBarChart({
   data,
   color,
   monthlyGoal,
+  visibleMonths = 12,
 }: {
   S: Styles;
   t: Theme;
   data: number[];
   color: string;
   monthlyGoal?: number | null;
+  visibleMonths?: number;
 }) {
   const [hover, setHover] = useState<number | null>(null);
 
+  const visibleData = data.slice(0, visibleMonths);
   const hasGoal = !!monthlyGoal && monthlyGoal > 0;
-  const { max: yMax, step } = niceAxisMax(Math.max(...data, hasGoal ? monthlyGoal! : 0, 0));
+  const { max: yMax, step } = niceAxisMax(Math.max(...visibleData, hasGoal ? monthlyGoal! : 0, 0));
   const ticks = [0, step, step * 2, step * 3, step * 4];
   const bandW = PLOT_W / 12;
   const barW = Math.min(24, bandW * 0.55);
-  const peakIndex = data.indexOf(Math.max(...data));
+  const peakIndex = data.indexOf(Math.max(...visibleData));
   const goalY = hasGoal ? valueY(monthlyGoal!, yMax) : null;
 
   // The svg scales to 100% width at a fixed aspect ratio, so the tooltip's
@@ -253,6 +247,7 @@ function FirmBarChart({
           );
         })}
         {data.map((v, i) => {
+          const isFuture = i >= visibleMonths;
           const x = monthX(i) - barW / 2;
           const y = valueY(v, yMax);
           const h = MARGIN.top + PLOT_H - y;
@@ -262,38 +257,42 @@ function FirmBarChart({
           const goalNote = hasGoal ? (underGoal ? " — below goal" : " — at or above goal") : "";
           return (
             <g key={i}>
-              <rect
-                x={monthX(i) - bandW / 2}
-                y={MARGIN.top}
-                width={bandW}
-                height={PLOT_H}
-                fill="transparent"
-                tabIndex={0}
-                aria-label={`${MONTHS_SHORT[i]}: ${money(v)}${goalNote}`}
-                onPointerEnter={() => setHover(i)}
-                onPointerLeave={() => setHover(null)}
-                onFocus={() => setHover(i)}
-                onBlur={() => setHover(null)}
-                style={{ cursor: "pointer" }}
-              />
-              <path
-                d={topRoundedRectPath(x, y, barW, Math.max(h, 0), 4)}
-                fill={barColor}
-                opacity={isHover ? 1 : 0.85}
-                style={{ transition: "opacity 0.15s ease, fill 0.2s ease", pointerEvents: "none" }}
-              />
-              {v > 0 && (
-                <text
-                  x={monthX(i)}
-                  y={y - 8}
-                  textAnchor="middle"
-                  fontSize={11}
-                  fontWeight={i === peakIndex ? 700 : 600}
-                  fill={i === peakIndex ? t.ink : t.muted}
-                  style={{ pointerEvents: "none" }}
-                >
-                  {moneyCompact(v)}
-                </text>
+              {!isFuture && (
+                <>
+                  <rect
+                    x={monthX(i) - bandW / 2}
+                    y={MARGIN.top}
+                    width={bandW}
+                    height={PLOT_H}
+                    fill="transparent"
+                    tabIndex={0}
+                    aria-label={`${MONTHS_SHORT[i]}: ${money(v)}${goalNote}`}
+                    onPointerEnter={() => setHover(i)}
+                    onPointerLeave={() => setHover(null)}
+                    onFocus={() => setHover(i)}
+                    onBlur={() => setHover(null)}
+                    style={{ cursor: "pointer" }}
+                  />
+                  <path
+                    d={topRoundedRectPath(x, y, barW, Math.max(h, 0), 4)}
+                    fill={barColor}
+                    opacity={isHover ? 1 : 0.85}
+                    style={{ transition: "opacity 0.15s ease, fill 0.2s ease", pointerEvents: "none" }}
+                  />
+                  {v > 0 && (
+                    <text
+                      x={monthX(i)}
+                      y={y - 8}
+                      textAnchor="middle"
+                      fontSize={11}
+                      fontWeight={i === peakIndex ? 700 : 600}
+                      fill={i === peakIndex ? t.ink : t.muted}
+                      style={{ pointerEvents: "none" }}
+                    >
+                      {moneyCompact(v)}
+                    </text>
+                  )}
+                </>
               )}
               <text x={monthX(i)} y={H - 8} textAnchor="middle" fontSize={11} fill={t.mutedSoft} style={{ pointerEvents: "none" }}>
                 {MONTHS_SHORT[i]}
@@ -367,16 +366,18 @@ function RecruiterLineChart({
   S,
   t,
   series,
+  visibleMonths = 12,
 }: {
   S: Styles;
   t: Theme;
   series: { name: string; color: string; values: number[] }[];
+  visibleMonths?: number;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  const allValues = series.flatMap((s) => s.values);
-  const { max: yMax, step } = niceAxisMax(Math.max(...allValues, 0));
+  const visibleValues = series.flatMap((s) => s.values.slice(0, visibleMonths));
+  const { max: yMax, step } = niceAxisMax(Math.max(...visibleValues, 0));
   const ticks = [0, step, step * 2, step * 3, step * 4];
 
   const onMove = (evt: React.PointerEvent<SVGRectElement>) => {
@@ -384,7 +385,7 @@ function RecruiterLineChart({
     if (!rect) return;
     const relX = ((evt.clientX - rect.left) / rect.width) * W;
     const i = Math.round(((relX - MARGIN.left) / PLOT_W) * 11);
-    setHover(Math.min(11, Math.max(0, i)));
+    setHover(Math.min(visibleMonths - 1, Math.max(0, i)));
   };
 
   // Pure data-space percentages — see FirmBarChart for why no ref read is needed.
@@ -434,11 +435,12 @@ function RecruiterLineChart({
           />
         )}
         {series.map((s) => {
-          const d = s.values.map((v, i) => `${i === 0 ? "M" : "L"}${monthX(i)},${valueY(v, yMax)}`).join(" ");
+          const visible = s.values.slice(0, visibleMonths);
+          const d = visible.map((v, i) => `${i === 0 ? "M" : "L"}${monthX(i)},${valueY(v, yMax)}`).join(" ");
           return (
             <g key={s.name}>
               <path d={d} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-              {s.values.map((v, i) => (
+              {visible.map((v, i) => (
                 <circle
                   key={i}
                   cx={monthX(i)}
@@ -456,7 +458,7 @@ function RecruiterLineChart({
         <rect
           x={MARGIN.left}
           y={MARGIN.top}
-          width={PLOT_W}
+          width={visibleMonths >= 12 ? PLOT_W : monthX(visibleMonths - 1) - MARGIN.left + PLOT_W / 22}
           height={PLOT_H}
           fill="transparent"
           tabIndex={0}
