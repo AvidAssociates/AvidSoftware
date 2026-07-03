@@ -455,7 +455,7 @@ function Dashboard({
         </div>
         {view === "billings" ? (
           <div style={{ marginTop: 16 }}>
-            <BillingsSummary billings={billings} monthKey={monthKey} year={monthCursorYear} goals={billingsGoals} t={t} />
+            <BillingsSummary billings={billings} teamNames={teamNames} monthKey={monthKey} year={monthCursorYear} goals={billingsGoals} t={t} />
           </div>
         ) : (
           <div style={S.heroStatsRow}>
