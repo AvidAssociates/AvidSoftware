@@ -133,7 +133,12 @@ function FirmBarChart({ S, t, data, color }: { S: Styles; t: Theme; data: number
 
   return (
     <div style={{ position: "relative" }}>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height="auto" role="img" aria-label="Firm production by month">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        style={{ width: "100%", height: "auto", display: "block" }}
+        role="img"
+        aria-label="Firm production by month"
+      >
         {ticks.map((tick, i) => {
           const y = valueY(tick, yMax);
           return (
@@ -238,7 +243,13 @@ function RecruiterLineChart({
 
   return (
     <div style={{ position: "relative" }}>
-      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} width="100%" height="auto" role="img" aria-label="Production by recruiter, by month">
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${W} ${H}`}
+        style={{ width: "100%", height: "auto", display: "block" }}
+        role="img"
+        aria-label="Production by recruiter, by month"
+      >
         {ticks.map((tick, i) => {
           const y = valueY(tick, yMax);
           return (
