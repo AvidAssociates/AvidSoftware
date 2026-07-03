@@ -119,8 +119,6 @@ export function makeStyles(t: Theme) {
       background: t.surface,
     },
     headerLeft: { display: "flex", alignItems: "center", gap: 9, justifySelf: "start" as const },
-    headerLogo: { width: 20, height: "auto" },
-    wordmarkSmall: { fontWeight: 800, fontSize: 15, color: t.ink, letterSpacing: -0.3 },
     headerRight: { display: "flex", alignItems: "center", gap: 6, justifySelf: "end" as const },
     monthSwitcher: { display: "flex", alignItems: "center", gap: 4, justifySelf: "center" as const },
     monthLabel: { fontSize: 13.5, fontWeight: 700, color: t.ink, minWidth: 112, textAlign: "center" as const },

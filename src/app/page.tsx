@@ -18,7 +18,6 @@ import {
   Settings,
   Tv,
 } from "lucide-react";
-import { LOGO_ICON_SRC } from "@/lib/logos";
 import { Billing, DeclineReason, Entry, RosterMember, Stage, StageEvent } from "@/lib/types";
 import {
   ADMIN,
@@ -384,11 +383,7 @@ function Dashboard({
     <div style={S.page} className="app-shell">
       <header style={S.header} className="no-print">
         <div style={S.headerLeft}>
-          {LOGO_ICON_SRC ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={LOGO_ICON_SRC} alt="Avid Associates" style={S.headerLogo} />
-          ) : null}
-          <span style={S.wordmarkSmall}>Avid</span>
+          <span style={{ ...S.heroEyebrow, marginBottom: 0 }}>AVID ASSOCIATES</span>
         </div>
         <div style={S.monthSwitcher}>
           {view === "report" ? (
@@ -429,7 +424,6 @@ function Dashboard({
       </header>
 
       <section style={S.hero} className="no-print">
-        <div style={S.heroEyebrow}>AVID ASSOCIATES</div>
         <h1 style={S.heroTitle}>
           {view === "sendouts"
             ? "Send-Outs"
