@@ -57,7 +57,8 @@ export default function BillingsSummary({
   const monthlyAvgNeeded = goals.yearlyGoal ? goals.yearlyGoal / 12 : null;
   const pctToGoal = goals.yearlyGoal ? companyYtd / goals.yearlyGoal : null;
 
-  const cols = "130px repeat(4, 1fr)";
+  const cols = "repeat(5, 1fr)";
+  const centered = { textAlign: "center" as const };
 
   return (
     <div style={S.reportSection}>
@@ -77,15 +78,15 @@ export default function BillingsSummary({
 
       <div style={S.reportTableWrap}>
         <div style={{ ...S.reportTableHeadRow, gridTemplateColumns: cols }}>
-          <div>Recruiter</div>
-          <div>Monthly Personal</div>
-          <div>Monthly Total</div>
-          <div>YTD Personal</div>
-          <div>YTD Total</div>
+          <div style={centered}>Recruiter</div>
+          <div style={centered}>Monthly Personal</div>
+          <div style={centered}>Monthly Total</div>
+          <div style={centered}>YTD Personal</div>
+          <div style={centered}>YTD Total</div>
         </div>
         {teamNames.map((name) => (
           <div key={name} style={{ ...S.reportTableRow, gridTemplateColumns: cols }}>
-            <div style={S.reportTableCell}>{name}</div>
+            <div style={{ ...S.reportTableCell, ...centered }}>{name}</div>
             <MoneyCell S={S} amount={personalSum(name, monthFees)} count={personalCount(name, monthFees)} />
             <MoneyCell S={S} amount={totalSum(name, monthFees)} count={totalCount(name, monthFees)} />
             <MoneyCell S={S} amount={personalSum(name, ytdFees)} count={personalCount(name, ytdFees)} />
@@ -99,8 +100,8 @@ export default function BillingsSummary({
 
 function MoneyCell({ S, amount, count }: { S: Styles; amount: number; count: number }) {
   return (
-    <div>
-      <div style={S.reportTableCell}>{money(amount)}</div>
+    <div style={{ textAlign: "center" }}>
+      <div style={{ ...S.reportTableCell, color: "#4FBF82" }}>{money(amount)}</div>
       <div style={S.cardSub}>
         {count} deal{count === 1 ? "" : "s"}
       </div>
