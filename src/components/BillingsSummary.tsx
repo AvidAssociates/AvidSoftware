@@ -52,7 +52,6 @@ export default function BillingsSummary({
   const monthFees = billings.filter((b) => b.date?.startsWith(monthKey));
   const ytdFees = billings.filter((b) => b.date?.startsWith(String(year)) && Number(b.date.slice(5, 7)) <= month);
 
-  const companyMonth = monthFees.reduce((s, b) => s + b.amount, 0);
   const companyYtd = ytdFees.reduce((s, b) => s + b.amount, 0);
 
   const monthlyAvgNeeded = goals.yearlyGoal ? goals.yearlyGoal / 12 : null;
@@ -93,13 +92,6 @@ export default function BillingsSummary({
             <MoneyCell S={S} amount={totalSum(name, ytdFees)} count={totalCount(name, ytdFees)} />
           </div>
         ))}
-        <div style={{ ...S.reportTableRow, ...S.reportTableTotalRow, gridTemplateColumns: cols }}>
-          <div style={S.reportTableCell}>Company</div>
-          <div style={S.reportTableCell}>{money(companyMonth)}</div>
-          <div style={S.reportTableCell}>{money(companyMonth)}</div>
-          <div style={S.reportTableCell}>{money(companyYtd)}</div>
-          <div style={S.reportTableCell}>{money(companyYtd)}</div>
-        </div>
       </div>
     </div>
   );
