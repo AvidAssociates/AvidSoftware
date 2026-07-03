@@ -8,12 +8,22 @@ import pg from "pg";
 
 const migrationsDir = fileURLToPath(new URL("../db/migrations", import.meta.url));
 
+// See src/lib/db.ts: recent pg-connection-string versions upgrade
+// sslmode=require/prefer to full chain verification, which rejects
+// Supabase's pooler cert regardless of an explicit ssl option.
+function withNoVerifySsl(connectionString) {
+  const url = new URL(connectionString);
+  url.searchParams.set("sslmode", "no-verify");
+  return url.toString();
+}
+
 async function main() {
-  const connectionString =
+  const rawConnectionString =
     process.env.DATABASE_URL ?? process.env.POSTGRES_URL ?? process.env.POSTGRES_URL_NON_POOLING;
-  if (!connectionString) {
+  if (!rawConnectionString) {
     throw new Error("No database connection string set (DATABASE_URL / POSTGRES_URL) — cannot run migrations.");
   }
+  const connectionString = withNoVerifySsl(rawConnectionString);
 
   const dirs = readdirSync(migrationsDir, { withFileTypes: true })
     .filter((e) => e.isDirectory())
