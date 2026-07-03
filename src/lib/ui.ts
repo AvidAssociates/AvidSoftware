@@ -19,6 +19,20 @@ export const BRAND_RED = "#ED1D24";
 export const INTERVIEW_TYPES = ["Phone", "Video", "Face-to-Face"];
 export const FONT = `'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
 
+export const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Fixed hue order, one slot per person (never cycled/regenerated) — validated
+// for CVD-safe adjacent contrast against this app's light/dark card surfaces.
+// A roster beyond 8 people falls back to a neutral gray for the extra slots.
+export const PRODUCTION_COLORS = {
+  dark: ["#3987e5", "#199e70", "#c98500", "#008300", "#9085e9", "#e66767", "#d55181", "#d95926"],
+  light: ["#2a78d6", "#1baf7a", "#eda100", "#008300", "#4a3aa7", "#e34948", "#e87ba4", "#eb6834"],
+};
+export function seriesColor(index: number, isDark: boolean) {
+  const ramp = isDark ? PRODUCTION_COLORS.dark : PRODUCTION_COLORS.light;
+  return ramp[index] ?? (isDark ? "#6E6A62" : "#94A3B8");
+}
+
 export function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
@@ -36,6 +50,24 @@ export function money(n: number) {
     currency: "USD",
     maximumFractionDigits: 0,
   });
+}
+export function moneyCompact(n: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(n);
+}
+// "Nice number" axis step so ticks land on round values (0/1,000/2,000…)
+// instead of whatever max/ticks happens to divide into.
+export function niceAxisMax(maxValue: number, ticks = 4) {
+  if (maxValue <= 0) return { max: ticks * 10, step: 10 };
+  const roughStep = maxValue / ticks;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+  const norm = roughStep / magnitude;
+  const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * magnitude;
+  return { max: step * ticks, step };
 }
 
 export type Theme = ReturnType<typeof getTheme>;
@@ -327,5 +359,49 @@ export function makeStyles(t: Theme) {
       borderBottom: `1px solid ${t.border}`,
     },
     rosterName: { flex: 1, fontSize: 14, fontWeight: 600, color: t.ink },
+
+    // report tab
+    reportPad: { padding: "26px 24px" },
+    reportSection: { marginBottom: 40 },
+    reportSectionHeader: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
+    reportTitleGroup: { display: "flex", alignItems: "center", gap: 6 },
+    chartTitle: { fontSize: 14.5, fontWeight: 700, color: t.ink, margin: 0 },
+    chartSubtitle: { fontSize: 12.5, color: t.muted, marginTop: 3, marginBottom: 18, fontWeight: 500 },
+    legendRow: { display: "flex", flexWrap: "wrap" as const, gap: "8px 18px", marginTop: 14 },
+    legendItem: { display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: t.muted, fontWeight: 600 },
+    legendSwatch: { width: 14, height: 3, borderRadius: 2, flexShrink: 0 },
+    legendDot: { width: 9, height: 9, borderRadius: "50%", flexShrink: 0 },
+    chartTooltip: {
+      position: "absolute" as const,
+      pointerEvents: "none" as const,
+      background: t.surfaceAlt,
+      border: `1px solid ${t.border}`,
+      borderRadius: 9,
+      padding: "9px 12px",
+      fontSize: 12.5,
+      boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+      zIndex: 5,
+      minWidth: 140,
+    },
+    tooltipMonth: { fontSize: 11.5, fontWeight: 700, color: t.mutedSoft, textTransform: "uppercase" as const, letterSpacing: 0.4, marginBottom: 6 },
+    tooltipRow: { display: "flex", alignItems: "center", gap: 7, padding: "2px 0" },
+    tooltipName: { flex: 1, color: t.muted, fontWeight: 500 },
+    tooltipValue: { color: t.ink, fontWeight: 700, fontVariantNumeric: "tabular-nums" as const },
+    reportTableWrap: { border: `1px solid ${t.border}`, borderRadius: 10, overflow: "hidden" },
+    reportTableRow: { display: "grid", alignItems: "center", padding: "9px 14px", fontSize: 12.5 },
+    reportTableHeadRow: {
+      display: "grid",
+      alignItems: "center",
+      padding: "9px 14px",
+      fontSize: 11,
+      textTransform: "uppercase" as const,
+      letterSpacing: 0.4,
+      fontWeight: 700,
+      color: t.mutedSoft,
+      background: t.surfaceAlt,
+      borderBottom: `1px solid ${t.border}`,
+    },
+    reportTableCell: { fontVariantNumeric: "tabular-nums" as const, color: t.ink, fontWeight: 500 },
+    reportTableTotalRow: { fontWeight: 800, borderTop: `1px solid ${t.border}`, background: t.surfaceAlt },
   };
 }

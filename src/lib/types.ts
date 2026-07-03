@@ -42,3 +42,9 @@ export type RosterMember = {
   name: string;
   sortOrder: number;
 };
+
+export type ProductionGoals = {
+  year: number;
+  yearlyGoal: number | null;
+  monthlyGoal: number | null;
+};

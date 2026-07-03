@@ -213,3 +213,29 @@ select::-ms-expand {
     transition: none !important;
   }
 }
+
+/* ---- print / PDF export (Report tab) ---- */
+.print-only {
+  display: none;
+}
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .app-shell,
+  .report-card {
+    background: #ffffff !important;
+    border-color: #e2e8f0 !important;
+    box-shadow: none !important;
+  }
+  html,
+  body {
+    background: #ffffff !important;
+  }
+  @page {
+    margin: 16mm;
+  }
+}

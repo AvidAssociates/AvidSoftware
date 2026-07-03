@@ -35,6 +35,7 @@ import {
   uid,
 } from "@/lib/ui";
 import TVMode from "@/components/TVMode";
+import ReportView from "@/components/ReportView";
 
 type Styles = ReturnType<typeof makeStyles>;
 
@@ -164,7 +165,7 @@ function Dashboard({
   const [entries, setEntries] = useState<Entry[]>([]);
   const [billings, setBillings] = useState<Billing[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"sendouts" | "billings">("sendouts");
+  const [view, setView] = useState<"sendouts" | "billings" | "report">("sendouts");
   const [showEntryForm, setShowEntryForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const [showBillingForm, setShowBillingForm] = useState(false);
@@ -178,6 +179,7 @@ function Dashboard({
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
+  const [reportYear, setReportYear] = useState(() => new Date().getFullYear());
 
   const isAdmin = user === ADMIN;
   const monthKey = `${monthCursor.getFullYear()}-${String(monthCursor.getMonth() + 1).padStart(2, "0")}`;
@@ -322,13 +324,32 @@ function Dashboard({
     };
   }, [monthBillings]);
 
+  const yearBillings = useMemo(
+    () => billings.filter((b) => b.date?.startsWith(String(reportYear))),
+    [billings, reportYear]
+  );
+  const reportStats = useMemo(() => {
+    const total = yearBillings.reduce((s, b) => s + b.amount, 0);
+    const byPerson: Record<string, number> = {};
+    for (const b of yearBillings) byPerson[b.recruiter] = (byPerson[b.recruiter] || 0) + b.amount;
+    let topName = "—";
+    let topAmount = 0;
+    for (const [name, amount] of Object.entries(byPerson)) {
+      if (amount > topAmount) {
+        topName = name;
+        topAmount = amount;
+      }
+    }
+    return { total, deals: yearBillings.length, topName };
+  }, [yearBillings]);
+
   if (tvOpen) {
     return <TVMode entries={entries} billings={billings} roster={teamNames} onExit={() => setTvOpen(false)} />;
   }
 
   return (
-    <div style={S.page}>
-      <header style={S.header}>
+    <div style={S.page} className="app-shell">
+      <header style={S.header} className="no-print">
         <div style={S.headerLeft}>
           {LOGO_ICON_SRC ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -337,13 +358,27 @@ function Dashboard({
           <span style={S.wordmarkSmall}>Avid</span>
         </div>
         <div style={S.monthSwitcher}>
-          <button className="avid-btn" style={S.iconGhost} onClick={goPrevMonth} title="Previous month">
-            <ChevronLeft size={16} />
-          </button>
-          <span style={S.monthLabel}>{monthLabel}</span>
-          <button className="avid-btn" style={S.iconGhost} onClick={goNextMonth} title="Next month">
-            <ChevronRight size={16} />
-          </button>
+          {view === "report" ? (
+            <>
+              <button className="avid-btn" style={S.iconGhost} onClick={() => setReportYear((y) => y - 1)} title="Previous year">
+                <ChevronLeft size={16} />
+              </button>
+              <span style={S.monthLabel}>{reportYear}</span>
+              <button className="avid-btn" style={S.iconGhost} onClick={() => setReportYear((y) => y + 1)} title="Next year">
+                <ChevronRight size={16} />
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="avid-btn" style={S.iconGhost} onClick={goPrevMonth} title="Previous month">
+                <ChevronLeft size={16} />
+              </button>
+              <span style={S.monthLabel}>{monthLabel}</span>
+              <button className="avid-btn" style={S.iconGhost} onClick={goNextMonth} title="Next month">
+                <ChevronRight size={16} />
+              </button>
+            </>
+          )}
         </div>
         <div style={S.headerRight}>
           <button className="avid-btn" style={S.iconGhost} onClick={() => setTvOpen(true)} title="TV mode">
@@ -360,9 +395,9 @@ function Dashboard({
         </div>
       </header>
 
-      <section style={S.hero}>
+      <section style={S.hero} className="no-print">
         <div style={S.heroEyebrow}>AVID ASSOCIATES</div>
-        <h1 style={S.heroTitle}>{view === "sendouts" ? "Send-Outs" : "Billings"}</h1>
+        <h1 style={S.heroTitle}>{view === "sendouts" ? "Send-Outs" : view === "billings" ? "Billings" : "Production Report"}</h1>
         <div style={S.heroStatsRow}>
           {view === "sendouts" ? (
             <>
@@ -371,17 +406,23 @@ function Dashboard({
               <HeroStat S={S} label="Placed" value={String(sendoutStats.placed)} color={STAGE_COLOR.placed} />
               <HeroStat S={S} label="Declined" value={String(sendoutStats.declined)} color={t.danger} />
             </>
-          ) : (
+          ) : view === "billings" ? (
             <>
               <HeroStat S={S} label="Billed" value={money(billingStats.total)} color={STAGE_COLOR.placed} />
               <HeroStat S={S} label="Deals" value={String(billingStats.deals)} />
               <HeroStat S={S} label="Avg Deal" value={money(billingStats.avg)} color={STAGE_COLOR.interview} />
             </>
+          ) : (
+            <>
+              <HeroStat S={S} label="Billed YTD" value={money(reportStats.total)} color={STAGE_COLOR.placed} />
+              <HeroStat S={S} label="Deals" value={String(reportStats.deals)} />
+              <HeroStat S={S} label="Top Producer" value={reportStats.topName} color={t.accent} />
+            </>
           )}
         </div>
       </section>
 
-      <div style={S.toolbar}>
+      <div style={S.toolbar} className="no-print">
         <div style={S.segWrap}>
           <button
             className="avid-btn"
@@ -397,45 +438,60 @@ function Dashboard({
           >
             Billings
           </button>
+          <button
+            className="avid-btn"
+            style={view === "report" ? S.segBtnActive : S.segBtn}
+            onClick={() => setView("report")}
+          >
+            Report
+          </button>
         </div>
-        <div style={S.searchWrap}>
-          <Search size={15} color={t.mutedSoft} />
-          <input
-            style={S.search}
-            placeholder={view === "sendouts" ? "Search candidate, company, role…" : "Search recruiter, company, candidate…"}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-        <SelectPill S={S} value={filterTeam} onChange={setFilterTeam} options={["All", ...teamNames]} />
-        {view === "sendouts" && (
-          <SelectPill
-            S={S}
-            value={filterStage}
-            onChange={setFilterStage}
-            options={["All", ...PIPELINE.map((s) => s.key), "declined"]}
-            labels={{ All: "All stages", declined: "Declined", ...Object.fromEntries(PIPELINE.map((s) => [s.key, s.label])) }}
-          />
+        {view !== "report" && (
+          <>
+            <div style={S.searchWrap}>
+              <Search size={15} color={t.mutedSoft} />
+              <input
+                style={S.search}
+                placeholder={view === "sendouts" ? "Search candidate, company, role…" : "Search recruiter, company, candidate…"}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+            <SelectPill S={S} value={filterTeam} onChange={setFilterTeam} options={["All", ...teamNames]} />
+            {view === "sendouts" && (
+              <SelectPill
+                S={S}
+                value={filterStage}
+                onChange={setFilterStage}
+                options={["All", ...PIPELINE.map((s) => s.key), "declined"]}
+                labels={{ All: "All stages", declined: "Declined", ...Object.fromEntries(PIPELINE.map((s) => [s.key, s.label])) }}
+              />
+            )}
+            <button
+              className="avid-btn" style={S.primaryBtn}
+              onClick={() => {
+                if (view === "sendouts") {
+                  setEditingEntry(null);
+                  setShowEntryForm(true);
+                } else {
+                  setEditingBilling(null);
+                  setShowBillingForm(true);
+                }
+              }}
+            >
+              <Plus size={15} /> New
+            </button>
+          </>
         )}
-        <button
-          className="avid-btn" style={S.primaryBtn}
-          onClick={() => {
-            if (view === "sendouts") {
-              setEditingEntry(null);
-              setShowEntryForm(true);
-            } else {
-              setEditingBilling(null);
-              setShowBillingForm(true);
-            }
-          }}
-        >
-          <Plus size={15} /> New
-        </button>
       </div>
 
-      <div style={S.tableWrap}>
+      <div style={S.tableWrap} className="report-card">
         {loading ? (
           <div style={S.empty}>Loading…</div>
+        ) : view === "report" ? (
+          <div style={S.reportPad}>
+            <ReportView billings={billings} teamNames={teamNames} year={reportYear} t={t} isDark={isDark} />
+          </div>
         ) : view === "sendouts" ? (
           filteredEntries.length === 0 ? (
             <div style={S.empty}>

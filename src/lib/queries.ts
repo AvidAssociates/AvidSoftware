@@ -1,5 +1,5 @@
 import { getDb } from "./db";
-import { Billing, Entry, RosterMember, StageEvent } from "./types";
+import { Billing, Entry, ProductionGoals, RosterMember, StageEvent } from "./types";
 
 type EntryRow = {
   id: string;
@@ -338,4 +338,34 @@ export async function updateBilling(
 
 export async function deleteBilling(id: string) {
   await getDb().sql`DELETE FROM billings WHERE id = ${id}`;
+}
+
+// ---------------- Production goals ----------------
+
+type GoalsRow = { year: number; yearly_goal: number | null; monthly_goal: number | null };
+
+export async function getProductionGoals(year: number): Promise<ProductionGoals> {
+  const db = getDb();
+  const [row] = (await db.sql`
+    SELECT * FROM production_goals WHERE year = ${year}
+  `) as GoalsRow[];
+  return {
+    year,
+    yearlyGoal: row ? Number(row.yearly_goal) : null,
+    monthlyGoal: row ? Number(row.monthly_goal) : null,
+  };
+}
+
+export async function setProductionGoals(
+  year: number,
+  yearlyGoal: number | null,
+  monthlyGoal: number | null
+): Promise<ProductionGoals> {
+  const db = getDb();
+  await db.sql`
+    INSERT INTO production_goals (year, yearly_goal, monthly_goal)
+    VALUES (${year}, ${yearlyGoal}, ${monthlyGoal})
+    ON CONFLICT (year) DO UPDATE SET yearly_goal = EXCLUDED.yearly_goal, monthly_goal = EXCLUDED.monthly_goal
+  `;
+  return { year, yearlyGoal, monthlyGoal };
 }
