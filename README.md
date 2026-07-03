@@ -2,39 +2,42 @@
 
 A send-out pipeline tracker for Avid Associates: log candidates as they move
 through sent → interview → offer → placed, or mark them declined. Built with
-Next.js and Netlify DB (Postgres).
+Next.js and Postgres, deployed on Vercel.
 
 ## App
 
-Single page at `/`. Sign in by picking (or typing) a name — stays signed in
-on that device. From there:
+Single page at `/`. From there:
 
 - Log a new send-out with candidate, company, role, interview type/round,
   and the team members working it.
 - Advance an entry's stage by clicking a dot on its progress track, or mark
-  it declined.
+  it declined (with a reason).
 - Filter by team member, stage, or search text; switch months with the
   header arrows.
-- Toggle light/dark theme (persisted per device).
+- Toggle light/dark theme (persisted per device), or open TV mode for a
+  display-friendly leaderboard view.
 
 ## Data model
 
-Postgres database provisioned automatically via Netlify DB (`@netlify/database`).
-Schema lives in `netlify/database/migrations/`. Single `pipeline_entries` table
-holding each send-out's candidate/company/role, interview details, team,
-stage, and declined flag.
+Plain Postgres, connected via the `DATABASE_URL` environment variable.
+Schema lives in `db/migrations/`, one directory per migration; each
+`migration.sql` is idempotent (`CREATE TABLE IF NOT EXISTS`,
+`ADD COLUMN IF NOT EXISTS`, etc.), so `scripts/migrate.mjs` can safely
+re-run the full set on every deploy.
 
 ## Running locally
 
 ```bash
 npm install
-netlify dev
+export DATABASE_URL=postgres://... # your Postgres connection string
+npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
 ## Deployment
 
-Deployed on Netlify. Pushing to the linked branch triggers a build; database
-migrations run automatically before each deploy is published. Each deploy
-preview gets its own isolated database branch.
+Deployed on Vercel. Pushing to the linked branch triggers a build; Vercel
+runs the `vercel-build` script (`node scripts/migrate.mjs && next build`),
+which applies any pending migrations before building. Set `DATABASE_URL` in
+the project's Environment Variables.
