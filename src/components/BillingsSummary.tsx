@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Billing, Retainer } from "@/lib/types";
+import { Billing } from "@/lib/types";
 import { Theme, makeStyles, money } from "@/lib/ui";
 
 type Styles = ReturnType<typeof makeStyles>;
@@ -34,23 +34,10 @@ export default function BillingsSummary({
   t: Theme;
 }) {
   const S = makeStyles(t);
-  const [retainers, setRetainers] = useState<Record<string, Retainer>>({});
-  const [drafts, setDrafts] = useState<Record<string, { client: string; amount: string }>>({});
   const [goals, setGoals] = useState<{ yearlyGoal: number | null; monthlyGoal: number | null }>({
     yearlyGoal: null,
     monthlyGoal: null,
   });
-
-  useEffect(() => {
-    fetch("/api/retainers")
-      .then((r) => (r.ok ? r.json() : []))
-      .then((list: Retainer[]) => {
-        const map: Record<string, Retainer> = {};
-        for (const r of list) map[r.recruiter] = r;
-        setRetainers(map);
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     fetch(`/api/goals?year=${year}`)
@@ -67,32 +54,11 @@ export default function BillingsSummary({
 
   const companyMonth = monthFees.reduce((s, b) => s + b.amount, 0);
   const companyYtd = ytdFees.reduce((s, b) => s + b.amount, 0);
-  const retainersTotal = Object.values(retainers).reduce((s, r) => s + (r.amount || 0), 0);
 
   const monthlyAvgNeeded = goals.yearlyGoal ? goals.yearlyGoal / 12 : null;
   const pctToGoal = goals.yearlyGoal ? companyYtd / goals.yearlyGoal : null;
 
-  const cols = "130px repeat(4, 1fr) 150px 110px";
-
-  const draftFor = (name: string) =>
-    drafts[name] ?? { client: retainers[name]?.client ?? "", amount: retainers[name]?.amount != null ? String(retainers[name].amount) : "" };
-
-  const saveRetainer = async (name: string) => {
-    const draft = draftFor(name);
-    const res = await fetch("/api/retainers", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        recruiter: name,
-        client: draft.client.trim() || null,
-        amount: draft.amount.trim() === "" ? null : Number(draft.amount),
-      }),
-    });
-    if (res.ok) {
-      const saved = await res.json();
-      setRetainers((prev) => ({ ...prev, [name]: saved }));
-    }
-  };
+  const cols = "130px repeat(4, 1fr)";
 
   return (
     <div style={S.reportSection}>
@@ -117,44 +83,22 @@ export default function BillingsSummary({
           <div>Monthly Total</div>
           <div>YTD Personal</div>
           <div>YTD Total</div>
-          <div>Retainer Client</div>
-          <div>Retainer $</div>
         </div>
-        {teamNames.map((name) => {
-          const draft = draftFor(name);
-          return (
-            <div key={name} style={{ ...S.reportTableRow, gridTemplateColumns: cols }}>
-              <div style={S.reportTableCell}>{name}</div>
-              <MoneyCell S={S} amount={personalSum(name, monthFees)} count={personalCount(name, monthFees)} />
-              <MoneyCell S={S} amount={totalSum(name, monthFees)} count={totalCount(name, monthFees)} />
-              <MoneyCell S={S} amount={personalSum(name, ytdFees)} count={personalCount(name, ytdFees)} />
-              <MoneyCell S={S} amount={totalSum(name, ytdFees)} count={totalCount(name, ytdFees)} />
-              <input
-                style={{ ...S.input, fontSize: 12.5, padding: "6px 8px" }}
-                placeholder="Client"
-                value={draft.client}
-                onChange={(e) => setDrafts((d) => ({ ...d, [name]: { ...draft, client: e.target.value } }))}
-                onBlur={() => saveRetainer(name)}
-              />
-              <input
-                type="number"
-                style={{ ...S.input, fontSize: 12.5, padding: "6px 8px" }}
-                placeholder="$0"
-                value={draft.amount}
-                onChange={(e) => setDrafts((d) => ({ ...d, [name]: { ...draft, amount: e.target.value } }))}
-                onBlur={() => saveRetainer(name)}
-              />
-            </div>
-          );
-        })}
+        {teamNames.map((name) => (
+          <div key={name} style={{ ...S.reportTableRow, gridTemplateColumns: cols }}>
+            <div style={S.reportTableCell}>{name}</div>
+            <MoneyCell S={S} amount={personalSum(name, monthFees)} count={personalCount(name, monthFees)} />
+            <MoneyCell S={S} amount={totalSum(name, monthFees)} count={totalCount(name, monthFees)} />
+            <MoneyCell S={S} amount={personalSum(name, ytdFees)} count={personalCount(name, ytdFees)} />
+            <MoneyCell S={S} amount={totalSum(name, ytdFees)} count={totalCount(name, ytdFees)} />
+          </div>
+        ))}
         <div style={{ ...S.reportTableRow, ...S.reportTableTotalRow, gridTemplateColumns: cols }}>
           <div style={S.reportTableCell}>Company</div>
           <div style={S.reportTableCell}>{money(companyMonth)}</div>
           <div style={S.reportTableCell}>{money(companyMonth)}</div>
           <div style={S.reportTableCell}>{money(companyYtd)}</div>
           <div style={S.reportTableCell}>{money(companyYtd)}</div>
-          <div style={S.reportTableCell} />
-          <div style={S.reportTableCell}>{money(retainersTotal)}</div>
         </div>
       </div>
     </div>
