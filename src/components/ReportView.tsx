@@ -141,8 +141,8 @@ export default function ReportView({
         </div>
 
         <div style={{ ...S.reportSection, marginBottom: 24 }}>
-          <h3 style={S.chartTitle}>Production by Recruiter</h3>
-          <p style={S.chartSubtitle}>Monthly billings per person, {year}</p>
+          <h3 style={S.chartTitle}>Total Production by Recruiter</h3>
+          <p style={S.chartSubtitle}>Monthly billings per person (personal + shared searches), {year}</p>
           <RecruiterLineChart S={S} t={t} series={series} visibleMonths={visibleMonths} />
           <div style={S.legendRow}>
             {series.map((s) => (
@@ -178,8 +178,8 @@ export default function ReportView({
           <FirmBarChart S={printS} t={printT} data={firmByMonth} color={STAGE_COLOR.placed} monthlyGoal={goals.monthlyGoal} visibleMonths={visibleMonths} />
         </div>
         <div style={printS.reportSection}>
-          <h3 style={printS.chartTitle}>Production by Recruiter</h3>
-          <p style={printS.chartSubtitle}>Monthly billings per person, {year}</p>
+          <h3 style={printS.chartTitle}>Total Production by Recruiter</h3>
+          <p style={printS.chartSubtitle}>Monthly billings per person (personal + shared searches), {year}</p>
           <RecruiterLineChart S={printS} t={printT} series={printSeries} visibleMonths={visibleMonths} />
           <div style={printS.legendRow}>
             {printSeries.map((s) => (
@@ -395,7 +395,7 @@ function RecruiterLineChart({
         viewBox={`0 0 ${W} ${H}`}
         style={{ width: "100%", height: "auto", display: "block" }}
         role="img"
-        aria-label="Production by recruiter, by month"
+        aria-label="Total production by recruiter, by month"
       >
         {ticks.map((tick, i) => {
           const y = valueY(tick, yMax);
