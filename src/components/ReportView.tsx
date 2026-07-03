@@ -17,7 +17,7 @@ type Styles = ReturnType<typeof makeStyles>;
 
 const W = 720;
 const H = 260;
-const MARGIN = { top: 18, right: 16, bottom: 26, left: 54 };
+const MARGIN = { top: 28, right: 16, bottom: 26, left: 54 };
 const PLOT_W = W - MARGIN.left - MARGIN.right;
 const PLOT_H = H - MARGIN.top - MARGIN.bottom;
 
@@ -177,8 +177,16 @@ function FirmBarChart({ S, t, data, color }: { S: Styles; t: Theme; data: number
                 opacity={isHover ? 1 : 0.85}
                 style={{ transition: "opacity 0.15s ease", pointerEvents: "none" }}
               />
-              {i === peakIndex && v > 0 && (
-                <text x={monthX(i)} y={y - 8} textAnchor="middle" fontSize={11} fontWeight={700} fill={t.ink} style={{ pointerEvents: "none" }}>
+              {v > 0 && (
+                <text
+                  x={monthX(i)}
+                  y={y - 8}
+                  textAnchor="middle"
+                  fontSize={11}
+                  fontWeight={i === peakIndex ? 700 : 600}
+                  fill={i === peakIndex ? t.ink : t.muted}
+                  style={{ pointerEvents: "none" }}
+                >
                   {moneyCompact(v)}
                 </text>
               )}
