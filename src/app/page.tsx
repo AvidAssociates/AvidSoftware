@@ -317,15 +317,6 @@ function Dashboard({
     };
   }, [monthEntries]);
 
-  const billingStats = useMemo(() => {
-    const total = monthBillings.reduce((s, b) => s + b.amount, 0);
-    return {
-      total,
-      deals: monthBillings.length,
-      avg: monthBillings.length ? Math.round(total / monthBillings.length) : 0,
-    };
-  }, [monthBillings]);
-
   const yearBillings = useMemo(
     () => billings.filter((b) => b.date?.startsWith(String(reportYear))),
     [billings, reportYear]
@@ -426,34 +417,32 @@ function Dashboard({
                 ? "Leaderboard"
                 : "Production Report"}
         </h1>
-        <div style={S.heroStatsRow}>
-          {view === "sendouts" ? (
-            <>
-              <HeroStat S={S} label="Total" value={String(sendoutStats.total)} />
-              <HeroStat S={S} label="Active" value={String(sendoutStats.active)} color={t.accent} />
-              <HeroStat S={S} label="Placed" value={String(sendoutStats.placed)} color={STAGE_COLOR.placed} />
-              <HeroStat S={S} label="Declined" value={String(sendoutStats.declined)} color={t.danger} />
-            </>
-          ) : view === "billings" ? (
-            <>
-              <HeroStat S={S} label="Billed" value={money(billingStats.total)} color={STAGE_COLOR.placed} />
-              <HeroStat S={S} label="Deals" value={String(billingStats.deals)} />
-              <HeroStat S={S} label="Avg Deal" value={money(billingStats.avg)} color={STAGE_COLOR.interview} />
-            </>
-          ) : view === "leaderboard" ? (
-            <>
-              <HeroStat S={S} label="Send-Outs" value={String(leaderboardStats.total)} />
-              <HeroStat S={S} label="First-Time" value={String(leaderboardStats.firstTimeCount)} color={t.accent} />
-              <HeroStat S={S} label="Top This Month" value={leaderboardStats.topName} color={STAGE_COLOR.placed} />
-            </>
-          ) : (
-            <>
-              <HeroStat S={S} label="Billed YTD" value={money(reportStats.total)} color={STAGE_COLOR.placed} />
-              <HeroStat S={S} label="Deals" value={String(reportStats.deals)} />
-              <HeroStat S={S} label="Top Producer" value={reportStats.topName} color={t.accent} />
-            </>
-          )}
-        </div>
+        {view === "billings" ? (
+          <BillingsSummary billings={billings} teamNames={teamNames} monthKey={monthKey} year={monthCursor.getFullYear()} t={t} />
+        ) : (
+          <div style={S.heroStatsRow}>
+            {view === "sendouts" ? (
+              <>
+                <HeroStat S={S} label="Total" value={String(sendoutStats.total)} />
+                <HeroStat S={S} label="Active" value={String(sendoutStats.active)} color={t.accent} />
+                <HeroStat S={S} label="Placed" value={String(sendoutStats.placed)} color={STAGE_COLOR.placed} />
+                <HeroStat S={S} label="Declined" value={String(sendoutStats.declined)} color={t.danger} />
+              </>
+            ) : view === "leaderboard" ? (
+              <>
+                <HeroStat S={S} label="Send-Outs" value={String(leaderboardStats.total)} />
+                <HeroStat S={S} label="First-Time" value={String(leaderboardStats.firstTimeCount)} color={t.accent} />
+                <HeroStat S={S} label="Top This Month" value={leaderboardStats.topName} color={STAGE_COLOR.placed} />
+              </>
+            ) : (
+              <>
+                <HeroStat S={S} label="Billed YTD" value={money(reportStats.total)} color={STAGE_COLOR.placed} />
+                <HeroStat S={S} label="Deals" value={String(reportStats.deals)} />
+                <HeroStat S={S} label="Top Producer" value={reportStats.topName} color={t.accent} />
+              </>
+            )}
+          </div>
+        )}
       </section>
 
       <div style={S.toolbar} className="no-print">
@@ -573,9 +562,6 @@ function Dashboard({
           </div>
         ) : (
           <div>
-            <div style={S.reportPad}>
-              <BillingsSummary billings={billings} teamNames={teamNames} monthKey={monthKey} year={monthCursor.getFullYear()} t={t} />
-            </div>
             {filteredBillings.length === 0 ? (
               <div style={S.empty}>
                 {billings.length === 0 ? "No billings yet — log the first one." : "Nothing matches these filters."}
