@@ -41,10 +41,20 @@ export default function BillingsSummary({
   // Company-wide totals are a plain sum — a team deal is counted once here,
   // even though it also counts toward every listed person's own total.
   const ytdFees = billings.filter((b) => b.date?.startsWith(String(year)) && Number(b.date.slice(5, 7)) <= month);
+  const companyMonth = monthFees.reduce((s, b) => s + b.amount, 0);
   const companyYtd = ytdFees.reduce((s, b) => s + b.amount, 0);
 
   const monthlyAvgNeeded = goals.yearlyGoal ? goals.yearlyGoal / 12 : null;
   const pctToGoal = goals.yearlyGoal ? companyYtd / goals.yearlyGoal : null;
+
+  const hasMonthlyGoal = !!goals.monthlyGoal && goals.monthlyGoal > 0;
+  const monthDiff = hasMonthlyGoal ? companyMonth - goals.monthlyGoal! : 0;
+  const monthColor = hasMonthlyGoal ? (monthDiff >= 0 ? "#4FBF82" : t.danger) : undefined;
+  const monthSub = hasMonthlyGoal
+    ? monthDiff >= 0
+      ? `${money(monthDiff)} over goal`
+      : `${money(Math.abs(monthDiff))} short of goal`
+    : undefined;
 
   const cols = "repeat(5, 1fr)";
   const centered = { textAlign: "center" as const };
@@ -53,6 +63,7 @@ export default function BillingsSummary({
     <div>
       <div style={{ display: "flex", gap: 36, flexWrap: "wrap" as const, marginBottom: 20 }}>
         <Stat t={t} label="Monthly Avg Needed" value={monthlyAvgNeeded !== null ? money(monthlyAvgNeeded) : "—"} />
+        <Stat t={t} label="Monthly Billings" value={money(companyMonth)} color={monthColor} sub={monthSub} />
         <Stat t={t} label="Company YTD" value={money(companyYtd)} color="#4FBF82" />
         <Stat
           t={t}
@@ -95,13 +106,16 @@ function MoneyCell({ S, amount, count }: { S: Styles; amount: number; count: num
   );
 }
 
-function Stat({ t, label, value, color }: { t: Theme; label: string; value: string; color?: string }) {
+function Stat({ t, label, value, color, sub }: { t: Theme; label: string; value: string; color?: string; sub?: string }) {
   return (
     <div>
       <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.5, color: color ?? t.ink, fontVariantNumeric: "tabular-nums" }}>
         {value}
       </div>
       <div style={{ fontSize: 11.5, color: t.muted, marginTop: 2, fontWeight: 600 }}>{label}</div>
+      {sub && (
+        <div style={{ fontSize: 11, color: color ?? t.mutedSoft, marginTop: 3, fontWeight: 600 }}>{sub}</div>
+      )}
     </div>
   );
 }

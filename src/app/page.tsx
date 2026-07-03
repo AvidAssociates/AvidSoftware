@@ -38,7 +38,7 @@ import TVMode from "@/components/TVMode";
 import ReportView from "@/components/ReportView";
 import BillingsSummary from "@/components/BillingsSummary";
 import LeaderboardView from "@/components/LeaderboardView";
-import GoalsModal from "@/components/GoalsModal";
+import SettingsModal from "@/components/SettingsModal";
 
 type Styles = ReturnType<typeof makeStyles>;
 
@@ -173,7 +173,7 @@ function Dashboard({
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const [showBillingForm, setShowBillingForm] = useState(false);
   const [editingBilling, setEditingBilling] = useState<Billing | null>(null);
-  const [showUserMgr, setShowUserMgr] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [tvOpen, setTvOpen] = useState(false);
   const [filterTeam, setFilterTeam] = useState("All");
   const [filterStage, setFilterStage] = useState("All");
@@ -183,7 +183,6 @@ function Dashboard({
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [reportYear, setReportYear] = useState(() => new Date().getFullYear());
-  const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [billingsGoals, setBillingsGoals] = useState<{ yearlyGoal: number | null; monthlyGoal: number | null }>({
     yearlyGoal: null,
     monthlyGoal: null,
@@ -422,7 +421,7 @@ function Dashboard({
             {isDark ? <Sun size={16} /> : <Moon size={16} />}
           </button>
           {isAdmin && (
-            <button className="avid-btn" style={S.iconGhost} onClick={() => setShowUserMgr(true)} title="Manage users">
+            <button className="avid-btn" style={S.iconGhost} onClick={() => setShowSettings(true)} title="Settings">
               <Settings size={16} />
             </button>
           )}
@@ -431,28 +430,15 @@ function Dashboard({
 
       <section style={S.hero} className="no-print">
         <div style={S.heroEyebrow}>AVID ASSOCIATES</div>
-        <div style={S.reportTitleGroup}>
-          <h1 style={S.heroTitle}>
-            {view === "sendouts"
-              ? "Send-Outs"
-              : view === "billings"
-                ? "Billings"
-                : view === "leaderboard"
-                  ? "Leaderboard"
-                  : "Production Report"}
-          </h1>
-          {view === "billings" && (
-            <button
-              className="avid-btn"
-              style={S.iconGhost}
-              onClick={() => setShowGoalsModal(true)}
-              title="Set production goals"
-              aria-label="Set production goals"
-            >
-              <Settings size={18} />
-            </button>
-          )}
-        </div>
+        <h1 style={S.heroTitle}>
+          {view === "sendouts"
+            ? "Send-Outs"
+            : view === "billings"
+              ? "Billings"
+              : view === "leaderboard"
+                ? "Leaderboard"
+                : "Production Report"}
+        </h1>
         {view === "billings" ? (
           <div style={{ marginTop: 16 }}>
             <BillingsSummary billings={billings} teamNames={teamNames} monthKey={monthKey} year={monthCursorYear} goals={billingsGoals} t={t} />
@@ -662,25 +648,17 @@ function Dashboard({
         />
       )}
 
-      {showUserMgr && (
-        <UserManager
+      {showSettings && (
+        <SettingsModal
           S={S}
           t={t}
           roster={roster}
           reloadRoster={reloadRoster}
-          onClose={() => setShowUserMgr(false)}
-        />
-      )}
-
-      {showGoalsModal && (
-        <GoalsModal
-          S={S}
-          t={t}
           year={monthCursorYear}
           initialYearly={billingsGoals.yearlyGoal}
           initialMonthly={billingsGoals.monthlyGoal}
-          onClose={() => setShowGoalsModal(false)}
-          onSaved={setBillingsGoals}
+          onSavedGoals={setBillingsGoals}
+          onClose={() => setShowSettings(false)}
         />
       )}
     </div>
@@ -1609,104 +1587,6 @@ function BillingForm({
           <button className="avid-btn" style={{ ...S.primaryBtn, opacity: valid ? 1 : 0.5 }} disabled={!valid} onClick={() => onSave(form, !initial)}>
             {initial ? "Save changes" : "Log billing"}
           </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
-function UserManager({
-  S,
-  t,
-  roster,
-  reloadRoster,
-  onClose,
-}: {
-  S: Styles;
-  t: Theme;
-  roster: RosterMember[];
-  reloadRoster: () => Promise<void>;
-  onClose: () => void;
-}) {
-  const [drafts, setDrafts] = useState<Record<number, string>>({});
-  const [newName, setNewName] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const nameOf = (m: RosterMember) => (drafts[m.id] ?? m.name);
-
-  const rename = async (m: RosterMember) => {
-    const name = (drafts[m.id] ?? m.name).trim();
-    if (!name || name === m.name) return;
-    setBusy(true);
-    await send(`/api/roster/${m.id}`, "PUT", { name });
-    await reloadRoster();
-    setBusy(false);
-  };
-  const remove = async (m: RosterMember) => {
-    setBusy(true);
-    await send(`/api/roster/${m.id}`, "DELETE");
-    await reloadRoster();
-    setBusy(false);
-  };
-  const add = async () => {
-    const name = newName.trim();
-    if (!name) return;
-    setBusy(true);
-    await send("/api/roster", "POST", { name });
-    setNewName("");
-    await reloadRoster();
-    setBusy(false);
-  };
-
-  return (
-    <div className="avid-overlay" style={S.modalOverlay} onClick={onClose}>
-      <div className="avid-modal" style={{ ...S.modal, maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
-        <div style={S.modalHeader}>
-          <div style={S.modalTitle}>Manage users</div>
-          <button className="avid-btn" style={S.iconGhost} onClick={onClose}>
-            <X size={18} />
-          </button>
-        </div>
-
-        <div style={{ padding: 22 }}>
-          {roster.map((m) => (
-            <div key={m.id} style={S.rosterRow}>
-              <input
-                style={{ ...S.input, flex: 1 }}
-                value={nameOf(m)}
-                onChange={(e) => setDrafts((d) => ({ ...d, [m.id]: e.target.value }))}
-              />
-              <button
-                className="avid-btn" style={{ ...S.ghostBtn, opacity: nameOf(m).trim() && nameOf(m) !== m.name ? 1 : 0.4, padding: "8px 12px" }}
-                disabled={busy || !(nameOf(m).trim() && nameOf(m) !== m.name)}
-                onClick={() => rename(m)}
-              >
-                Save
-              </button>
-              <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} disabled={busy} onClick={() => remove(m)} title="Remove">
-                <Trash2 size={15} />
-              </button>
-            </div>
-          ))}
-
-          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-            <input
-              style={{ ...S.input, flex: 1 }}
-              placeholder="Add a person…"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") add();
-              }}
-            />
-            <button className="avid-btn" style={{ ...S.primaryBtn, opacity: newName.trim() ? 1 : 0.5 }} disabled={busy || !newName.trim()} onClick={add}>
-              <Plus size={15} /> Add
-            </button>
-          </div>
-          <div style={{ fontSize: 11.5, color: t.mutedSoft, marginTop: 14 }}>
-            Renaming updates that person across all existing send-outs and billings.
-          </div>
         </div>
       </div>
     </div>
