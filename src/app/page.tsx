@@ -348,8 +348,8 @@ function Dashboard({
   }
 
   return (
-    <div style={S.page}>
-      <header style={S.header}>
+    <div style={S.page} className="app-shell">
+      <header style={S.header} className="no-print">
         <div style={S.headerLeft}>
           {LOGO_ICON_SRC ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -395,7 +395,7 @@ function Dashboard({
         </div>
       </header>
 
-      <section style={S.hero}>
+      <section style={S.hero} className="no-print">
         <div style={S.heroEyebrow}>AVID ASSOCIATES</div>
         <h1 style={S.heroTitle}>{view === "sendouts" ? "Send-Outs" : view === "billings" ? "Billings" : "Production Report"}</h1>
         <div style={S.heroStatsRow}>
@@ -422,7 +422,7 @@ function Dashboard({
         </div>
       </section>
 
-      <div style={S.toolbar}>
+      <div style={S.toolbar} className="no-print">
         <div style={S.segWrap}>
           <button
             className="avid-btn"
@@ -485,7 +485,7 @@ function Dashboard({
         )}
       </div>
 
-      <div style={S.tableWrap}>
+      <div style={S.tableWrap} className="report-card">
         {loading ? (
           <div style={S.empty}>Loading…</div>
         ) : view === "report" ? (

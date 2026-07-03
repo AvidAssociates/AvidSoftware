@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Download, Settings, X } from "lucide-react";
 import { Billing } from "@/lib/types";
 import {
   MONTHS_SHORT,
   STAGE_COLOR,
   Theme,
+  getTheme,
   makeStyles,
   money,
   moneyCompact,
@@ -49,6 +51,24 @@ export default function ReportView({
 }) {
   const S = makeStyles(t);
   const [showTable, setShowTable] = useState(false);
+  const [showGoalsModal, setShowGoalsModal] = useState(false);
+  const [goals, setGoals] = useState<{ yearlyGoal: number | null; monthlyGoal: number | null }>({
+    yearlyGoal: null,
+    monthlyGoal: null,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/goals?year=${year}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setGoals({ yearlyGoal: data.yearlyGoal ?? null, monthlyGoal: data.monthlyGoal ?? null });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [year]);
 
   const yearBillings = useMemo(
     () => billings.filter((b) => b.date?.startsWith(String(year))),
@@ -81,49 +101,231 @@ export default function ReportView({
 
   const series = people.map((name, i) => ({ name, color: seriesColor(i, isDark), values: byPersonByMonth[name] }));
 
+  let topProducer = "—";
+  let topAmount = 0;
+  for (const s of series) {
+    const total = s.values.reduce((a, b) => a + b, 0);
+    if (total > topAmount) {
+      topProducer = s.name;
+      topAmount = total;
+    }
+  }
+
+  const firmTotal = firmByMonth.reduce((a, b) => a + b, 0);
+
+  // A fixed light theme for the printed rendition — a PDF should always look
+  // like clean print, independent of whatever theme the screen happens to
+  // be in when Export is clicked.
+  const printT = getTheme(false);
+  const printS = makeStyles(printT);
+  const printSeries = people.map((name, i) => ({ name, color: seriesColor(i, false), values: byPersonByMonth[name] }));
+
   return (
     <div>
-      <div style={S.reportSection}>
-        <h3 style={S.chartTitle}>Firm Production</h3>
-        <p style={S.chartSubtitle}>Total billings by month, {year}</p>
-        <FirmBarChart S={S} t={t} data={firmByMonth} color={STAGE_COLOR.placed} />
-      </div>
-
-      <div style={{ ...S.reportSection, marginBottom: 24 }}>
-        <h3 style={S.chartTitle}>Production by Recruiter</h3>
-        <p style={S.chartSubtitle}>Monthly billings per person, {year}</p>
-        <RecruiterLineChart S={S} t={t} series={series} />
-        <div style={S.legendRow}>
-          {series.map((s) => (
-            <div key={s.name} style={S.legendItem}>
-              <span style={{ ...S.legendSwatch, background: s.color }} />
-              {s.name}
+      <div className="no-print">
+        <div style={S.reportSection}>
+          <div style={S.reportSectionHeader}>
+            <div>
+              <div style={S.reportTitleGroup}>
+                <button
+                  className="avid-btn"
+                  style={S.iconGhost}
+                  onClick={() => setShowGoalsModal(true)}
+                  title="Set production goals"
+                  aria-label="Set production goals"
+                >
+                  <Settings size={16} />
+                </button>
+                <h3 style={S.chartTitle}>Firm Production</h3>
+              </div>
+              <p style={S.chartSubtitle}>Total billings by month, {year}</p>
             </div>
-          ))}
+            <button className="avid-btn" style={S.ghostBtn} onClick={() => window.print()}>
+              <Download size={14} /> Export PDF
+            </button>
+          </div>
+          <FirmBarChart S={S} t={t} data={firmByMonth} color={STAGE_COLOR.placed} monthlyGoal={goals.monthlyGoal} />
         </div>
-      </div>
 
-      <button className="avid-btn" style={S.ghostBtn} onClick={() => setShowTable((v) => !v)}>
-        {showTable ? "Hide data table" : "Show data table"}
-      </button>
+        <div style={{ ...S.reportSection, marginBottom: 24 }}>
+          <h3 style={S.chartTitle}>Production by Recruiter</h3>
+          <p style={S.chartSubtitle}>Monthly billings per person, {year}</p>
+          <RecruiterLineChart S={S} t={t} series={series} />
+          <div style={S.legendRow}>
+            {series.map((s) => (
+              <div key={s.name} style={S.legendItem}>
+                <span style={{ ...S.legendSwatch, background: s.color }} />
+                {s.name}
+              </div>
+            ))}
+          </div>
+        </div>
 
-      {showTable && (
-        <div style={{ ...S.reportTableWrap, marginTop: 16 }} className="avid-row-enter">
+        <button className="avid-btn" style={S.ghostBtn} onClick={() => setShowTable((v) => !v)}>
+          {showTable ? "Hide data table" : "Show data table"}
+        </button>
+
+        <div
+          key={showTable ? "shown" : "hidden"}
+          style={{ ...S.reportTableWrap, marginTop: 16, display: showTable ? "block" : "none" }}
+          className="avid-row-enter"
+        >
           <ReportTable S={S} months={MONTHS_SHORT} firmByMonth={firmByMonth} series={series} />
         </div>
+      </div>
+
+      <div className="print-only" style={{ display: "none" }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: printT.ink }}>Avid Associates — Production Report</div>
+        <div style={{ fontSize: 13, color: printT.muted, marginTop: 4, marginBottom: 28 }}>
+          {year} &middot; Billed {money(firmTotal)} &middot; {yearBillings.length} deals &middot; Top Producer: {topProducer}
+        </div>
+        <div style={printS.reportSection}>
+          <h3 style={printS.chartTitle}>Firm Production</h3>
+          <p style={printS.chartSubtitle}>Total billings by month, {year}</p>
+          <FirmBarChart S={printS} t={printT} data={firmByMonth} color={STAGE_COLOR.placed} monthlyGoal={goals.monthlyGoal} />
+        </div>
+        <div style={printS.reportSection}>
+          <h3 style={printS.chartTitle}>Production by Recruiter</h3>
+          <p style={printS.chartSubtitle}>Monthly billings per person, {year}</p>
+          <RecruiterLineChart S={printS} t={printT} series={printSeries} />
+          <div style={printS.legendRow}>
+            {printSeries.map((s) => (
+              <div key={s.name} style={printS.legendItem}>
+                <span style={{ ...printS.legendSwatch, background: s.color }} />
+                {s.name}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={printS.reportTableWrap}>
+          <ReportTable S={printS} months={MONTHS_SHORT} firmByMonth={firmByMonth} series={printSeries} />
+        </div>
+      </div>
+
+      {showGoalsModal && (
+        <GoalsModal
+          S={S}
+          t={t}
+          year={year}
+          initialYearly={goals.yearlyGoal}
+          initialMonthly={goals.monthlyGoal}
+          onClose={() => setShowGoalsModal(false)}
+          onSaved={setGoals}
+        />
       )}
     </div>
   );
 }
 
-function FirmBarChart({ S, t, data, color }: { S: Styles; t: Theme; data: number[]; color: string }) {
+function GoalsModal({
+  S,
+  t,
+  year,
+  initialYearly,
+  initialMonthly,
+  onClose,
+  onSaved,
+}: {
+  S: Styles;
+  t: Theme;
+  year: number;
+  initialYearly: number | null;
+  initialMonthly: number | null;
+  onClose: () => void;
+  onSaved: (goals: { yearlyGoal: number | null; monthlyGoal: number | null }) => void;
+}) {
+  const [yearly, setYearly] = useState(initialYearly !== null ? String(initialYearly) : "");
+  const [monthly, setMonthly] = useState(initialMonthly !== null ? String(initialMonthly) : "");
+  const [busy, setBusy] = useState(false);
+
+  const save = async () => {
+    setBusy(true);
+    const yearlyGoal = yearly.trim() ? Number(yearly) : null;
+    const monthlyGoal = monthly.trim() ? Number(monthly) : null;
+    const res = await fetch("/api/goals", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ year, yearlyGoal, monthlyGoal }),
+    });
+    setBusy(false);
+    if (res.ok) {
+      onSaved({ yearlyGoal, monthlyGoal });
+      onClose();
+    }
+  };
+
+  return (
+    <div className="avid-overlay no-print" style={S.modalOverlay} onClick={onClose}>
+      <div className="avid-modal" style={{ ...S.modal, maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+        <div style={S.modalHeader}>
+          <div style={S.modalTitle}>Production Goals — {year}</div>
+          <button className="avid-btn" style={S.iconGhost} onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
+        <div style={{ padding: 22, display: "flex", flexDirection: "column", gap: 18 }}>
+          <div>
+            <div style={S.fieldLabel}>Yearly Goal</div>
+            <input
+              style={{ ...S.input, width: "100%", marginTop: 6, boxSizing: "border-box" }}
+              type="number"
+              inputMode="decimal"
+              placeholder="e.g. 1300000"
+              value={yearly}
+              onChange={(e) => setYearly(e.target.value)}
+            />
+          </div>
+          <div>
+            <div style={S.fieldLabel}>Monthly Goal</div>
+            <input
+              style={{ ...S.input, width: "100%", marginTop: 6, boxSizing: "border-box" }}
+              type="number"
+              inputMode="decimal"
+              placeholder="e.g. 108000"
+              value={monthly}
+              onChange={(e) => setMonthly(e.target.value)}
+            />
+            <div style={{ fontSize: 11.5, color: t.mutedSoft, marginTop: 8 }}>
+              Shown as a reference line on the Firm Production chart — months at or above it are highlighted, months
+              below it are flagged.
+            </div>
+          </div>
+        </div>
+        <div style={S.modalFooter}>
+          <button className="avid-btn" style={S.ghostBtn} onClick={onClose}>
+            Cancel
+          </button>
+          <button className="avid-btn" style={{ ...S.primaryBtn, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={save}>
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FirmBarChart({
+  S,
+  t,
+  data,
+  color,
+  monthlyGoal,
+}: {
+  S: Styles;
+  t: Theme;
+  data: number[];
+  color: string;
+  monthlyGoal?: number | null;
+}) {
   const [hover, setHover] = useState<number | null>(null);
 
-  const { max: yMax, step } = niceAxisMax(Math.max(...data, 0));
+  const hasGoal = !!monthlyGoal && monthlyGoal > 0;
+  const { max: yMax, step } = niceAxisMax(Math.max(...data, hasGoal ? monthlyGoal! : 0, 0));
   const ticks = [0, step, step * 2, step * 3, step * 4];
   const bandW = PLOT_W / 12;
   const barW = Math.min(24, bandW * 0.55);
   const peakIndex = data.indexOf(Math.max(...data));
+  const goalY = hasGoal ? valueY(monthlyGoal!, yMax) : null;
 
   // The svg scales to 100% width at a fixed aspect ratio, so the tooltip's
   // containing box always matches its rendered size 1:1 — percentages of the
@@ -155,6 +357,9 @@ function FirmBarChart({ S, t, data, color }: { S: Styles; t: Theme; data: number
           const y = valueY(v, yMax);
           const h = MARGIN.top + PLOT_H - y;
           const isHover = hover === i;
+          const underGoal = hasGoal && v < monthlyGoal!;
+          const barColor = underGoal ? t.danger : color;
+          const goalNote = hasGoal ? (underGoal ? " — below goal" : " — at or above goal") : "";
           return (
             <g key={i}>
               <rect
@@ -164,7 +369,7 @@ function FirmBarChart({ S, t, data, color }: { S: Styles; t: Theme; data: number
                 height={PLOT_H}
                 fill="transparent"
                 tabIndex={0}
-                aria-label={`${MONTHS_SHORT[i]}: ${money(v)}`}
+                aria-label={`${MONTHS_SHORT[i]}: ${money(v)}${goalNote}`}
                 onPointerEnter={() => setHover(i)}
                 onPointerLeave={() => setHover(null)}
                 onFocus={() => setHover(i)}
@@ -173,9 +378,9 @@ function FirmBarChart({ S, t, data, color }: { S: Styles; t: Theme; data: number
               />
               <path
                 d={topRoundedRectPath(x, y, barW, Math.max(h, 0), 4)}
-                fill={color}
+                fill={barColor}
                 opacity={isHover ? 1 : 0.85}
-                style={{ transition: "opacity 0.15s ease", pointerEvents: "none" }}
+                style={{ transition: "opacity 0.15s ease, fill 0.2s ease", pointerEvents: "none" }}
               />
               {v > 0 && (
                 <text
@@ -196,6 +401,31 @@ function FirmBarChart({ S, t, data, color }: { S: Styles; t: Theme; data: number
             </g>
           );
         })}
+        {hasGoal && goalY !== null && (
+          <g>
+            <line
+              x1={MARGIN.left}
+              x2={W - MARGIN.right}
+              y1={goalY}
+              y2={goalY}
+              stroke={t.accent}
+              strokeWidth={1.5}
+              strokeDasharray="6 4"
+              style={{ pointerEvents: "none" }}
+            />
+            <text
+              x={W - MARGIN.right}
+              y={goalY - 7}
+              textAnchor="end"
+              fontSize={10.5}
+              fontWeight={700}
+              fill={t.accent}
+              style={{ pointerEvents: "none" }}
+            >
+              Goal {moneyCompact(monthlyGoal!)}
+            </text>
+          </g>
+        )}
       </svg>
       {hover !== null && (
         <div
@@ -209,6 +439,23 @@ function FirmBarChart({ S, t, data, color }: { S: Styles; t: Theme; data: number
           <div style={S.tooltipMonth}>{MONTHS_SHORT[hover]}</div>
           <div style={S.tooltipRow}>
             <span style={S.tooltipValue}>{money(data[hover])}</span>
+          </div>
+          {hasGoal && (
+            <div style={{ fontSize: 11, color: data[hover] >= monthlyGoal! ? color : t.danger, marginTop: 4, fontWeight: 600 }}>
+              {data[hover] >= monthlyGoal! ? "At or above goal" : "Below goal"}
+            </div>
+          )}
+        </div>
+      )}
+      {hasGoal && (
+        <div style={S.legendRow}>
+          <div style={S.legendItem}>
+            <span style={{ ...S.legendDot, background: color }} />
+            At or above goal
+          </div>
+          <div style={S.legendItem}>
+            <span style={{ ...S.legendDot, background: t.danger }} />
+            Below goal
           </div>
         </div>
       )}
