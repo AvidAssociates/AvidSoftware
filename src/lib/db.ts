@@ -11,6 +11,9 @@ export function getDb() {
       "No database connection string set. Add DATABASE_URL (or POSTGRES_URL) in your Vercel project's Environment Variables."
     );
   }
-  pool ??= new Pool({ connectionString });
+  // Supabase's pooler presents a cert chain that Node's default trust store
+  // doesn't recognize; rejectUnauthorized: false is Supabase's documented
+  // fix for pg/serverless connections (the connection is still encrypted).
+  pool ??= new Pool({ connectionString, ssl: { rejectUnauthorized: false } });
   return { sql: waddler({ client: pool }) };
 }

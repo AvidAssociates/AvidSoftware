@@ -20,7 +20,7 @@ async function main() {
     .map((e) => e.name)
     .sort();
 
-  const client = new pg.Client({ connectionString });
+  const client = new pg.Client({ connectionString, ssl: { rejectUnauthorized: false } });
   await client.connect();
   try {
     for (const dir of dirs) {
