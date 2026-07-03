@@ -27,6 +27,7 @@ export async function POST(request: Request) {
     declinedReason: body.declinedReason,
     notes: body.notes,
     addedBy: body.addedBy,
+    firstTime: body.firstTime === undefined ? true : Boolean(body.firstTime),
   });
   return NextResponse.json(entry, { status: 201 });
 }

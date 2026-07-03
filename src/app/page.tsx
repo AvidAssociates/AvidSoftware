@@ -36,6 +36,8 @@ import {
 } from "@/lib/ui";
 import TVMode from "@/components/TVMode";
 import ReportView from "@/components/ReportView";
+import BillingsSummary from "@/components/BillingsSummary";
+import LeaderboardView from "@/components/LeaderboardView";
 
 type Styles = ReturnType<typeof makeStyles>;
 
@@ -165,7 +167,7 @@ function Dashboard({
   const [entries, setEntries] = useState<Entry[]>([]);
   const [billings, setBillings] = useState<Billing[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"sendouts" | "billings" | "report">("sendouts");
+  const [view, setView] = useState<"sendouts" | "billings" | "report" | "leaderboard">("sendouts");
   const [showEntryForm, setShowEntryForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const [showBillingForm, setShowBillingForm] = useState(false);
@@ -292,12 +294,12 @@ function Dashboard({
 
   const filteredBillings = useMemo(() => {
     let list = [...monthBillings];
-    if (filterTeam !== "All") list = list.filter((b) => b.recruiter === filterTeam);
+    if (filterTeam !== "All") list = list.filter((b) => b.team.includes(filterTeam));
     if (query.trim()) {
       const q = query.toLowerCase();
       list = list.filter(
         (b) =>
-          b.recruiter?.toLowerCase().includes(q) ||
+          b.team.some((name) => name.toLowerCase().includes(q)) ||
           b.company?.toLowerCase().includes(q) ||
           b.candidate?.toLowerCase().includes(q)
       );
@@ -331,7 +333,7 @@ function Dashboard({
   const reportStats = useMemo(() => {
     const total = yearBillings.reduce((s, b) => s + b.amount, 0);
     const byPerson: Record<string, number> = {};
-    for (const b of yearBillings) byPerson[b.recruiter] = (byPerson[b.recruiter] || 0) + b.amount;
+    for (const b of yearBillings) for (const name of b.team) byPerson[name] = (byPerson[name] || 0) + b.amount;
     let topName = "—";
     let topAmount = 0;
     for (const [name, amount] of Object.entries(byPerson)) {
@@ -342,6 +344,24 @@ function Dashboard({
     }
     return { total, deals: yearBillings.length, topName };
   }, [yearBillings]);
+
+  const leaderboardStats = useMemo(() => {
+    const firstTimeCount = monthEntries.filter((e) => e.firstTime).length;
+    const tally: Record<string, number> = {};
+    for (const e of monthEntries) {
+      const credited = e.team.length ? e.team : ["Unassigned"];
+      for (const name of credited) tally[name] = (tally[name] || 0) + 1;
+    }
+    let topName = "—";
+    let topCount = 0;
+    for (const [name, count] of Object.entries(tally)) {
+      if (count > topCount) {
+        topName = name;
+        topCount = count;
+      }
+    }
+    return { total: monthEntries.length, firstTimeCount, topName };
+  }, [monthEntries]);
 
   if (tvOpen) {
     return <TVMode entries={entries} billings={billings} roster={teamNames} onExit={() => setTvOpen(false)} />;
@@ -397,7 +417,15 @@ function Dashboard({
 
       <section style={S.hero} className="no-print">
         <div style={S.heroEyebrow}>AVID ASSOCIATES</div>
-        <h1 style={S.heroTitle}>{view === "sendouts" ? "Send-Outs" : view === "billings" ? "Billings" : "Production Report"}</h1>
+        <h1 style={S.heroTitle}>
+          {view === "sendouts"
+            ? "Send-Outs"
+            : view === "billings"
+              ? "Billings"
+              : view === "leaderboard"
+                ? "Leaderboard"
+                : "Production Report"}
+        </h1>
         <div style={S.heroStatsRow}>
           {view === "sendouts" ? (
             <>
@@ -411,6 +439,12 @@ function Dashboard({
               <HeroStat S={S} label="Billed" value={money(billingStats.total)} color={STAGE_COLOR.placed} />
               <HeroStat S={S} label="Deals" value={String(billingStats.deals)} />
               <HeroStat S={S} label="Avg Deal" value={money(billingStats.avg)} color={STAGE_COLOR.interview} />
+            </>
+          ) : view === "leaderboard" ? (
+            <>
+              <HeroStat S={S} label="Send-Outs" value={String(leaderboardStats.total)} />
+              <HeroStat S={S} label="First-Time" value={String(leaderboardStats.firstTimeCount)} color={t.accent} />
+              <HeroStat S={S} label="Top This Month" value={leaderboardStats.topName} color={STAGE_COLOR.placed} />
             </>
           ) : (
             <>
@@ -445,8 +479,15 @@ function Dashboard({
           >
             Report
           </button>
+          <button
+            className="avid-btn"
+            style={view === "leaderboard" ? S.segBtnActive : S.segBtn}
+            onClick={() => setView("leaderboard")}
+          >
+            Leaderboard
+          </button>
         </div>
-        {view !== "report" && (
+        {view !== "report" && view !== "leaderboard" && (
           <>
             <div style={S.searchWrap}>
               <Search size={15} color={t.mutedSoft} />
@@ -526,32 +567,43 @@ function Dashboard({
               ))}
             </div>
           )
-        ) : filteredBillings.length === 0 ? (
-          <div style={S.empty}>
-            {billings.length === 0 ? "No billings yet — log the first one." : "Nothing matches these filters."}
+        ) : view === "leaderboard" ? (
+          <div style={S.reportPad}>
+            <LeaderboardView entries={monthEntries} teamNames={teamNames} t={t} />
           </div>
         ) : (
           <div>
-            <div style={S.cardHeaderRow}>
-              <div style={S.colRecruiter}>Recruiter</div>
-              <div style={S.colClient}>Client</div>
-              <div style={S.colAmount}>Amount</div>
-              <div style={S.colDate}>Date</div>
-              <div style={S.colActions} />
+            <div style={S.reportPad}>
+              <BillingsSummary billings={billings} teamNames={teamNames} monthKey={monthKey} year={monthCursor.getFullYear()} t={t} />
             </div>
-            {filteredBillings.map((b) => (
-              <BillingRow
-                key={b.id}
-                S={S}
-                t={t}
-                billing={b}
-                onEdit={() => {
-                  setEditingBilling(b);
-                  setShowBillingForm(true);
-                }}
-                onDelete={() => deleteBilling(b.id)}
-              />
-            ))}
+            {filteredBillings.length === 0 ? (
+              <div style={S.empty}>
+                {billings.length === 0 ? "No billings yet — log the first one." : "Nothing matches these filters."}
+              </div>
+            ) : (
+              <div>
+                <div style={S.cardHeaderRow}>
+                  <div style={S.colRecruiter}>Team</div>
+                  <div style={S.colClient}>Client</div>
+                  <div style={S.colAmount}>Amount</div>
+                  <div style={S.colDate}>Date</div>
+                  <div style={S.colActions} />
+                </div>
+                {filteredBillings.map((b) => (
+                  <BillingRow
+                    key={b.id}
+                    S={S}
+                    t={t}
+                    billing={b}
+                    onEdit={() => {
+                      setEditingBilling(b);
+                      setShowBillingForm(true);
+                    }}
+                    onDelete={() => deleteBilling(b.id)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -574,6 +626,7 @@ function Dashboard({
       {showBillingForm && (
         <BillingForm
           S={S}
+          t={t}
           initial={editingBilling}
           user={user}
           teamNames={teamNames}
@@ -716,7 +769,7 @@ function BillingRow({
   return (
     <div className="avid-row avid-row-enter" style={S.billingRow}>
       <div style={S.colRecruiter}>
-        <div style={S.cardPrimary}>{billing.recruiter}</div>
+        <div style={S.cardPrimary}>{billing.team.join(", ") || "—"}</div>
       </div>
       <div style={S.colClient}>
         <div style={S.cardPrimary}>{billing.company || "—"}</div>
@@ -1276,6 +1329,7 @@ function EntryForm({
       notes: "",
       addedBy: user,
       createdAt: "",
+      firstTime: true,
     }
   );
 
@@ -1329,6 +1383,26 @@ function EntryForm({
               value={form.round}
               onChange={(e) => setForm((f) => ({ ...f, round: Number(e.target.value) }))}
             />
+          </Field>
+          <Field S={S} label="Business type">
+            <div style={S.segWrap}>
+              <button
+                type="button"
+                className="avid-btn"
+                style={form.firstTime ? S.segBtnActive : S.segBtn}
+                onClick={() => setForm((f) => ({ ...f, firstTime: true }))}
+              >
+                First-time
+              </button>
+              <button
+                type="button"
+                className="avid-btn"
+                style={!form.firstTime ? S.segBtnActive : S.segBtn}
+                onClick={() => setForm((f) => ({ ...f, firstTime: false }))}
+              >
+                Repeat
+              </button>
+            </div>
           </Field>
           <Field S={S} label="Team" full>
             <div style={S.chipRow}>
@@ -1387,6 +1461,7 @@ function EntryForm({
 // ============================================================
 function BillingForm({
   S,
+  t,
   initial,
   user,
   teamNames,
@@ -1394,6 +1469,7 @@ function BillingForm({
   onSave,
 }: {
   S: Styles;
+  t: Theme;
   initial: Billing | null;
   user: string;
   teamNames: string[];
@@ -1404,7 +1480,7 @@ function BillingForm({
     initial || {
       id: uid(),
       date: todayISO(),
-      recruiter: teamNames.includes(user) ? user : teamNames[0] || user,
+      team: teamNames.includes(user) ? [user] : teamNames.slice(0, 1),
       amount: 0,
       company: "",
       candidate: "",
@@ -1413,11 +1489,17 @@ function BillingForm({
       createdAt: "",
     }
   );
+  const toggleTeam = (name: string) => {
+    setForm((f) => {
+      const has = f.team.includes(name);
+      return { ...f, team: has ? f.team.filter((n) => n !== name) : [...f.team, name] };
+    });
+  };
   const set =
-    (k: "date" | "recruiter" | "company" | "candidate" | "notes") =>
+    (k: "date" | "company" | "candidate" | "notes") =>
     (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       setForm((f) => ({ ...f, [k]: e.target.value }));
-  const valid = form.recruiter && form.amount > 0 && form.date;
+  const valid = form.team.length > 0 && form.amount > 0 && form.date;
 
   return (
     <div className="avid-overlay" style={S.modalOverlay} onClick={onClose}>
@@ -1433,13 +1515,6 @@ function BillingForm({
           <Field S={S} label="Date">
             <input type="date" style={S.input} value={form.date} onChange={set("date")} />
           </Field>
-          <Field S={S} label="Recruiter">
-            <select style={S.input} value={form.recruiter} onChange={set("recruiter")}>
-              {teamNames.map((n) => (
-                <option key={n}>{n}</option>
-              ))}
-            </select>
-          </Field>
           <Field S={S} label="Amount ($)">
             <input
               type="number"
@@ -1450,6 +1525,30 @@ function BillingForm({
               value={form.amount || ""}
               onChange={(e) => setForm((f) => ({ ...f, amount: Number(e.target.value) }))}
             />
+          </Field>
+          <Field S={S} label="Team" full>
+            <div style={S.chipRow}>
+              {teamNames.map((name) => (
+                <button
+                  type="button"
+                  key={name}
+                  className="avid-chip"
+                  onClick={() => toggleTeam(name)}
+                  style={{
+                    ...S.chip,
+                    borderColor: t.accent,
+                    color: form.team.includes(name) ? "#fff" : t.accent,
+                    background: form.team.includes(name) ? t.accent : "transparent",
+                  }}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+            <div style={{ fontSize: 11.5, color: t.mutedSoft, marginTop: 8 }}>
+              One person = solo deal (counts toward their Personal total). Two or more = team deal — the full amount
+              credits everyone listed, toward Total only.
+            </div>
           </Field>
           <Field S={S} label="Company">
             <input style={S.input} placeholder="Client company" value={form.company || ""} onChange={set("company")} />

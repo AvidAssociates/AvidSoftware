@@ -96,9 +96,9 @@ export default function TVMode({
       .map((name) => ({
         name,
         amount: monthBillings
-          .filter((b) => b.recruiter === name)
+          .filter((b) => b.team.includes(name))
           .reduce((s, b) => s + b.amount, 0),
-        deals: monthBillings.filter((b) => b.recruiter === name).length,
+        deals: monthBillings.filter((b) => b.team.includes(name)).length,
       }))
       .sort((a, b) => b.amount - a.amount);
     const total = monthBillings.reduce((s, b) => s + b.amount, 0);

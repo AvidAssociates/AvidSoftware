@@ -403,5 +403,25 @@ export function makeStyles(t: Theme) {
     },
     reportTableCell: { fontVariantNumeric: "tabular-nums" as const, color: t.ink, fontWeight: 500 },
     reportTableTotalRow: { fontWeight: 800, borderTop: `1px solid ${t.border}`, background: t.surfaceAlt },
+
+    // leaderboard tab
+    leaderboardRow: { display: "flex", alignItems: "center", gap: 14, padding: "10px 0" },
+    leaderboardRank: {
+      width: 26,
+      height: 26,
+      borderRadius: "50%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 12,
+      fontWeight: 800,
+      flexShrink: 0,
+      background: t.surfaceAlt,
+      color: t.muted,
+    },
+    leaderboardName: { width: 96, flexShrink: 0, fontSize: 13.5, fontWeight: 700, color: t.ink },
+    leaderboardBarTrack: { flex: 1, height: 20, borderRadius: 20, background: t.surfaceAlt, overflow: "hidden" },
+    leaderboardBarFill: { height: "100%", borderRadius: 20, transition: "width 0.4s cubic-bezier(0.16,1,0.3,1)" },
+    leaderboardCount: { width: 70, textAlign: "right" as const, flexShrink: 0, fontSize: 13.5, fontWeight: 700, color: t.ink, fontVariantNumeric: "tabular-nums" as const },
   };
 }

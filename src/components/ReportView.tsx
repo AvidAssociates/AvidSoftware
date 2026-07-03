@@ -85,16 +85,21 @@ export default function ReportView({
   }, [yearBillings]);
 
   const people = useMemo(
-    () => (teamNames.length ? teamNames : Array.from(new Set(yearBillings.map((b) => b.recruiter)))),
+    () => (teamNames.length ? teamNames : Array.from(new Set(yearBillings.flatMap((b) => b.team)))),
     [teamNames, yearBillings]
   );
 
+  // Every person listed on a team deal is credited the full amount — same
+  // "credit everyone, don't split" rule as the Billings tab's Total column.
   const byPersonByMonth = useMemo(() => {
     const map: Record<string, number[]> = {};
     for (const name of people) map[name] = new Array(12).fill(0);
     for (const b of yearBillings) {
       const m = Number(b.date.slice(5, 7)) - 1;
-      if (m >= 0 && m < 12 && map[b.recruiter]) map[b.recruiter][m] += b.amount;
+      if (m < 0 || m >= 12) continue;
+      for (const name of b.team) {
+        if (map[name]) map[name][m] += b.amount;
+      }
     }
     return map;
   }, [yearBillings, people]);

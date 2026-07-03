@@ -19,6 +19,7 @@ export async function PUT(
     declined: Boolean(body.declined),
     declinedReason: body.declinedReason,
     notes: body.notes,
+    firstTime: body.firstTime === undefined ? true : Boolean(body.firstTime),
   });
   if (!entry) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

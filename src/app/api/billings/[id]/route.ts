@@ -8,15 +8,16 @@ export async function PUT(
   const { id } = await params;
   const body = await request.json();
   const amount = Number(body.amount);
-  if (!body.date || !body.recruiter || !amount || amount <= 0) {
+  const team = Array.isArray(body.team) ? body.team : [];
+  if (!body.date || !team.length || !amount || amount <= 0) {
     return NextResponse.json(
-      { error: "date, recruiter, and a positive amount are required" },
+      { error: "date, at least one team member, and a positive amount are required" },
       { status: 400 }
     );
   }
   const billing = await updateBilling(id, {
     date: body.date,
-    recruiter: body.recruiter,
+    team,
     amount,
     company: body.company,
     candidate: body.candidate,

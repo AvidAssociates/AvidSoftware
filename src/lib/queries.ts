@@ -1,5 +1,5 @@
 import { getDb } from "./db";
-import { Billing, Entry, ProductionGoals, RosterMember, StageEvent } from "./types";
+import { Billing, Entry, ProductionGoals, Retainer, RosterMember, StageEvent } from "./types";
 
 type EntryRow = {
   id: string;
@@ -17,6 +17,7 @@ type EntryRow = {
   notes: string | null;
   added_by: string | null;
   created_at: string;
+  first_time: boolean;
 };
 
 function toEntry(row: EntryRow): Entry {
@@ -36,6 +37,7 @@ function toEntry(row: EntryRow): Entry {
     notes: row.notes,
     addedBy: row.added_by,
     createdAt: row.created_at,
+    firstTime: row.first_time,
   };
 }
 
@@ -65,12 +67,13 @@ export async function createEntry(input: {
   declinedReason?: string | null;
   notes?: string | null;
   addedBy?: string | null;
+  firstTime: boolean;
 }): Promise<Entry> {
   const db = getDb();
   // The Sent date defaults to the send-out's own date — no other default.
   const history: StageEvent[] = [{ stage: input.stage as Entry["stage"], date: input.date }];
   const [row] = (await db.sql`
-    INSERT INTO pipeline_entries (id, date, candidate, company, role, interview_type, round, team, stage, stage_history, declined, declined_reason, notes, added_by)
+    INSERT INTO pipeline_entries (id, date, candidate, company, role, interview_type, round, team, stage, stage_history, declined, declined_reason, notes, added_by, first_time)
     VALUES (
       ${input.id},
       ${input.date},
@@ -85,7 +88,8 @@ export async function createEntry(input: {
       ${input.declined},
       ${input.declinedReason ?? null},
       ${input.notes ?? null},
-      ${input.addedBy ?? null}
+      ${input.addedBy ?? null},
+      ${input.firstTime}
     )
     RETURNING *
   `) as EntryRow[];
@@ -106,6 +110,7 @@ export async function updateEntry(
     declined: boolean;
     declinedReason?: string | null;
     notes?: string | null;
+    firstTime: boolean;
   }
 ): Promise<Entry | null> {
   const db = getDb();
@@ -132,7 +137,8 @@ export async function updateEntry(
       stage_history = ${JSON.stringify(history)},
       declined = ${input.declined},
       declined_reason = ${input.declined ? input.declinedReason ?? null : null},
-      notes = ${input.notes ?? null}
+      notes = ${input.notes ?? null},
+      first_time = ${input.firstTime}
     WHERE id = ${id}
     RETURNING *
   `) as EntryRow[];
@@ -233,10 +239,15 @@ export async function renameRosterMember(
     UPDATE pipeline_entries SET added_by = ${newName} WHERE added_by = ${oldName}
   `;
   await db.sql`
-    UPDATE billings SET recruiter = ${newName} WHERE recruiter = ${oldName}
+    UPDATE billings SET team = array_replace(team, ${oldName}, ${newName})
+    WHERE ${oldName} = ANY(team)
   `;
   await db.sql`
     UPDATE billings SET added_by = ${newName} WHERE added_by = ${oldName}
+  `;
+  await db.sql`
+    UPDATE retainers SET recruiter = ${newName} WHERE recruiter = ${oldName}
+    AND NOT EXISTS (SELECT 1 FROM retainers WHERE recruiter = ${newName})
   `;
 
   return toRoster(row);
@@ -251,7 +262,7 @@ export async function deleteRosterMember(id: number) {
 type BillingRow = {
   id: string;
   date: string;
-  recruiter: string;
+  team: string[] | null;
   amount: number;
   company: string | null;
   candidate: string | null;
@@ -264,7 +275,7 @@ function toBilling(row: BillingRow): Billing {
   return {
     id: row.id,
     date: row.date,
-    recruiter: row.recruiter,
+    team: row.team ?? [],
     amount: Number(row.amount),
     company: row.company,
     candidate: row.candidate,
@@ -285,7 +296,7 @@ export async function listBillings(): Promise<Billing[]> {
 export async function createBilling(input: {
   id: string;
   date: string;
-  recruiter: string;
+  team: string[];
   amount: number;
   company?: string | null;
   candidate?: string | null;
@@ -294,11 +305,11 @@ export async function createBilling(input: {
 }): Promise<Billing> {
   const db = getDb();
   const [row] = (await db.sql`
-    INSERT INTO billings (id, date, recruiter, amount, company, candidate, notes, added_by)
+    INSERT INTO billings (id, date, team, amount, company, candidate, notes, added_by)
     VALUES (
       ${input.id},
       ${input.date},
-      ${input.recruiter},
+      ${input.team},
       ${input.amount},
       ${input.company ?? null},
       ${input.candidate ?? null},
@@ -314,7 +325,7 @@ export async function updateBilling(
   id: string,
   input: {
     date: string;
-    recruiter: string;
+    team: string[];
     amount: number;
     company?: string | null;
     candidate?: string | null;
@@ -325,7 +336,7 @@ export async function updateBilling(
   const [row] = (await db.sql`
     UPDATE billings SET
       date = ${input.date},
-      recruiter = ${input.recruiter},
+      team = ${input.team},
       amount = ${input.amount},
       company = ${input.company ?? null},
       candidate = ${input.candidate ?? null},
@@ -338,6 +349,34 @@ export async function updateBilling(
 
 export async function deleteBilling(id: string) {
   await getDb().sql`DELETE FROM billings WHERE id = ${id}`;
+}
+
+// ---------------- Retainers ----------------
+
+type RetainerRow = { recruiter: string; client: string | null; amount: number | null };
+
+function toRetainer(row: RetainerRow): Retainer {
+  return { recruiter: row.recruiter, client: row.client, amount: row.amount === null ? null : Number(row.amount) };
+}
+
+export async function listRetainers(): Promise<Retainer[]> {
+  const db = getDb();
+  const rows = (await db.sql`SELECT * FROM retainers`) as RetainerRow[];
+  return rows.map(toRetainer);
+}
+
+export async function setRetainer(
+  recruiter: string,
+  client: string | null,
+  amount: number | null
+): Promise<Retainer> {
+  const db = getDb();
+  await db.sql`
+    INSERT INTO retainers (recruiter, client, amount)
+    VALUES (${recruiter}, ${client}, ${amount})
+    ON CONFLICT (recruiter) DO UPDATE SET client = EXCLUDED.client, amount = EXCLUDED.amount
+  `;
+  return { recruiter, client, amount };
 }
 
 // ---------------- Production goals ----------------
