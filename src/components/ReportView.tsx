@@ -140,8 +140,14 @@ export default function ReportView({
               </div>
               <p style={S.chartSubtitle}>Total billings by month, {year}</p>
             </div>
-            <button className="avid-btn" style={S.ghostBtn} onClick={() => window.print()}>
-              <Download size={14} /> Export PDF
+            <button
+              className="avid-btn"
+              style={S.iconGhost}
+              onClick={() => window.print()}
+              title="Export PDF"
+              aria-label="Export PDF"
+            >
+              <Download size={18} />
             </button>
           </div>
           <FirmBarChart S={S} t={t} data={firmByMonth} color={STAGE_COLOR.placed} monthlyGoal={goals.monthlyGoal} />
