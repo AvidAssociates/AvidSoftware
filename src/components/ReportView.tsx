@@ -68,10 +68,13 @@ export default function ReportView({
     return arr;
   }, [yearBillings]);
 
-  const people = useMemo(
-    () => (teamNames.length ? teamNames : Array.from(new Set(yearBillings.flatMap((b) => b.team)))),
-    [teamNames, yearBillings]
-  );
+  // Union of the current roster and anyone who appears in this year's
+  // billings — so the chart/legend pick up a newly added person right away,
+  // but removing someone from the roster never erases their historical line.
+  const people = useMemo(() => {
+    const historical = yearBillings.flatMap((b) => b.team);
+    return Array.from(new Set([...teamNames, ...historical]));
+  }, [teamNames, yearBillings]);
 
   // Every person listed on a team deal is credited the full amount — same
   // "credit everyone, don't split" rule as the Billings tab's Total column.
@@ -346,18 +349,6 @@ function FirmBarChart({
           )}
         </div>
       )}
-      {hasGoal && (
-        <div style={S.legendRow}>
-          <div style={S.legendItem}>
-            <span style={{ ...S.legendDot, background: color }} />
-            At or above goal
-          </div>
-          <div style={S.legendItem}>
-            <span style={{ ...S.legendDot, background: t.danger }} />
-            Below goal
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -486,6 +477,11 @@ function RecruiterLineChart({
               <span style={S.tooltipValue}>{money(r.values[hover])}</span>
             </div>
           ))}
+          <div style={{ ...S.tooltipRow, marginTop: 4, paddingTop: 6, borderTop: `1px solid ${t.border}` }}>
+            <span style={{ width: 14, flexShrink: 0 }} />
+            <span style={{ ...S.tooltipName, fontWeight: 700, color: t.ink }}>Total</span>
+            <span style={S.tooltipValue}>{money(rows.reduce((sum, r) => sum + r.values[hover], 0))}</span>
+          </div>
         </div>
       )}
     </div>

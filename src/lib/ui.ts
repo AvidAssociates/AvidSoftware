@@ -365,10 +365,9 @@ export function makeStyles(t: Theme) {
     reportTitleGroup: { display: "flex", alignItems: "center", gap: 6 },
     chartTitle: { fontSize: 14.5, fontWeight: 700, color: t.ink, margin: 0 },
     chartSubtitle: { fontSize: 12.5, color: t.muted, marginTop: 3, marginBottom: 18, fontWeight: 500 },
-    legendRow: { display: "flex", flexWrap: "wrap" as const, gap: "8px 18px", marginTop: 14 },
+    legendRow: { display: "flex", flexWrap: "wrap" as const, justifyContent: "center" as const, gap: "8px 18px", marginTop: 14 },
     legendItem: { display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: t.muted, fontWeight: 600 },
     legendSwatch: { width: 14, height: 3, borderRadius: 2, flexShrink: 0 },
-    legendDot: { width: 9, height: 9, borderRadius: "50%", flexShrink: 0 },
     chartTooltip: {
       position: "absolute" as const,
       pointerEvents: "none" as const,
