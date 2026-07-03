@@ -1,6 +1,215 @@
 @import "tailwindcss";
 
+/* Matches the default (dark) theme so pull-to-refresh/overscroll bounce on
+   mobile shows theme-colored background instead of a flash of white. Kept
+   in sync with the live theme via JS in page.tsx (see applyDocumentTheme). */
+html,
+body {
+  background-color: #191918;
+  color-scheme: dark;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial,
     Helvetica, sans-serif;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+select::-ms-expand {
+  display: none;
+}
+::placeholder {
+  color: inherit;
+  opacity: 0.45;
+}
+
+/* ---- TV mode ---- */
+@keyframes tvRise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.tv-rise {
+  animation: tvRise 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes tvBarGrow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.tv-bar {
+  height: 100%;
+  border-radius: 20px;
+  transform-origin: left;
+  animation: tvBarGrow 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: width 0.6s ease;
+}
+@keyframes tvProgress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+.tv-progress {
+  height: 100%;
+  border-radius: 4px;
+  animation-name: tvProgress;
+  animation-timing-function: linear;
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
+
+/* ---- app-wide interaction polish ---- */
+.avid-row {
+  transition: background-color 0.18s ease;
+}
+.avid-row:hover {
+  background-color: rgba(140, 146, 240, 0.05);
+}
+
+.avid-btn {
+  transition: filter 0.15s ease, transform 0.12s ease, opacity 0.15s ease,
+    background-color 0.15s ease, color 0.15s ease;
+}
+.avid-btn:hover:not(:disabled) {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+.avid-btn:active:not(:disabled) {
+  transform: translateY(0);
+  filter: brightness(0.96);
+}
+
+.avid-chip {
+  transition: background-color 0.18s ease, color 0.18s ease,
+    border-color 0.18s ease, transform 0.12s ease;
+}
+.avid-chip:hover {
+  transform: translateY(-1px);
+}
+
+.avid-decline-option {
+  transition: background-color 0.12s ease;
+}
+.avid-decline-option:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.avid-cal-day,
+.avid-cal-nav {
+  transition: background-color 0.12s ease;
+}
+.avid-cal-day:hover,
+.avid-cal-nav:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+@keyframes overlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.avid-overlay {
+  animation: overlayIn 0.16s ease;
+}
+@keyframes modalIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.avid-modal {
+  animation: modalIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes rowIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.avid-row-enter {
+  animation: rowIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ---- stage progress tracker ---- */
+.avid-stage-fill {
+  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.35s ease;
+}
+.avid-stage-dot {
+  transition: background-color 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.32s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s ease,
+    box-shadow 0.25s ease;
+}
+@keyframes stagePulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--pulse-color, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 9px transparent;
+  }
+}
+.avid-stage-active {
+  animation: stagePulse 2.2s ease-in-out infinite;
+}
+@keyframes stagePop {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.avid-stage-pop {
+  animation: stagePop 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avid-stage-active,
+  .avid-stage-pop,
+  .avid-row-enter,
+  .avid-modal,
+  .avid-overlay,
+  .tv-rise,
+  .tv-bar,
+  .tv-progress {
+    animation: none !important;
+  }
+  .avid-btn,
+  .avid-chip,
+  .avid-row,
+  .avid-stage-fill,
+  .avid-stage-dot {
+    transition: none !important;
+  }
 }

@@ -39,6 +39,9 @@ yarn-error.log*
 # sqlite data
 /data
 
+# netlify
+.netlify
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

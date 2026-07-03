@@ -1,241 +1,341 @@
 import { getDb } from "./db";
-import { Recruiter, Sendout, Billing, Retainer, LeaderboardRow } from "./types";
+import { Billing, Entry, RosterMember, StageEvent } from "./types";
 
-export function listRecruiters(activeOnly = true): Recruiter[] {
-  const db = getDb();
-  const sql = activeOnly
-    ? "SELECT * FROM recruiters WHERE active = 1 ORDER BY sort_order, name"
-    : "SELECT * FROM recruiters ORDER BY sort_order, name";
-  return db.prepare(sql).all() as Recruiter[];
-}
-
-export function createRecruiter(name: string): Recruiter {
-  const db = getDb();
-  const maxOrder = db
-    .prepare("SELECT COALESCE(MAX(sort_order), -1) as m FROM recruiters")
-    .get() as { m: number };
-  const info = db
-    .prepare("INSERT INTO recruiters (name, sort_order) VALUES (?, ?)")
-    .run(name, maxOrder.m + 1);
-  return db
-    .prepare("SELECT * FROM recruiters WHERE id = ?")
-    .get(info.lastInsertRowid) as Recruiter;
-}
-
-export function setRecruiterActive(id: number, active: boolean) {
-  const db = getDb();
-  db.prepare("UPDATE recruiters SET active = ? WHERE id = ?").run(
-    active ? 1 : 0,
-    id
-  );
-}
-
-export function listSendouts(limit = 500): Sendout[] {
-  const db = getDb();
-  return db
-    .prepare("SELECT * FROM sendouts ORDER BY date DESC, id DESC LIMIT ?")
-    .all(limit) as Sendout[];
-}
-
-export function createSendout(input: {
+type EntryRow = {
+  id: string;
   date: string;
   candidate: string;
   company: string;
-  role?: string;
-  type?: string;
-  recruiter_id: number;
-  am_recruiter_id?: number | null;
-  notes?: string;
-}): Sendout {
+  role: string | null;
+  interview_type: string;
+  round: number;
+  team: string[];
+  stage: string;
+  stage_history: StageEvent[];
+  declined: boolean;
+  declined_reason: string | null;
+  notes: string | null;
+  added_by: string | null;
+  created_at: string;
+};
+
+function toEntry(row: EntryRow): Entry {
+  return {
+    id: row.id,
+    date: row.date,
+    candidate: row.candidate,
+    company: row.company,
+    role: row.role,
+    interviewType: row.interview_type,
+    round: row.round,
+    team: row.team ?? [],
+    stage: row.stage as Entry["stage"],
+    stageHistory: row.stage_history ?? [],
+    declined: row.declined,
+    declinedReason: row.declined_reason as Entry["declinedReason"],
+    notes: row.notes,
+    addedBy: row.added_by,
+    createdAt: row.created_at,
+  };
+}
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export async function listEntries(): Promise<Entry[]> {
   const db = getDb();
-  const info = db
-    .prepare(
-      `INSERT INTO sendouts (date, candidate, company, role, type, recruiter_id, am_recruiter_id, notes)
-       VALUES (@date, @candidate, @company, @role, @type, @recruiter_id, @am_recruiter_id, @notes)`
-    )
-    .run({
-      date: input.date,
-      candidate: input.candidate,
-      company: input.company,
-      role: input.role ?? null,
-      type: input.type ?? null,
-      recruiter_id: input.recruiter_id,
-      am_recruiter_id: input.am_recruiter_id ?? null,
-      notes: input.notes ?? null,
-    });
-  return db
-    .prepare("SELECT * FROM sendouts WHERE id = ?")
-    .get(info.lastInsertRowid) as Sendout;
+  const rows = (await db.sql`
+    SELECT * FROM pipeline_entries ORDER BY date DESC, created_at DESC
+  `) as EntryRow[];
+  return rows.map(toEntry);
 }
 
-export function deleteSendout(id: number) {
-  getDb().prepare("DELETE FROM sendouts WHERE id = ?").run(id);
-}
-
-export function listBillings(limit = 500): Billing[] {
-  const db = getDb();
-  return db
-    .prepare("SELECT * FROM billings ORDER BY date DESC, id DESC LIMIT ?")
-    .all(limit) as Billing[];
-}
-
-export function createBilling(input: {
+export async function createEntry(input: {
+  id: string;
   date: string;
-  recruiter_id: number;
-  amount: number;
-  category?: string;
-  personal?: boolean;
-  candidate?: string;
-  company?: string;
-  notes?: string;
-}): Billing {
+  candidate: string;
+  company: string;
+  role?: string | null;
+  interviewType: string;
+  round: number;
+  team: string[];
+  stage: string;
+  declined: boolean;
+  declinedReason?: string | null;
+  notes?: string | null;
+  addedBy?: string | null;
+}): Promise<Entry> {
   const db = getDb();
-  const info = db
-    .prepare(
-      `INSERT INTO billings (date, recruiter_id, amount, category, personal, candidate, company, notes)
-       VALUES (@date, @recruiter_id, @amount, @category, @personal, @candidate, @company, @notes)`
+  // The Sent date defaults to the send-out's own date — no other default.
+  const history: StageEvent[] = [{ stage: input.stage as Entry["stage"], date: input.date }];
+  const [row] = (await db.sql`
+    INSERT INTO pipeline_entries (id, date, candidate, company, role, interview_type, round, team, stage, stage_history, declined, declined_reason, notes, added_by)
+    VALUES (
+      ${input.id},
+      ${input.date},
+      ${input.candidate},
+      ${input.company},
+      ${input.role ?? null},
+      ${input.interviewType},
+      ${input.round},
+      ${input.team},
+      ${input.stage},
+      ${JSON.stringify(history)},
+      ${input.declined},
+      ${input.declinedReason ?? null},
+      ${input.notes ?? null},
+      ${input.addedBy ?? null}
     )
-    .run({
-      date: input.date,
-      recruiter_id: input.recruiter_id,
-      amount: input.amount,
-      category: input.category ?? "placement",
-      personal: input.personal === false ? 0 : 1,
-      candidate: input.candidate ?? null,
-      company: input.company ?? null,
-      notes: input.notes ?? null,
-    });
-  return db
-    .prepare("SELECT * FROM billings WHERE id = ?")
-    .get(info.lastInsertRowid) as Billing;
+    RETURNING *
+  `) as EntryRow[];
+  return toEntry(row);
 }
 
-export function deleteBilling(id: number) {
-  getDb().prepare("DELETE FROM billings WHERE id = ?").run(id);
-}
-
-export function listRetainers(limit = 500): Retainer[] {
+export async function updateEntry(
+  id: string,
+  input: {
+    date: string;
+    candidate: string;
+    company: string;
+    role?: string | null;
+    interviewType: string;
+    round: number;
+    team: string[];
+    stage: string;
+    declined: boolean;
+    declinedReason?: string | null;
+    notes?: string | null;
+  }
+): Promise<Entry | null> {
   const db = getDb();
-  return db
-    .prepare("SELECT * FROM retainers ORDER BY date DESC, id DESC LIMIT ?")
-    .all(limit) as Retainer[];
+  const [existing] = (await db.sql`
+    SELECT stage, stage_history FROM pipeline_entries WHERE id = ${id}
+  `) as { stage: string; stage_history: StageEvent[] }[];
+  if (!existing) return null;
+
+  let history = existing.stage_history ?? [];
+  if (input.stage !== existing.stage && !history.some((h) => h.stage === input.stage)) {
+    history = [...history, { stage: input.stage as Entry["stage"], date: todayISO() }];
+  }
+
+  const [row] = (await db.sql`
+    UPDATE pipeline_entries SET
+      date = ${input.date},
+      candidate = ${input.candidate},
+      company = ${input.company},
+      role = ${input.role ?? null},
+      interview_type = ${input.interviewType},
+      round = ${input.round},
+      team = ${input.team},
+      stage = ${input.stage},
+      stage_history = ${JSON.stringify(history)},
+      declined = ${input.declined},
+      declined_reason = ${input.declined ? input.declinedReason ?? null : null},
+      notes = ${input.notes ?? null}
+    WHERE id = ${id}
+    RETURNING *
+  `) as EntryRow[];
+  return toEntry(row);
 }
 
-export function createRetainer(input: {
+export async function deleteEntry(id: string) {
+  await getDb().sql`DELETE FROM pipeline_entries WHERE id = ${id}`;
+}
+
+const PIPELINE_ORDER: Entry["stage"][] = ["sent", "interview", "offer", "placed"];
+
+// The single entry point for setting a stage's date, whether that's
+// correcting an already-recorded date or moving the pipeline forward to a
+// stage it hasn't reached yet (which requires a date — there's no default).
+export async function setStageEventDate(
+  id: string,
+  stage: string,
+  date: string
+): Promise<Entry | null> {
+  const db = getDb();
+  const [existing] = (await db.sql`
+    SELECT stage, stage_history FROM pipeline_entries WHERE id = ${id}
+  `) as { stage: string; stage_history: StageEvent[] }[];
+  if (!existing) return null;
+
+  const history = existing.stage_history ?? [];
+  const idx = history.map((h) => h.stage).lastIndexOf(stage as Entry["stage"]);
+  const updatedHistory =
+    idx === -1
+      ? [...history, { stage: stage as Entry["stage"], date }]
+      : history.map((h, i) => (i === idx ? { ...h, date } : h));
+
+  const newStage =
+    PIPELINE_ORDER.indexOf(stage as Entry["stage"]) > PIPELINE_ORDER.indexOf(existing.stage as Entry["stage"])
+      ? stage
+      : existing.stage;
+
+  const [row] = (await db.sql`
+    UPDATE pipeline_entries SET stage_history = ${JSON.stringify(updatedHistory)}, stage = ${newStage}
+    WHERE id = ${id}
+    RETURNING *
+  `) as EntryRow[];
+  return toEntry(row);
+}
+
+// ---------------- Roster ----------------
+
+type RosterRow = { id: number; name: string; sort_order: number };
+
+function toRoster(row: RosterRow): RosterMember {
+  return { id: row.id, name: row.name, sortOrder: row.sort_order };
+}
+
+export async function listRoster(): Promise<RosterMember[]> {
+  const db = getDb();
+  const rows = (await db.sql`
+    SELECT * FROM roster ORDER BY sort_order, name
+  `) as RosterRow[];
+  return rows.map(toRoster);
+}
+
+export async function addRosterMember(name: string): Promise<RosterMember> {
+  const db = getDb();
+  const [maxRow] = (await db.sql`
+    SELECT COALESCE(MAX(sort_order), -1) AS m FROM roster
+  `) as { m: number }[];
+  const [row] = (await db.sql`
+    INSERT INTO roster (name, sort_order)
+    VALUES (${name}, ${maxRow.m + 1})
+    ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+    RETURNING *
+  `) as RosterRow[];
+  return toRoster(row);
+}
+
+export async function renameRosterMember(
+  id: number,
+  newName: string
+): Promise<RosterMember | null> {
+  const db = getDb();
+  const [existing] = (await db.sql`
+    SELECT * FROM roster WHERE id = ${id}
+  `) as RosterRow[];
+  if (!existing) return null;
+  const oldName = existing.name;
+
+  const [row] = (await db.sql`
+    UPDATE roster SET name = ${newName} WHERE id = ${id} RETURNING *
+  `) as RosterRow[];
+
+  // Keep historical records consistent with the rename.
+  await db.sql`
+    UPDATE pipeline_entries SET team = array_replace(team, ${oldName}, ${newName})
+    WHERE ${oldName} = ANY(team)
+  `;
+  await db.sql`
+    UPDATE pipeline_entries SET added_by = ${newName} WHERE added_by = ${oldName}
+  `;
+  await db.sql`
+    UPDATE billings SET recruiter = ${newName} WHERE recruiter = ${oldName}
+  `;
+  await db.sql`
+    UPDATE billings SET added_by = ${newName} WHERE added_by = ${oldName}
+  `;
+
+  return toRoster(row);
+}
+
+export async function deleteRosterMember(id: number) {
+  await getDb().sql`DELETE FROM roster WHERE id = ${id}`;
+}
+
+// ---------------- Billings ----------------
+
+type BillingRow = {
+  id: string;
   date: string;
-  recruiter_id: number;
+  recruiter: string;
   amount: number;
-  company?: string;
-  notes?: string;
-}): Retainer {
+  company: string | null;
+  candidate: string | null;
+  notes: string | null;
+  added_by: string | null;
+  created_at: string;
+};
+
+function toBilling(row: BillingRow): Billing {
+  return {
+    id: row.id,
+    date: row.date,
+    recruiter: row.recruiter,
+    amount: Number(row.amount),
+    company: row.company,
+    candidate: row.candidate,
+    notes: row.notes,
+    addedBy: row.added_by,
+    createdAt: row.created_at,
+  };
+}
+
+export async function listBillings(): Promise<Billing[]> {
   const db = getDb();
-  const info = db
-    .prepare(
-      `INSERT INTO retainers (date, recruiter_id, amount, company, notes)
-       VALUES (@date, @recruiter_id, @amount, @company, @notes)`
+  const rows = (await db.sql`
+    SELECT * FROM billings ORDER BY date DESC, created_at DESC
+  `) as BillingRow[];
+  return rows.map(toBilling);
+}
+
+export async function createBilling(input: {
+  id: string;
+  date: string;
+  recruiter: string;
+  amount: number;
+  company?: string | null;
+  candidate?: string | null;
+  notes?: string | null;
+  addedBy?: string | null;
+}): Promise<Billing> {
+  const db = getDb();
+  const [row] = (await db.sql`
+    INSERT INTO billings (id, date, recruiter, amount, company, candidate, notes, added_by)
+    VALUES (
+      ${input.id},
+      ${input.date},
+      ${input.recruiter},
+      ${input.amount},
+      ${input.company ?? null},
+      ${input.candidate ?? null},
+      ${input.notes ?? null},
+      ${input.addedBy ?? null}
     )
-    .run({
-      date: input.date,
-      recruiter_id: input.recruiter_id,
-      amount: input.amount,
-      company: input.company ?? null,
-      notes: input.notes ?? null,
-    });
-  return db
-    .prepare("SELECT * FROM retainers WHERE id = ?")
-    .get(info.lastInsertRowid) as Retainer;
+    RETURNING *
+  `) as BillingRow[];
+  return toBilling(row);
 }
 
-export function getAnnualGoal(): number {
+export async function updateBilling(
+  id: string,
+  input: {
+    date: string;
+    recruiter: string;
+    amount: number;
+    company?: string | null;
+    candidate?: string | null;
+    notes?: string | null;
+  }
+): Promise<Billing> {
   const db = getDb();
-  const row = db
-    .prepare("SELECT value FROM settings WHERE key = 'annual_goal'")
-    .get() as { value: string } | undefined;
-  return row ? Number(row.value) : 1300000;
+  const [row] = (await db.sql`
+    UPDATE billings SET
+      date = ${input.date},
+      recruiter = ${input.recruiter},
+      amount = ${input.amount},
+      company = ${input.company ?? null},
+      candidate = ${input.candidate ?? null},
+      notes = ${input.notes ?? null}
+    WHERE id = ${id}
+    RETURNING *
+  `) as BillingRow[];
+  return toBilling(row);
 }
 
-export function setAnnualGoal(value: number) {
-  const db = getDb();
-  db.prepare(
-    "INSERT INTO settings (key, value) VALUES ('annual_goal', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
-  ).run(String(value));
-}
-
-function monthBounds(ref = new Date()) {
-  const y = ref.getFullYear();
-  const m = ref.getMonth();
-  const start = new Date(y, m, 1).toISOString().slice(0, 10);
-  const end = new Date(y, m + 1, 1).toISOString().slice(0, 10);
-  return { start, end };
-}
-
-function yearBounds(ref = new Date()) {
-  const y = ref.getFullYear();
-  const start = `${y}-01-01`;
-  const end = `${y + 1}-01-01`;
-  return { start, end };
-}
-
-export function getLeaderboard(): {
-  rows: LeaderboardRow[];
-  annualGoal: number;
-  teamCashYtd: number;
-  teamBillingsMonth: number;
-} {
-  const db = getDb();
-  const recruiters = listRecruiters(true);
-  const { start: mStart, end: mEnd } = monthBounds();
-  const { start: yStart, end: yEnd } = yearBounds();
-
-  const sendoutCount = db.prepare(
-    `SELECT COUNT(*) as c FROM sendouts WHERE recruiter_id = ? AND date >= ? AND date < ?`
-  );
-  const billingSum = db.prepare(
-    `SELECT COALESCE(SUM(amount),0) as s FROM billings WHERE recruiter_id = ? AND date >= ? AND date < ?`
-  );
-  const billingSumPersonal = db.prepare(
-    `SELECT COALESCE(SUM(amount),0) as s FROM billings WHERE recruiter_id = ? AND personal = 1 AND date >= ? AND date < ?`
-  );
-  const retainerSum = db.prepare(
-    `SELECT COALESCE(SUM(amount),0) as s FROM retainers WHERE recruiter_id = ? AND date >= ? AND date < ?`
-  );
-
-  const rows: LeaderboardRow[] = recruiters.map((recruiter) => {
-    const sendoutsMonth = (
-      sendoutCount.get(recruiter.id, mStart, mEnd) as { c: number }
-    ).c;
-    const sendoutsYtd = (
-      sendoutCount.get(recruiter.id, yStart, yEnd) as { c: number }
-    ).c;
-    const billingsMonth = (
-      billingSum.get(recruiter.id, mStart, mEnd) as { s: number }
-    ).s;
-    const billingsYtdTotal = (
-      billingSum.get(recruiter.id, yStart, yEnd) as { s: number }
-    ).s;
-    const billingsYtdPersonal = (
-      billingSumPersonal.get(recruiter.id, yStart, yEnd) as { s: number }
-    ).s;
-    const retainersYtd = (
-      retainerSum.get(recruiter.id, yStart, yEnd) as { s: number }
-    ).s;
-
-    return {
-      recruiter,
-      sendoutsMonth,
-      sendoutsYtd,
-      billingsMonth,
-      billingsYtdPersonal,
-      billingsYtdTotal,
-      retainersYtd,
-      totalCashYtd: billingsYtdTotal + retainersYtd,
-    };
-  });
-
-  rows.sort((a, b) => b.totalCashYtd - a.totalCashYtd);
-
-  const teamCashYtd = rows.reduce((sum, r) => sum + r.totalCashYtd, 0);
-  const teamBillingsMonth = rows.reduce((sum, r) => sum + r.billingsMonth, 0);
-
-  return { rows, annualGoal: getAnnualGoal(), teamCashYtd, teamBillingsMonth };
+export async function deleteBilling(id: string) {
+  await getDb().sql`DELETE FROM billings WHERE id = ${id}`;
 }

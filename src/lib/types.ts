@@ -1,53 +1,44 @@
-export type Recruiter = {
-  id: number;
-  name: string;
-  active: number;
-  sort_order: number;
+export type Stage = "sent" | "interview" | "offer" | "placed";
+
+export type StageEvent = {
+  stage: Stage;
+  date: string;
 };
 
-export type Sendout = {
-  id: number;
+export type DeclineReason = "candidate" | "client";
+
+export type Entry = {
+  id: string;
   date: string;
   candidate: string;
   company: string;
   role: string | null;
-  type: string | null;
-  recruiter_id: number;
-  am_recruiter_id: number | null;
+  interviewType: string;
+  round: number;
+  team: string[];
+  stage: Stage;
+  stageHistory: StageEvent[];
+  declined: boolean;
+  declinedReason: DeclineReason | null;
   notes: string | null;
-  created_at: string;
+  addedBy: string | null;
+  createdAt: string;
 };
 
 export type Billing = {
-  id: number;
+  id: string;
   date: string;
-  recruiter_id: number;
+  recruiter: string;
   amount: number;
-  category: string;
-  personal: number;
+  company: string | null;
   candidate: string | null;
-  company: string | null;
   notes: string | null;
-  created_at: string;
+  addedBy: string | null;
+  createdAt: string;
 };
 
-export type Retainer = {
+export type RosterMember = {
   id: number;
-  date: string;
-  recruiter_id: number;
-  amount: number;
-  company: string | null;
-  notes: string | null;
-  created_at: string;
-};
-
-export type LeaderboardRow = {
-  recruiter: Recruiter;
-  sendoutsMonth: number;
-  sendoutsYtd: number;
-  billingsMonth: number;
-  billingsYtdPersonal: number;
-  billingsYtdTotal: number;
-  retainersYtd: number;
-  totalCashYtd: number;
+  name: string;
+  sortOrder: number;
 };
