@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Settings, X } from "lucide-react";
+import { Download } from "lucide-react";
 import { Billing } from "@/lib/types";
 import {
   MONTHS_SHORT,
@@ -51,7 +51,6 @@ export default function ReportView({
 }) {
   const S = makeStyles(t);
   const [showTable, setShowTable] = useState(false);
-  const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [goals, setGoals] = useState<{ yearlyGoal: number | null; monthlyGoal: number | null }>({
     yearlyGoal: null,
     monthlyGoal: null,
@@ -131,18 +130,7 @@ export default function ReportView({
         <div style={S.reportSection}>
           <div style={S.reportSectionHeader}>
             <div>
-              <div style={S.reportTitleGroup}>
-                <button
-                  className="avid-btn"
-                  style={S.iconGhost}
-                  onClick={() => setShowGoalsModal(true)}
-                  title="Set production goals"
-                  aria-label="Set production goals"
-                >
-                  <Settings size={16} />
-                </button>
-                <h3 style={S.chartTitle}>Firm Production</h3>
-              </div>
+              <h3 style={S.chartTitle}>Firm Production</h3>
               <p style={S.chartSubtitle}>Total billings by month, {year}</p>
             </div>
             <button
@@ -210,105 +198,6 @@ export default function ReportView({
         </div>
         <div style={printS.reportTableWrap}>
           <ReportTable S={printS} months={MONTHS_SHORT} firmByMonth={firmByMonth} series={printSeries} />
-        </div>
-      </div>
-
-      {showGoalsModal && (
-        <GoalsModal
-          S={S}
-          t={t}
-          year={year}
-          initialYearly={goals.yearlyGoal}
-          initialMonthly={goals.monthlyGoal}
-          onClose={() => setShowGoalsModal(false)}
-          onSaved={setGoals}
-        />
-      )}
-    </div>
-  );
-}
-
-function GoalsModal({
-  S,
-  t,
-  year,
-  initialYearly,
-  initialMonthly,
-  onClose,
-  onSaved,
-}: {
-  S: Styles;
-  t: Theme;
-  year: number;
-  initialYearly: number | null;
-  initialMonthly: number | null;
-  onClose: () => void;
-  onSaved: (goals: { yearlyGoal: number | null; monthlyGoal: number | null }) => void;
-}) {
-  const [yearly, setYearly] = useState(initialYearly !== null ? String(initialYearly) : "");
-  const [monthly, setMonthly] = useState(initialMonthly !== null ? String(initialMonthly) : "");
-  const [busy, setBusy] = useState(false);
-
-  const save = async () => {
-    setBusy(true);
-    const yearlyGoal = yearly.trim() ? Number(yearly) : null;
-    const monthlyGoal = monthly.trim() ? Number(monthly) : null;
-    const res = await fetch("/api/goals", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ year, yearlyGoal, monthlyGoal }),
-    });
-    setBusy(false);
-    if (res.ok) {
-      onSaved({ yearlyGoal, monthlyGoal });
-      onClose();
-    }
-  };
-
-  return (
-    <div className="avid-overlay no-print" style={S.modalOverlay} onClick={onClose}>
-      <div className="avid-modal" style={{ ...S.modal, maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
-        <div style={S.modalHeader}>
-          <div style={S.modalTitle}>Production Goals — {year}</div>
-          <button className="avid-btn" style={S.iconGhost} onClick={onClose}>
-            <X size={18} />
-          </button>
-        </div>
-        <div style={{ padding: 22, display: "flex", flexDirection: "column", gap: 18 }}>
-          <div>
-            <div style={S.fieldLabel}>Yearly Goal</div>
-            <input
-              style={{ ...S.input, width: "100%", marginTop: 6, boxSizing: "border-box" }}
-              type="number"
-              inputMode="decimal"
-              placeholder="e.g. 1300000"
-              value={yearly}
-              onChange={(e) => setYearly(e.target.value)}
-            />
-          </div>
-          <div>
-            <div style={S.fieldLabel}>Monthly Goal</div>
-            <input
-              style={{ ...S.input, width: "100%", marginTop: 6, boxSizing: "border-box" }}
-              type="number"
-              inputMode="decimal"
-              placeholder="e.g. 108000"
-              value={monthly}
-              onChange={(e) => setMonthly(e.target.value)}
-            />
-            <div style={{ fontSize: 11.5, color: t.mutedSoft, marginTop: 8 }}>
-              Shown as a reference line on the Firm Production chart — months at or above it are highlighted, months
-              below it are flagged.
-            </div>
-          </div>
-        </div>
-        <div style={S.modalFooter}>
-          <button className="avid-btn" style={S.ghostBtn} onClick={onClose}>
-            Cancel
-          </button>
-          <button className="avid-btn" style={{ ...S.primaryBtn, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={save}>
-            Save
-          </button>
         </div>
       </div>
     </div>

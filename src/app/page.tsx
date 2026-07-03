@@ -38,6 +38,7 @@ import TVMode from "@/components/TVMode";
 import ReportView from "@/components/ReportView";
 import BillingsSummary from "@/components/BillingsSummary";
 import LeaderboardView from "@/components/LeaderboardView";
+import GoalsModal from "@/components/GoalsModal";
 
 type Styles = ReturnType<typeof makeStyles>;
 
@@ -182,12 +183,34 @@ function Dashboard({
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [reportYear, setReportYear] = useState(() => new Date().getFullYear());
+  const [showGoalsModal, setShowGoalsModal] = useState(false);
+  const [billingsGoals, setBillingsGoals] = useState<{ yearlyGoal: number | null; monthlyGoal: number | null }>({
+    yearlyGoal: null,
+    monthlyGoal: null,
+  });
 
   const isAdmin = user === ADMIN;
   const monthKey = `${monthCursor.getFullYear()}-${String(monthCursor.getMonth() + 1).padStart(2, "0")}`;
   const monthLabel = monthCursor.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const goPrevMonth = () => setMonthCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   const goNextMonth = () => setMonthCursor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+
+  const monthCursorYear = monthCursor.getFullYear();
+
+  // The same production_goals row the Report tab charts read — editing it
+  // here (next to Billings) carries straight over to Report.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/goals?year=${monthCursorYear}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setBillingsGoals({ yearlyGoal: data.yearlyGoal ?? null, monthlyGoal: data.monthlyGoal ?? null });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [monthCursorYear]);
 
   // Loads in the background without ever blanking the current view — only
   // the very first mount shows the loading state.
@@ -408,17 +431,32 @@ function Dashboard({
 
       <section style={S.hero} className="no-print">
         <div style={S.heroEyebrow}>AVID ASSOCIATES</div>
-        <h1 style={S.heroTitle}>
-          {view === "sendouts"
-            ? "Send-Outs"
-            : view === "billings"
-              ? "Billings"
-              : view === "leaderboard"
-                ? "Leaderboard"
-                : "Production Report"}
-        </h1>
+        <div style={S.reportTitleGroup}>
+          <h1 style={S.heroTitle}>
+            {view === "sendouts"
+              ? "Send-Outs"
+              : view === "billings"
+                ? "Billings"
+                : view === "leaderboard"
+                  ? "Leaderboard"
+                  : "Production Report"}
+          </h1>
+          {view === "billings" && (
+            <button
+              className="avid-btn"
+              style={S.iconGhost}
+              onClick={() => setShowGoalsModal(true)}
+              title="Set production goals"
+              aria-label="Set production goals"
+            >
+              <Settings size={18} />
+            </button>
+          )}
+        </div>
         {view === "billings" ? (
-          <BillingsSummary billings={billings} teamNames={teamNames} monthKey={monthKey} year={monthCursor.getFullYear()} t={t} />
+          <div style={{ marginTop: 16 }}>
+            <BillingsSummary billings={billings} monthKey={monthKey} year={monthCursorYear} goals={billingsGoals} t={t} />
+          </div>
         ) : (
           <div style={S.heroStatsRow}>
             {view === "sendouts" ? (
@@ -631,6 +669,18 @@ function Dashboard({
           roster={roster}
           reloadRoster={reloadRoster}
           onClose={() => setShowUserMgr(false)}
+        />
+      )}
+
+      {showGoalsModal && (
+        <GoalsModal
+          S={S}
+          t={t}
+          year={monthCursorYear}
+          initialYearly={billingsGoals.yearlyGoal}
+          initialMonthly={billingsGoals.monthlyGoal}
+          onClose={() => setShowGoalsModal(false)}
+          onSaved={setBillingsGoals}
         />
       )}
     </div>
