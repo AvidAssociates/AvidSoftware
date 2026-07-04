@@ -273,31 +273,30 @@ export function makeStyles(t: Theme) {
       padding: "18px 22px",
       borderBottom: `1px solid ${t.border}`,
     },
-    // Send-Outs row: two identical halves flanking a center Status track.
-    // Each half is its own 3-equal-column grid (Date/Candidate/Company on
-    // the left, Role/Team/Actions on the right), so the columns within each
-    // half are always equally spaced by construction, both halves mirror
-    // each other, and Status sits on the row's true center under the month
-    // picker. The center track's 220px minimum guarantees Role can never
-    // crowd the Status text no matter how short the status label is.
-    soGrid: { display: "grid", gridTemplateColumns: "1fr minmax(220px, auto) 1fr", alignItems: "center" as const },
-    soGroup: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", alignItems: "center" as const, gap: 20, minWidth: 0 },
-    // Every column, header and data alike, is plain left-aligned text --
-    // a value always starts directly under its header's first letter, and
-    // a wrapped second line stays left-aligned (ragged right) rather than
-    // centering, same as any ordinary table.
+    // Send-Outs row -- ONE flat 7-column grid, every column an equal 1fr:
+    //   Date | Candidate | Company | Status | Role | Team | Actions
+    // Equal fractions => the 7 columns are evenly spaced by construction,
+    // and Status, being the exact middle column (#4 of 7), always sits on
+    // the row's true center. The table has symmetric horizontal margins,
+    // so that center lines up under the month picker (also page-centered).
+    // No auto tracks, no nested half-grids, no per-content tuning -- the
+    // even spacing and the centered Status are pure grid math that can't
+    // drift with content. minWidth:0 on every cell keeps a long value from
+    // stretching its own column wider than the others.
+    soGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+      alignItems: "center" as const,
+      columnGap: 20,
+    },
+    // Header and data both left-aligned, so a value starts directly under
+    // its header's first letter (Account Manager's "A" under Role's "R"),
+    // and the Status dot sits directly under the "S" of STATUS -- both are
+    // the first thing drawn at the column's left edge. A wrapped second
+    // line stays left-aligned (ragged right), same as any ordinary table.
     soCol: { minWidth: 0, textAlign: "left" as const },
-    soStatusCol: { minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" as const },
-    // The header ("Status") and every row's dot+label both sit inside this
-    // exact same fixed-width, left-anchored box, which is then centered as
-    // a block within soStatusCol. That's what pins the dot under the "S":
-    // both the header text and the dot are the first thing drawn at this
-    // box's left edge, and the box's own width and centering never change
-    // with content, so the header's left edge and every row's left edge
-    // land on the identical x. (Centering the dot+label as a bare
-    // variable-width group instead would drift the dot per row, since a
-    // longer label like "Interview T(1)" centers differently than "Sent".)
-    soStatusInner: { width: 168, display: "flex", justifyContent: "flex-start" as const },
+    soStatusCol: { minWidth: 0, textAlign: "left" as const },
+    // Actions hug the row's right edge, mirroring Date at the left edge.
     soActionsCol: { minWidth: 0, display: "flex", justifyContent: "flex-end" as const },
     colActions: { width: 56, flexShrink: 0, display: "flex", justifyContent: "flex-end" },
     colRecruiter: { width: 140, flexShrink: 0 },
