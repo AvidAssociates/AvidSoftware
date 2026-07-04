@@ -280,7 +280,10 @@ export function makeStyles(t: Theme) {
     // it on each side), lined up with the month picker above.
     soGrid: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto 1fr 1fr 1fr", alignItems: "center" as const },
     soCol: { minWidth: 0 },
-    soStatusCol: { minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" as const },
+    // Padding (not just the grid gap) so Status always has real breathing
+    // room on both sides -- an "auto" track hugs its own content tightly,
+    // unlike the 1fr columns which usually have slack from shorter text.
+    soStatusCol: { minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" as const, padding: "0 32px" },
     soActionsCol: { minWidth: 0, display: "flex", justifyContent: "flex-end" as const },
     colActions: { width: 56, flexShrink: 0, display: "flex", justifyContent: "flex-end" },
     colRecruiter: { width: 140, flexShrink: 0 },
