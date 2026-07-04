@@ -10,6 +10,7 @@ import {
   Trash2,
   X,
   Ban,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -846,14 +847,14 @@ function EntryRow({
   const dateField = (
     <input
       type="date"
-      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5 }}
+      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5, textAlign: "center" }}
       value={draft.date}
       onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
     />
   );
   const candidateField = (
     <input
-      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 13.5, fontWeight: 600 }}
+      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 13.5, fontWeight: 600, textAlign: "center" }}
       value={draft.candidate}
       placeholder="Full name"
       onChange={(e) => setDraft((d) => ({ ...d, candidate: e.target.value }))}
@@ -861,7 +862,7 @@ function EntryRow({
   );
   const companyField = (
     <input
-      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5 }}
+      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5, textAlign: "center" }}
       value={draft.company}
       placeholder="Client company"
       onChange={(e) => setDraft((d) => ({ ...d, company: e.target.value }))}
@@ -869,32 +870,14 @@ function EntryRow({
   );
   const roleField = (
     <input
-      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5 }}
+      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5, textAlign: "center" }}
       value={draft.role}
       placeholder="e.g. Account Manager"
       onChange={(e) => setDraft((d) => ({ ...d, role: e.target.value }))}
     />
   );
   const teamField = (
-    <div style={{ display: "flex", justifyContent: "center" }}>
-      <div style={{ ...S.segWrap, flexWrap: "wrap" as const }}>
-        {teamNames.map((name) => (
-          <button
-            type="button"
-            key={name}
-            className="avid-btn"
-            onClick={() => toggleTeam(name)}
-            style={{
-              ...(draft.team.includes(name) ? S.segBtnActive : S.segBtn),
-              padding: "5px 11px",
-              fontSize: 11.5,
-            }}
-          >
-            {name}
-          </button>
-        ))}
-      </div>
-    </div>
+    <TeamMultiSelect S={S} teamNames={teamNames} selected={draft.team} onToggle={toggleTeam} />
   );
 
   if (mobile) {
@@ -1337,6 +1320,162 @@ function MeetingDatePicker({
         whiteSpace: "nowrap",
       }}
     />
+  );
+}
+
+// A closed-by-default dropdown for picking any number of team members --
+// click the box to open a checklist, toggle as many names as you want, and
+// it stays open until you click away (so multiple picks don't require
+// reopening it each time). Same portaled-popover pattern as the decline-
+// reason menu, so it isn't clipped by the row's own layout.
+function TeamMultiSelect({
+  S,
+  teamNames,
+  selected,
+  onToggle,
+}: {
+  S: Styles;
+  teamNames: string[];
+  selected: string[];
+  onToggle: (name: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (!(e.target instanceof Element) || !e.target.closest("[data-team-popover]")) setOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- measures real DOM
+       layout (getBoundingClientRect), which is only available in an effect */
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    const place = () => {
+      const el = btnRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const width = 190;
+      const left = Math.min(Math.max(rect.left + rect.width / 2, width / 2 + 8), window.innerWidth - width / 2 - 8);
+      const top = Math.min(rect.bottom + 6, window.innerHeight - 260);
+      setPos({ top, left });
+    };
+    place();
+    /* eslint-enable react-hooks/set-state-in-effect */
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open]);
+
+  const label = selected.length ? selected.join("/") : "Select team";
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          ...S.input,
+          width: "100%",
+          padding: "5px 7px",
+          fontSize: 12.5,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 5,
+          cursor: "pointer",
+        }}
+      >
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+        <ChevronDown size={12} style={{ flexShrink: 0, opacity: 0.6 }} />
+      </button>
+      {open &&
+        pos &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            data-team-popover
+            style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 1000 }}
+          >
+            <div
+              className="avid-pop-in"
+              style={{
+                background: STAGE_POPOVER_BG,
+                borderRadius: 9,
+                padding: 4,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+                display: "flex",
+                flexDirection: "column",
+                minWidth: 176,
+              }}
+            >
+              {teamNames.map((name) => {
+                const checked = selected.includes(name);
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => onToggle(name)}
+                    className="avid-decline-option"
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: STAGE_POPOVER_FG,
+                      textAlign: "left",
+                      padding: "7px 9px",
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      borderRadius: 6,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 9,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 15,
+                        height: 15,
+                        borderRadius: 4,
+                        border: `1.5px solid ${checked ? STAGE_POPOVER_FG : "rgba(240,237,231,0.35)"}`,
+                        background: checked ? STAGE_POPOVER_FG : "transparent",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {checked && <Check size={11} color={STAGE_POPOVER_BG} strokeWidth={3} />}
+                    </span>
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
   );
 }
 
