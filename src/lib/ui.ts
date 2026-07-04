@@ -282,19 +282,19 @@ export function makeStyles(t: Theme) {
     // crowd the Status text no matter how short the status label is.
     soGrid: { display: "grid", gridTemplateColumns: "1fr minmax(220px, auto) 1fr", alignItems: "center" as const },
     soGroup: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", alignItems: "center" as const, gap: 20, minWidth: 0 },
-    soCol: { minWidth: 0 },
-    // Right-half cells anchor content to their right edge -- the true
-    // mirror of the left half's left-anchored cells. That puts Team the
-    // same distance from Actions as Candidate is from Date, and makes
-    // Role's gap to Status mirror Company's, so the row reads balanced
-    // outward from the centered Status.
-    soColRight: { minWidth: 0, textAlign: "right" as const },
-    // When a value wraps to a second line, the lines center against each
-    // other instead of leaving a ragged edge. The shrink-wrapped block
-    // itself still anchors to its column's edge (left half left, right
-    // half right), so single-line cells don't move at all.
-    soCellText: { display: "inline-block" as const, maxWidth: "100%", textAlign: "center" as const },
+    // Every column, header and data alike, is plain left-aligned text --
+    // a value always starts directly under its header's first letter, and
+    // a wrapped second line stays left-aligned (ragged right) rather than
+    // centering, same as any ordinary table.
+    soCol: { minWidth: 0, textAlign: "left" as const },
     soStatusCol: { minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" as const },
+    // A fixed-width box around the status dot+label, centered as a block
+    // within soStatusCol. Without this, centering the dot+label as a
+    // variable-width group moves the dot itself left/right depending on
+    // how long the label text is (e.g. "Sent" vs "Interview T(1)") -- a
+    // fixed box with left-aligned content keeps the dot at the exact same
+    // x on every row, since the box's own width never changes.
+    soStatusInner: { width: 168, display: "flex", justifyContent: "flex-start" as const },
     soActionsCol: { minWidth: 0, display: "flex", justifyContent: "flex-end" as const },
     colActions: { width: 56, flexShrink: 0, display: "flex", justifyContent: "flex-end" },
     colRecruiter: { width: 140, flexShrink: 0 },
