@@ -645,6 +645,7 @@ function Dashboard({
                 await saveEntry(entry, true);
                 setShowEntryForm(false);
               }}
+              onCancel={() => setShowEntryForm(false)}
             />
             {filteredEntries.length === 0 && !showEntryForm ? (
               <div style={S.empty}>
@@ -1006,6 +1007,7 @@ function NewEntryRow({
   user,
   open,
   onSave,
+  onCancel,
 }: {
   S: Styles;
   t: Theme;
@@ -1014,6 +1016,7 @@ function NewEntryRow({
   user: string;
   open: boolean;
   onSave: (entry: Entry) => void;
+  onCancel: () => void;
 }) {
   const emptyDraft = { date: "", candidate: "", company: "", role: "", team: [] as string[], firstTime: true };
   const [draft, setDraft] = useState(emptyDraft);
@@ -1116,15 +1119,23 @@ function NewEntryRow({
           Repeat
         </button>
       </div>
-      <button
-        type="button"
-        className="avid-btn"
-        style={{ ...S.ghostBtn, opacity: canSave ? 1 : 0.5 }}
-        disabled={!canSave}
-        onClick={handleSave}
-      >
-        Save
-      </button>
+      {/* Cancel/Save grouped in the same segmented-tab look as the
+          First-time/Repeat toggle on the left -- Save wears the active
+          tab style, Cancel the muted one. */}
+      <div style={S.segWrap}>
+        <button type="button" className="avid-btn" style={S.segBtn} onClick={onCancel}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="avid-btn"
+          style={{ ...S.segBtnActive, opacity: canSave ? 1 : 0.5 }}
+          disabled={!canSave}
+          onClick={handleSave}
+        >
+          Save
+        </button>
+      </div>
     </div>
   );
 
