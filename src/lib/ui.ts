@@ -36,8 +36,17 @@ export function seriesColor(index: number, isDark: boolean) {
 export function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
+// The user's own local calendar date -- NOT toISOString(), which reports
+// the UTC date. Those two disagree for roughly a third of the day in any
+// timezone west of UTC (e.g. anyone in the US after ~4-8pm local), which
+// was stamping stage transitions (Offer, Placed, ...) a day ahead of the
+// business day the user actually acted in.
 export function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 export function fmtDate(iso: string) {
   if (!iso) return "—";

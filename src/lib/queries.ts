@@ -133,6 +133,13 @@ export async function updateEntry(
     declinedReason?: string | null;
     notes?: string | null;
     firstTime: boolean;
+    // The browser's own local calendar date for a newly-reached stage. The
+    // server's clock can't be trusted for this -- it has no idea what
+    // timezone the user is in, so falling back to its own "today" can stamp
+    // a stage a day off from the business day the user actually acted in
+    // (e.g. Vercel's server clock is UTC, which is already "tomorrow" for
+    // anyone in the US once it's evening locally).
+    stageDate?: string;
   }
 ): Promise<Entry | null> {
   const db = getDb();
@@ -141,9 +148,10 @@ export async function updateEntry(
   `) as { stage: string; stage_history: StageEvent[]; meeting_log: MeetingLogEntry[] }[];
   if (!existing) return null;
 
+  const newStageDate = input.stageDate || todayISO();
   let history = existing.stage_history ?? [];
   if (input.stage !== existing.stage && !history.some((h) => h.stage === input.stage)) {
-    history = [...history, { stage: input.stage as Entry["stage"], date: todayISO() }];
+    history = [...history, { stage: input.stage as Entry["stage"], date: newStageDate }];
   }
 
   // Reaching Offer or Placed logs it as an activity, same as a logged
@@ -151,10 +159,10 @@ export async function updateEntry(
   // they've actually held a meeting.
   let meetingLog = existing.meeting_log ?? [];
   if (input.stage === "offer" && existing.stage !== "offer") {
-    meetingLog = [...meetingLog, activityEntry("Offer", 0, lastEventDateOf(history, "offer") ?? todayISO())];
+    meetingLog = [...meetingLog, activityEntry("Offer", 0, lastEventDateOf(history, "offer") ?? newStageDate)];
   }
   if (input.stage === "placed" && existing.stage !== "placed") {
-    meetingLog = [...meetingLog, activityEntry("Placed", 0, lastEventDateOf(history, "placed") ?? todayISO())];
+    meetingLog = [...meetingLog, activityEntry("Placed", 0, lastEventDateOf(history, "placed") ?? newStageDate)];
   }
 
   const [row] = (await db.sql`

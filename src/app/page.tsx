@@ -306,7 +306,11 @@ function Dashboard({
   const advanceStage = async (entry: Entry, stage: Stage) => {
     const optimistic = { ...entry, stage, declined: false };
     applyEntry(optimistic);
-    const res = await send(`/api/entries/${entry.id}`, "PUT", optimistic);
+    // stageDate is the browser's own local calendar date -- the server has
+    // no idea what timezone the user is in, so it can't be trusted to stamp
+    // "today" on a newly-reached stage itself (it would use its own clock,
+    // which disagrees with the user's local date for part of the day).
+    const res = await send(`/api/entries/${entry.id}`, "PUT", { ...optimistic, stageDate: todayISO() });
     if (res.ok) applyEntry(await res.json());
   };
   // Double-clicking a stage sets/corrects its date without changing which

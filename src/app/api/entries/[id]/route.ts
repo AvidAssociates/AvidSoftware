@@ -20,6 +20,7 @@ export async function PUT(
     declinedReason: body.declinedReason,
     notes: body.notes,
     firstTime: body.firstTime === undefined ? true : Boolean(body.firstTime),
+    stageDate: body.stageDate,
   });
   if (!entry) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
