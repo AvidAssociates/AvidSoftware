@@ -17,6 +17,7 @@ import {
   Moon,
   Settings,
   Tv,
+  History,
 } from "lucide-react";
 import { Billing, DeclineReason, Entry, RosterMember, Stage, StageEvent } from "@/lib/types";
 import {
@@ -308,6 +309,15 @@ function Dashboard({
     setEntries((prev) => prev.filter((e) => e.id !== id));
     await send(`/api/entries/${id}`, "DELETE");
   };
+  // Appends a meeting (Phone R1 -> Phone R2 -> Face-to-Face R1, ...) instead
+  // of writing a whole new send-out entry — the fixed 4-stage tracker never
+  // changes, only the log inside the Interview stage grows.
+  const logMeeting = async (entry: Entry, type: string, round: number, date: string) => {
+    const optimistic = { ...entry, interviewType: type, round, meetingLog: [...entry.meetingLog, { type, round, date }] };
+    applyEntry(optimistic);
+    const res = await send(`/api/entries/${entry.id}/meeting-log`, "PATCH", { type, round, date });
+    if (res.ok) applyEntry(await res.json());
+  };
   const saveBilling = async (billing: Billing, isNew: boolean) => {
     applyBilling(billing);
     const res = await send(isNew ? "/api/billings" : `/api/billings/${billing.id}`, isNew ? "POST" : "PUT", billing);
@@ -357,6 +367,7 @@ function Dashboard({
     const active = monthEntries.filter((e) => !e.declined && e.stage !== "placed");
     return {
       total: monthEntries.length,
+      firstTimeCount: monthEntries.filter((e) => e.firstTime).length,
       active: active.length,
       placed: monthEntries.filter((e) => e.stage === "placed" && !e.declined).length,
       declined: monthEntries.filter((e) => e.declined).length,
@@ -467,7 +478,8 @@ function Dashboard({
             {view === "sendouts" ? (
               <>
                 <HeroStat S={S} label="Total" value={String(sendoutStats.total)} />
-                <HeroStat S={S} label="Active" value={String(sendoutStats.active)} color={t.accent} />
+                <HeroStat S={S} label="First-Time" value={String(sendoutStats.firstTimeCount)} color={t.accent} />
+                <HeroStat S={S} label="Active" value={String(sendoutStats.active)} color={STAGE_COLOR.interview} />
                 <HeroStat S={S} label="Placed" value={String(sendoutStats.placed)} color={STAGE_COLOR.placed} />
                 <HeroStat S={S} label="Declined" value={String(sendoutStats.declined)} color={t.danger} />
               </>
@@ -595,6 +607,7 @@ function Dashboard({
                   onEditDate={(stage, date) => setStageDate(e, stage, date)}
                   onRestore={() => setDeclined(e, false)}
                   onDecline={(reason) => setDeclined(e, true, reason)}
+                  onLogMeeting={(type, round, date) => logMeeting(e, type, round, date)}
                 />
               ))}
             </div>
@@ -730,6 +743,7 @@ function EntryRow({
   onEditDate,
   onRestore,
   onDecline,
+  onLogMeeting,
 }: {
   S: Styles;
   t: Theme;
@@ -740,6 +754,7 @@ function EntryRow({
   onEditDate: (stage: Stage, date: string) => void;
   onRestore: () => void;
   onDecline: (reason: DeclineReason) => void;
+  onLogMeeting: (type: string, round: number, date: string) => void;
 }) {
   return (
     <div className="avid-row avid-row-enter" style={S.cardRow}>
@@ -749,9 +764,12 @@ function EntryRow({
       </div>
       <div style={S.colRole}>
         <div style={S.cardPrimary}>{entry.role || "—"}</div>
-        <div style={S.cardSub}>
-          {entry.interviewType}
-          {entry.round ? ` · R${entry.round}` : ""}
+        <div style={{ ...S.cardSub, display: "flex", alignItems: "center", gap: 5 }}>
+          <span>
+            {entry.interviewType}
+            {entry.round ? ` · R${entry.round}` : ""}
+          </span>
+          <MeetingLogControl entry={entry} onLog={onLogMeeting} />
         </div>
       </div>
       <div style={S.colProgress}>
@@ -783,6 +801,226 @@ function EntryRow({
         </button>
       </div>
     </div>
+  );
+}
+
+const MEETING_LOG_POPOVER_WIDTH = 240;
+
+// A small floating log of every meeting held during the Interview stage
+// (Phone R1, then Phone R2, then Face-to-Face R1, ...) plus a way to add
+// the next one — replaces writing a whole new send-out entry each time the
+// meeting type/round moves forward. The fixed 4-stage tracker is untouched.
+function MeetingLogControl({
+  entry,
+  onLog,
+}: {
+  entry: Entry;
+  onLog: (type: string, round: number, date: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const last = entry.meetingLog[entry.meetingLog.length - 1];
+  const [draftType, setDraftType] = useState(last?.type || entry.interviewType || "Phone");
+  const [draftRound, setDraftRound] = useState((last?.round || entry.round || 0) + 1);
+  const [draftDate, setDraftDate] = useState(todayISO());
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (!(e.target instanceof Element) || !e.target.closest("[data-meeting-log-popover]")) setOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- measures real DOM
+       layout (getBoundingClientRect), which is only available in an effect */
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    const place = () => {
+      const el = btnRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const width = MEETING_LOG_POPOVER_WIDTH;
+      const left = Math.min(Math.max(rect.left, width / 2 + 8), window.innerWidth - width / 2 - 8);
+      const top = Math.min(rect.bottom + 8, window.innerHeight - 260);
+      setPos({ top, left });
+    };
+    place();
+    /* eslint-enable react-hooks/set-state-in-effect */
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open]);
+
+  if (entry.stage !== "interview" && entry.meetingLog.length === 0) return null;
+  const canAdd = entry.stage === "interview" && !entry.declined;
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title="Meeting log"
+        style={{
+          border: "none",
+          background: "none",
+          padding: 0,
+          cursor: "pointer",
+          color: "inherit",
+          opacity: 0.65,
+          display: "inline-flex",
+          alignItems: "center",
+        }}
+      >
+        <History size={12} />
+      </button>
+      {open &&
+        pos &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            data-meeting-log-popover
+            style={{
+              position: "fixed",
+              top: pos.top,
+              left: pos.left,
+              transform: "translateX(-50%)",
+              background: STAGE_POPOVER_BG,
+              color: STAGE_POPOVER_FG,
+              padding: 12,
+              borderRadius: 12,
+              boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
+              zIndex: 1000,
+              width: MEETING_LOG_POPOVER_WIDTH,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 10.5,
+                fontWeight: 700,
+                letterSpacing: 0.4,
+                textTransform: "uppercase",
+                opacity: 0.6,
+                marginBottom: 8,
+              }}
+            >
+              Meeting log
+            </div>
+            {entry.meetingLog.length === 0 ? (
+              <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 10 }}>No meetings logged yet.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
+                {entry.meetingLog.map((m, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 600 }}>
+                    <span>
+                      {m.type} · R{m.round}
+                    </span>
+                    <span style={{ opacity: 0.6, fontVariantNumeric: "tabular-nums" }}>{fmtDate(m.date)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {canAdd && (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                  paddingTop: 10,
+                  borderTop: `1px solid ${STAGE_POPOVER_FG}22`,
+                }}
+              >
+                <div style={{ display: "flex", gap: 6 }}>
+                  <select
+                    value={draftType}
+                    onChange={(e) => setDraftType(e.target.value)}
+                    style={{
+                      flex: 1,
+                      fontSize: 12,
+                      background: "transparent",
+                      color: STAGE_POPOVER_FG,
+                      border: `1px solid ${STAGE_POPOVER_FG}33`,
+                      borderRadius: 6,
+                      padding: "5px 6px",
+                    }}
+                  >
+                    {INTERVIEW_TYPES.map((tp) => (
+                      <option key={tp} value={tp} style={{ color: "#000" }}>
+                        {tp}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    min="1"
+                    value={draftRound}
+                    onChange={(e) => setDraftRound(Number(e.target.value))}
+                    style={{
+                      width: 48,
+                      fontSize: 12,
+                      background: "transparent",
+                      color: STAGE_POPOVER_FG,
+                      border: `1px solid ${STAGE_POPOVER_FG}33`,
+                      borderRadius: 6,
+                      padding: "5px 6px",
+                    }}
+                  />
+                </div>
+                <input
+                  type="date"
+                  value={draftDate}
+                  onChange={(e) => setDraftDate(e.target.value)}
+                  style={{
+                    fontSize: 12,
+                    background: "transparent",
+                    color: STAGE_POPOVER_FG,
+                    border: `1px solid ${STAGE_POPOVER_FG}33`,
+                    borderRadius: 6,
+                    padding: "5px 6px",
+                    colorScheme: "dark",
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    onLog(draftType, draftRound, draftDate);
+                    setOpen(false);
+                  }}
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    background: STAGE_POPOVER_FG,
+                    color: STAGE_POPOVER_BG,
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "6px 8px",
+                    cursor: "pointer",
+                  }}
+                >
+                  + Log meeting
+                </button>
+              </div>
+            )}
+          </div>,
+          document.body
+        )}
+    </>
   );
 }
 
@@ -1357,6 +1595,7 @@ function EntryForm({
       team: [user],
       stage: "sent",
       stageHistory: [],
+      meetingLog: [],
       declined: false,
       declinedReason: null,
       notes: "",

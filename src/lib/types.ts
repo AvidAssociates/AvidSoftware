@@ -7,6 +7,17 @@ export type StageEvent = {
 
 export type DeclineReason = "candidate" | "client";
 
+// One logged meeting within the Interview stage — Phone R1, then Phone R2,
+// then Face-to-Face R1, etc. Lets the meeting type/round move forward
+// without the fixed 4-stage tracker (Sent/Interview/Offer/Placed) changing
+// shape, and without creating a duplicate entry for the same candidate the
+// way the paper sheet does.
+export type MeetingLogEntry = {
+  type: string;
+  round: number;
+  date: string;
+};
+
 export type Entry = {
   id: string;
   date: string;
@@ -18,6 +29,7 @@ export type Entry = {
   team: string[];
   stage: Stage;
   stageHistory: StageEvent[];
+  meetingLog: MeetingLogEntry[];
   declined: boolean;
   declinedReason: DeclineReason | null;
   notes: string | null;

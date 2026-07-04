@@ -1,5 +1,5 @@
 import { getDb } from "./db";
-import { Billing, Entry, ProductionGoals, Retainer, RosterMember, StageEvent } from "./types";
+import { Billing, Entry, MeetingLogEntry, ProductionGoals, Retainer, RosterMember, StageEvent } from "./types";
 
 type EntryRow = {
   id: string;
@@ -12,6 +12,7 @@ type EntryRow = {
   team: string[];
   stage: string;
   stage_history: StageEvent[];
+  meeting_log: MeetingLogEntry[];
   declined: boolean;
   declined_reason: string | null;
   notes: string | null;
@@ -32,6 +33,7 @@ function toEntry(row: EntryRow): Entry {
     team: row.team ?? [],
     stage: row.stage as Entry["stage"],
     stageHistory: row.stage_history ?? [],
+    meetingLog: row.meeting_log ?? [],
     declined: row.declined,
     declinedReason: row.declined_reason as Entry["declinedReason"],
     notes: row.notes,
@@ -39,6 +41,20 @@ function toEntry(row: EntryRow): Entry {
     createdAt: row.created_at,
     firstTime: row.first_time,
   };
+}
+
+// A brand-new or freshly-advanced entry that has reached the Interview
+// stage (or beyond) always has at least one logged meeting — seeded from
+// its current type/round — so the log is never empty while a candidate is
+// actively interviewing.
+function seedMeetingLog(stage: string, interviewType: string, round: number, date: string): MeetingLogEntry[] {
+  if (stage !== "interview" && stage !== "offer" && stage !== "placed") return [];
+  return [{ type: interviewType, round, date }];
+}
+
+function lastEventDateOf(history: StageEvent[], stage: string): string | null {
+  const match = [...history].reverse().find((h) => h.stage === stage);
+  return match?.date ?? null;
 }
 
 function todayISO() {
@@ -72,8 +88,9 @@ export async function createEntry(input: {
   const db = getDb();
   // The Sent date defaults to the send-out's own date — no other default.
   const history: StageEvent[] = [{ stage: input.stage as Entry["stage"], date: input.date }];
+  const meetingLog = seedMeetingLog(input.stage, input.interviewType, input.round, input.date);
   const [row] = (await db.sql`
-    INSERT INTO pipeline_entries (id, date, candidate, company, role, interview_type, round, team, stage, stage_history, declined, declined_reason, notes, added_by, first_time)
+    INSERT INTO pipeline_entries (id, date, candidate, company, role, interview_type, round, team, stage, stage_history, meeting_log, declined, declined_reason, notes, added_by, first_time)
     VALUES (
       ${input.id},
       ${input.date},
@@ -85,6 +102,7 @@ export async function createEntry(input: {
       ${input.team},
       ${input.stage},
       ${JSON.stringify(history)},
+      ${JSON.stringify(meetingLog)},
       ${input.declined},
       ${input.declinedReason ?? null},
       ${input.notes ?? null},
@@ -115,14 +133,22 @@ export async function updateEntry(
 ): Promise<Entry | null> {
   const db = getDb();
   const [existing] = (await db.sql`
-    SELECT stage, stage_history FROM pipeline_entries WHERE id = ${id}
-  `) as { stage: string; stage_history: StageEvent[] }[];
+    SELECT stage, stage_history, meeting_log FROM pipeline_entries WHERE id = ${id}
+  `) as { stage: string; stage_history: StageEvent[]; meeting_log: MeetingLogEntry[] }[];
   if (!existing) return null;
 
   let history = existing.stage_history ?? [];
   if (input.stage !== existing.stage && !history.some((h) => h.stage === input.stage)) {
     history = [...history, { stage: input.stage as Entry["stage"], date: todayISO() }];
   }
+
+  // Reaching Interview (or beyond) for the first time seeds the meeting
+  // log from the current type/round, same as a brand-new entry created
+  // straight into that stage — the log is never empty while active.
+  const meetingLog =
+    (existing.meeting_log ?? []).length === 0
+      ? seedMeetingLog(input.stage, input.interviewType, input.round, lastEventDateOf(history, "interview") ?? todayISO())
+      : existing.meeting_log;
 
   const [row] = (await db.sql`
     UPDATE pipeline_entries SET
@@ -135,6 +161,7 @@ export async function updateEntry(
       team = ${input.team},
       stage = ${input.stage},
       stage_history = ${JSON.stringify(history)},
+      meeting_log = ${JSON.stringify(meetingLog)},
       declined = ${input.declined},
       declined_reason = ${input.declined ? input.declinedReason ?? null : null},
       notes = ${input.notes ?? null},
@@ -161,8 +188,8 @@ export async function setStageEventDate(
 ): Promise<Entry | null> {
   const db = getDb();
   const [existing] = (await db.sql`
-    SELECT stage, stage_history FROM pipeline_entries WHERE id = ${id}
-  `) as { stage: string; stage_history: StageEvent[] }[];
+    SELECT stage, stage_history, meeting_log, interview_type, round FROM pipeline_entries WHERE id = ${id}
+  `) as { stage: string; stage_history: StageEvent[]; meeting_log: MeetingLogEntry[]; interview_type: string; round: number }[];
   if (!existing) return null;
 
   const history = existing.stage_history ?? [];
@@ -177,8 +204,37 @@ export async function setStageEventDate(
       ? stage
       : existing.stage;
 
+  const meetingLog =
+    (existing.meeting_log ?? []).length === 0
+      ? seedMeetingLog(newStage, existing.interview_type, existing.round, lastEventDateOf(updatedHistory, "interview") ?? date)
+      : existing.meeting_log;
+
   const [row] = (await db.sql`
-    UPDATE pipeline_entries SET stage_history = ${JSON.stringify(updatedHistory)}, stage = ${newStage}
+    UPDATE pipeline_entries SET stage_history = ${JSON.stringify(updatedHistory)}, stage = ${newStage}, meeting_log = ${JSON.stringify(meetingLog)}
+    WHERE id = ${id}
+    RETURNING *
+  `) as EntryRow[];
+  return toEntry(row);
+}
+
+// Appends a meeting to the log (Phone R1 -> Phone R2 -> Face-to-Face R1,
+// etc.) and updates the entry's current type/round to match — the fixed
+// 4-stage tracker never changes, only what's logged inside Interview does.
+export async function logMeeting(
+  id: string,
+  type: string,
+  round: number,
+  date: string
+): Promise<Entry | null> {
+  const db = getDb();
+  const [existing] = (await db.sql`
+    SELECT meeting_log FROM pipeline_entries WHERE id = ${id}
+  `) as { meeting_log: MeetingLogEntry[] }[];
+  if (!existing) return null;
+
+  const meetingLog = [...(existing.meeting_log ?? []), { type, round, date }];
+  const [row] = (await db.sql`
+    UPDATE pipeline_entries SET meeting_log = ${JSON.stringify(meetingLog)}, interview_type = ${type}, round = ${round}
     WHERE id = ${id}
     RETURNING *
   `) as EntryRow[];
