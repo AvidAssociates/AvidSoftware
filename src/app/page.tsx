@@ -608,18 +608,13 @@ function Dashboard({
           ) : (
             <div>
               <div style={{ ...S.cardHeaderRow, ...S.soGrid }}>
-                <div />
-                <div style={S.soGroupLeft}>
-                  <div style={S.soCol}>Date</div>
-                  <div style={S.soCol}>Candidate</div>
-                  <div style={S.soCol}>Company</div>
-                </div>
+                <div style={S.soCol}>Date</div>
+                <div style={S.soCol}>Candidate</div>
+                <div style={S.soCol}>Company</div>
                 <div style={S.soStatusCol}>Status</div>
-                <div style={S.soGroupRight}>
-                  <div style={S.soCol}>Role</div>
-                  <div style={S.soCol}>Team</div>
-                </div>
-                <div style={S.soActionsCol} />
+                <div style={S.soCol}>Role</div>
+                <div style={S.soCol}>Team</div>
+                <div style={S.soActionsCol}>Actions</div>
               </div>
               {filteredEntries.map((e) => (
                 <EntryRow
@@ -795,28 +790,23 @@ function EntryRow({
         className="avid-row avid-row-enter"
         style={expanded ? { ...S.cardRow, ...S.soGrid, borderBottom: "none" } : { ...S.cardRow, ...S.soGrid }}
       >
-        <div />
-        <div style={S.soGroupLeft}>
-          <div style={S.soCol}>
-            <div style={S.cardSub}>{fmtDate(entry.date)}</div>
-          </div>
-          <div style={S.soCol}>
-            <div style={S.cardPrimary}>{entry.candidate}</div>
-          </div>
-          <div style={S.soCol}>
-            <div style={S.cardSub}>{entry.company}</div>
-          </div>
+        <div style={S.soCol}>
+          <div style={S.cardSub}>{fmtDate(entry.date)}</div>
+        </div>
+        <div style={S.soCol}>
+          <div style={S.cardPrimary}>{entry.candidate}</div>
+        </div>
+        <div style={S.soCol}>
+          <div style={S.cardSub}>{entry.company}</div>
         </div>
         <div style={S.soStatusCol}>
           <ProcessStatusControl t={t} entry={entry} expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
         </div>
-        <div style={S.soGroupRight}>
-          <div style={S.soCol}>
-            <div style={S.cardSub}>{entry.role || "—"}</div>
-          </div>
-          <div style={S.soCol}>
-            <div style={S.cardSub}>{(entry.team || []).join(", ") || "—"}</div>
-          </div>
+        <div style={S.soCol}>
+          <div style={S.cardSub}>{entry.role || "—"}</div>
+        </div>
+        <div style={S.soCol}>
+          <div style={S.cardSub}>{(entry.team || []).join(", ") || "—"}</div>
         </div>
         <div style={S.soActionsCol}>
           <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
