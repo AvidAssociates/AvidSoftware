@@ -252,6 +252,75 @@ select::-ms-expand {
   }
 }
 
+/* ---- mobile (phone-width screens) ---- */
+/* The app's layout styles are inline (theme-driven), so phone-size
+   adjustments override them here by class, with !important. Structural
+   changes (card rows instead of grids) are handled in JSX via
+   useIsMobile — this block only tightens spacing and type. */
+@media (max-width: 640px) {
+  .avid-brand {
+    display: none;
+  }
+  .avid-tv-btn {
+    display: none !important;
+  }
+  .avid-header {
+    padding: 10px 12px !important;
+  }
+  .avid-hero {
+    padding: 22px 16px 20px !important;
+  }
+  /* Title stacks centered above the stats instead of sharing one row */
+  .avid-hero-inline {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  .avid-hero-title {
+    font-size: 26px !important;
+    letter-spacing: -0.5px !important;
+    margin: 0 0 14px !important;
+  }
+  .avid-hero-inline .avid-hero-title {
+    margin: 0 !important;
+  }
+  .avid-hero-stats {
+    row-gap: 14px !important;
+  }
+  .avid-hero-stats > * {
+    padding-right: 18px !important;
+    margin-right: 18px !important;
+  }
+  .avid-hero-stat-value {
+    font-size: 26px !important;
+    letter-spacing: -0.5px !important;
+  }
+  .avid-hero-stat-label {
+    font-size: 10.5px !important;
+    margin-top: 4px !important;
+  }
+  .avid-toolbar {
+    padding: 14px 16px 12px !important;
+  }
+  .report-card {
+    margin: 0 12px !important;
+  }
+  /* The 5-column recruiter table keeps its readable width and scrolls
+     sideways instead of crushing the numbers. */
+  .avid-billings-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .avid-billings-scroll > div {
+    min-width: 560px;
+  }
+  /* Modal forms: one field per line */
+  .avid-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 /* ---- print / PDF export (Report tab) ---- */
 .print-only {
   display: none;

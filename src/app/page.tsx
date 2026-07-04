@@ -59,6 +59,21 @@ function setLocal(key: string, value: string) {
   }
 }
 
+// Phone-sized screens get stacked card layouts instead of the wide
+// multi-column grids (which physically can't fit 390px). SSR renders the
+// desktop layout; the first client paint corrects it.
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return isMobile;
+}
+
 // ---------- API ----------
 async function getJSON<T>(url: string, fallback: T): Promise<T> {
   try {
@@ -165,6 +180,7 @@ function Dashboard({
   onToggleTheme: () => void;
 }) {
   const S = makeStyles(t);
+  const isMobile = useIsMobile();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [billings, setBillings] = useState<Billing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -435,9 +451,9 @@ function Dashboard({
 
   return (
     <div style={S.page} className="app-shell">
-      <header style={S.header} className="no-print">
+      <header style={S.header} className="no-print avid-header">
         <div style={S.headerLeft}>
-          <span style={{ ...S.heroEyebrow, marginBottom: 0 }}>AVID ASSOCIATES</span>
+          <span className="avid-brand" style={{ ...S.heroEyebrow, marginBottom: 0 }}>AVID ASSOCIATES</span>
         </div>
         <div style={S.monthSwitcher}>
           {view === "report" ? (
@@ -463,7 +479,7 @@ function Dashboard({
           )}
         </div>
         <div style={S.headerRight}>
-          <button className="avid-btn" style={S.iconGhost} onClick={() => setTvOpen(true)} title="TV mode">
+          <button className="avid-btn avid-tv-btn" style={S.iconGhost} onClick={() => setTvOpen(true)} title="TV mode">
             <Tv size={17} />
           </button>
           <button className="avid-btn" style={S.iconGhost} onClick={onToggleTheme} title={isDark ? "Light mode" : "Dark mode"}>
@@ -477,21 +493,21 @@ function Dashboard({
         </div>
       </header>
 
-      <section style={S.hero} className="no-print">
+      <section style={S.hero} className="no-print avid-hero">
         {view === "billings" ? (
           <>
-            <div style={S.heroInlineRow}>
-              <h1 style={S.heroInlineTitle}>Billings</h1>
+            <div className="avid-hero-inline" style={S.heroInlineRow}>
+              <h1 className="avid-hero-title" style={S.heroInlineTitle}>Billings</h1>
               <BillingsGoalStats billings={billings} monthKey={monthKey} year={monthCursorYear} goals={billingsGoals} t={t} />
               <div />
             </div>
-            <div style={{ marginTop: 24 }}>
+            <div className="avid-billings-scroll" style={{ marginTop: 24 }}>
               <BillingsTable billings={billings} teamNames={teamNames} monthKey={monthKey} year={monthCursorYear} t={t} />
             </div>
           </>
         ) : view === "sendouts" ? (
-          <div style={S.heroInlineRow}>
-            <h1 style={S.heroInlineTitle}>Send-Outs</h1>
+          <div className="avid-hero-inline" style={S.heroInlineRow}>
+            <h1 className="avid-hero-title" style={S.heroInlineTitle}>Send-Outs</h1>
             <div className="avid-hero-stats" style={S.heroStatsRow}>
               <HeroStat S={S} label="Total" value={String(sendoutStats.total)} />
               <HeroStat S={S} label="First-Time" value={String(sendoutStats.firstTimeCount)} color={t.accent} />
@@ -503,7 +519,7 @@ function Dashboard({
           </div>
         ) : (
           <>
-            <h1 style={S.heroTitle}>{view === "leaderboard" ? "Leaderboard" : "Production Reports"}</h1>
+            <h1 className="avid-hero-title" style={S.heroTitle}>{view === "leaderboard" ? "Leaderboard" : "Production Reports"}</h1>
             <div className="avid-hero-stats" style={S.heroStatsRow}>
               {view === "leaderboard" ? (
                 <>
@@ -523,7 +539,7 @@ function Dashboard({
         )}
       </section>
 
-      <div style={S.toolbar} className="no-print">
+      <div style={S.toolbar} className="no-print avid-toolbar">
         <div style={S.segWrap}>
           <button
             className="avid-btn"
@@ -607,25 +623,28 @@ function Dashboard({
             </div>
           ) : (
             <div>
-              <div style={{ ...S.cardHeaderRow, ...S.soGrid }}>
-                <div style={S.soGroup}>
-                  <div style={S.soCol}>Date</div>
-                  <div style={S.soCol}>Candidate</div>
-                  <div style={S.soCol}>Company</div>
+              {!isMobile && (
+                <div style={{ ...S.cardHeaderRow, ...S.soGrid }}>
+                  <div style={S.soGroup}>
+                    <div style={S.soCol}>Date</div>
+                    <div style={S.soCol}>Candidate</div>
+                    <div style={S.soCol}>Company</div>
+                  </div>
+                  <div style={S.soStatusCol}>Status</div>
+                  <div style={S.soGroup}>
+                    <div style={S.soColRight}>Role</div>
+                    <div style={S.soColRight}>Team</div>
+                    <div style={S.soActionsCol}>Actions</div>
+                  </div>
                 </div>
-                <div style={S.soStatusCol}>Status</div>
-                <div style={S.soGroup}>
-                  <div style={S.soColRight}>Role</div>
-                  <div style={S.soColRight}>Team</div>
-                  <div style={S.soActionsCol}>Actions</div>
-                </div>
-              </div>
+              )}
               {filteredEntries.map((e) => (
                 <EntryRow
                   key={e.id}
                   S={S}
                   t={t}
                   entry={e}
+                  mobile={isMobile}
                   onEdit={() => {
                     setEditingEntry(e);
                     setShowEntryForm(true);
@@ -653,19 +672,22 @@ function Dashboard({
               </div>
             ) : (
               <div>
-                <div style={S.cardHeaderRow}>
-                  <div style={S.colRecruiter}>Team</div>
-                  <div style={S.colClient}>Client</div>
-                  <div style={S.colAmount}>Amount</div>
-                  <div style={S.colDate}>Date</div>
-                  <div style={S.colActions} />
-                </div>
+                {!isMobile && (
+                  <div style={S.cardHeaderRow}>
+                    <div style={S.colRecruiter}>Team</div>
+                    <div style={S.colClient}>Client</div>
+                    <div style={S.colAmount}>Amount</div>
+                    <div style={S.colDate}>Date</div>
+                    <div style={S.colActions} />
+                  </div>
+                )}
                 {filteredBillings.map((b) => (
                   <BillingRow
                     key={b.id}
                     S={S}
                     t={t}
                     billing={b}
+                    mobile={isMobile}
                     onEdit={() => {
                       setEditingBilling(b);
                       setShowBillingForm(true);
@@ -729,8 +751,8 @@ function Dashboard({
 function HeroStat({ S, label, value, color }: { S: Styles; label: string; value: string; color?: string }) {
   return (
     <div style={S.heroStat}>
-      <div style={{ ...S.heroStatValue, color: color || S._t.ink }}>{value}</div>
-      <div style={S.heroStatLabel}>{label}</div>
+      <div className="avid-hero-stat-value" style={{ ...S.heroStatValue, color: color || S._t.ink }}>{value}</div>
+      <div className="avid-hero-stat-label" style={S.heroStatLabel}>{label}</div>
     </div>
   );
 }
@@ -766,6 +788,7 @@ function EntryRow({
   S,
   t,
   entry,
+  mobile,
   onEdit,
   onDelete,
   onSetStage,
@@ -777,6 +800,7 @@ function EntryRow({
 }: {
   S: Styles;
   t: Theme;
+  mobile?: boolean;
   entry: Entry;
   onEdit: () => void;
   onDelete: () => void;
@@ -788,6 +812,57 @@ function EntryRow({
   onDeleteMeeting: (meetingId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+
+  if (mobile) {
+    // Phone layout: a stacked card — the 7-column grid can't fit a phone.
+    return (
+      <div>
+        <div
+          className="avid-row avid-row-enter"
+          style={{
+            padding: "16px 16px 14px",
+            borderBottom: expanded ? "none" : `1px solid ${t.border}`,
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+            <div style={S.cardPrimary}>{entry.candidate}</div>
+            <div style={{ ...S.cardSub, marginTop: 0, whiteSpace: "nowrap" }}>{fmtDate(entry.date)}</div>
+          </div>
+          <div style={{ ...S.cardSub, marginTop: 0 }}>
+            {[entry.company, entry.role, (entry.team || []).join(", ")].filter(Boolean).join(" · ")}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <ProcessStatusControl t={t} entry={entry} expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
+            <div style={{ display: "flex", gap: 2 }}>
+              <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
+                <Pencil size={14} />
+              </button>
+              <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+        <ProcessExpandedPanel
+          S={S}
+          t={t}
+          entry={entry}
+          expanded={expanded}
+          onSetStage={onSetStage}
+          onEditDate={onEditDate}
+          onRestore={onRestore}
+          onDecline={onDecline}
+          onLogMeeting={onLogMeeting}
+          onDeleteMeeting={onDeleteMeeting}
+          onDone={() => setExpanded(false)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div>
       <div
@@ -1112,15 +1187,44 @@ function BillingRow({
   S,
   t,
   billing,
+  mobile,
   onEdit,
   onDelete,
 }: {
   S: Styles;
   t: Theme;
   billing: Billing;
+  mobile?: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  if (mobile) {
+    return (
+      <div
+        className="avid-row avid-row-enter"
+        style={{ padding: "14px 16px", borderBottom: `1px solid ${S._t.border}`, display: "flex", flexDirection: "column", gap: 6 }}
+      >
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+          <div style={S.cardPrimary}>{billing.company || "—"}</div>
+          <span style={S.amountText}>{money(billing.amount)}</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ ...S.cardSub, marginTop: 0 }}>
+            {[billing.team.join(", "), billing.candidate, fmtDate(billing.date)].filter(Boolean).join(" · ")}
+          </div>
+          <div style={{ display: "flex", gap: 2 }}>
+            <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
+              <Pencil size={14} />
+            </button>
+            <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
+              <Trash2 size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="avid-row avid-row-enter" style={S.billingRow}>
       <div style={S.colRecruiter}>
@@ -1286,7 +1390,10 @@ function StageProgress({
   const idx = Math.max(0, PIPELINE.findIndex((s) => s.key === stage));
   const color = declined ? t.danger : STAGE_COLOR[stage];
   const fillPct = (idx / (PIPELINE.length - 1)) * 100;
-  const trackWidth = large ? 340 : 220;
+  const isMobile = useIsMobile();
+  // 340px + the absolutely-positioned decline button would overflow a
+  // 390px phone; 240px leaves room for it inside the panel padding.
+  const trackWidth = large ? (isMobile ? 240 : 340) : 220;
   const dotSize = large ? 22 : 13;
   const lineH = large ? 5 : 3;
   const inset = dotSize / 2;
@@ -1722,7 +1829,7 @@ function EntryForm({
           </button>
         </div>
 
-        <div style={S.formGrid}>
+        <div className="avid-form-grid" style={S.formGrid}>
           <Field S={S} label="Date">
             <input type="date" style={S.input} value={form.date} onChange={set("date")} />
           </Field>
@@ -1878,7 +1985,7 @@ function BillingForm({
           </button>
         </div>
 
-        <div style={S.formGrid}>
+        <div className="avid-form-grid" style={S.formGrid}>
           <Field S={S} label="Date">
             <input type="date" style={S.input} value={form.date} onChange={set("date")} />
           </Field>
