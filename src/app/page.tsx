@@ -615,8 +615,8 @@ function Dashboard({
                 </div>
                 <div style={S.soStatusCol}>Status</div>
                 <div style={S.soGroup}>
-                  <div style={S.soCol}>Role</div>
-                  <div style={S.soCol}>Team</div>
+                  <div style={S.soColRight}>Role</div>
+                  <div style={S.soColRight}>Team</div>
                   <div style={S.soActionsCol}>Actions</div>
                 </div>
               </div>
@@ -809,10 +809,10 @@ function EntryRow({
           <ProcessStatusControl t={t} entry={entry} expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
         </div>
         <div style={S.soGroup}>
-          <div style={S.soCol}>
+          <div style={S.soColRight}>
             <div style={S.cardSub}>{entry.role || "—"}</div>
           </div>
-          <div style={S.soCol}>
+          <div style={S.soColRight}>
             <div style={S.cardSub}>{(entry.team || []).join(", ") || "—"}</div>
           </div>
           <div style={S.soActionsCol}>

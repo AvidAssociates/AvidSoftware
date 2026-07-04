@@ -283,6 +283,12 @@ export function makeStyles(t: Theme) {
     soGrid: { display: "grid", gridTemplateColumns: "1fr minmax(220px, auto) 1fr", alignItems: "center" as const },
     soGroup: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", alignItems: "center" as const, gap: 20, minWidth: 0 },
     soCol: { minWidth: 0 },
+    // Right-half cells anchor content to their right edge -- the true
+    // mirror of the left half's left-anchored cells. That puts Team the
+    // same distance from Actions as Candidate is from Date, and makes
+    // Role's gap to Status mirror Company's, so the row reads balanced
+    // outward from the centered Status.
+    soColRight: { minWidth: 0, textAlign: "right" as const },
     soStatusCol: { minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" as const },
     soActionsCol: { minWidth: 0, display: "flex", justifyContent: "flex-end" as const },
     colActions: { width: 56, flexShrink: 0, display: "flex", justifyContent: "flex-end" },
