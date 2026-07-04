@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import type { ChangeEvent, ReactNode } from "react";
+import type { ChangeEvent, CSSProperties, ReactNode } from "react";
 import {
   Plus,
   Search,
@@ -186,7 +186,6 @@ function Dashboard({
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<"sendouts" | "billings" | "report" | "leaderboard">("sendouts");
   const [showEntryForm, setShowEntryForm] = useState(false);
-  const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const [showBillingForm, setShowBillingForm] = useState(false);
   const [editingBilling, setEditingBilling] = useState<Billing | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -599,7 +598,6 @@ function Dashboard({
               className="avid-btn" style={S.primaryBtn}
               onClick={() => {
                 if (view === "sendouts") {
-                  setEditingEntry(null);
                   setShowEntryForm(true);
                 } else {
                   setEditingBilling(null);
@@ -645,10 +643,8 @@ function Dashboard({
                   t={t}
                   entry={e}
                   mobile={isMobile}
-                  onEdit={() => {
-                    setEditingEntry(e);
-                    setShowEntryForm(true);
-                  }}
+                  teamNames={teamNames}
+                  onSaveEntry={(updated) => saveEntry(updated, false)}
                   onDelete={() => deleteEntry(e.id)}
                   onSetStage={(stage) => advanceStage(e, stage)}
                   onEditDate={(stage, date) => setStageDate(e, stage, date)}
@@ -705,12 +701,11 @@ function Dashboard({
         <EntryForm
           S={S}
           t={t}
-          initial={editingEntry}
           user={user}
           teamNames={teamNames}
           onClose={() => setShowEntryForm(false)}
-          onSave={async (entry, isNew) => {
-            await saveEntry(entry, isNew);
+          onSave={async (entry) => {
+            await saveEntry(entry, true);
             setShowEntryForm(false);
           }}
         />
@@ -789,7 +784,8 @@ function EntryRow({
   t,
   entry,
   mobile,
-  onEdit,
+  teamNames,
+  onSaveEntry,
   onDelete,
   onSetStage,
   onEditDate,
@@ -802,7 +798,8 @@ function EntryRow({
   t: Theme;
   mobile?: boolean;
   entry: Entry;
-  onEdit: () => void;
+  teamNames: string[];
+  onSaveEntry: (entry: Entry) => void;
   onDelete: () => void;
   onSetStage: (stage: Stage) => void;
   onEditDate: (stage: Stage, date: string) => void;
@@ -811,7 +808,14 @@ function EntryRow({
   onLogMeeting: (type: string, round: number, date: string) => void;
   onDeleteMeeting: (meetingId: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  // The row has one shared expansion, not two: clicking Status shows the
+  // process tracker, clicking Edit shows editable fields, and clicking
+  // whichever one is already open collapses it. They can never both be open.
+  const [panel, setPanel] = useState<"status" | "edit" | null>(null);
+  const expanded = panel !== null;
+  const toggleStatus = () => setPanel((p) => (p === "status" ? null : "status"));
+  const toggleEdit = () => setPanel((p) => (p === "edit" ? null : "edit"));
+  const closePanel = () => setPanel(null);
 
   if (mobile) {
     // Phone layout: a stacked card — the 7-column grid can't fit a phone.
@@ -835,9 +839,9 @@ function EntryRow({
             {[entry.company, entry.role, (entry.team || []).join(", ")].filter(Boolean).join(" · ")}
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <ProcessStatusControl t={t} entry={entry} expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
+            <ProcessStatusControl t={t} entry={entry} expanded={panel === "status"} onToggle={toggleStatus} />
             <div style={{ display: "flex", gap: 2 }}>
-              <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
+              <button className="avid-btn" style={S.iconGhost} onClick={toggleEdit} title="Edit">
                 <Pencil size={14} />
               </button>
               <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
@@ -846,18 +850,21 @@ function EntryRow({
             </div>
           </div>
         </div>
-        <ProcessExpandedPanel
+        <RowExpandedPanel
           S={S}
           t={t}
           entry={entry}
+          mode={panel}
           expanded={expanded}
+          teamNames={teamNames}
+          onSaveEntry={onSaveEntry}
           onSetStage={onSetStage}
           onEditDate={onEditDate}
           onRestore={onRestore}
           onDecline={onDecline}
           onLogMeeting={onLogMeeting}
           onDeleteMeeting={onDeleteMeeting}
-          onDone={() => setExpanded(false)}
+          onDone={closePanel}
         />
       </div>
     );
@@ -879,7 +886,7 @@ function EntryRow({
           <div style={S.cardSub}>{entry.company}</div>
         </div>
         <div style={S.soStatusCol}>
-          <ProcessStatusControl t={t} entry={entry} expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
+          <ProcessStatusControl t={t} entry={entry} expanded={panel === "status"} onToggle={toggleStatus} />
         </div>
         <div style={S.soCol}>
           <div style={S.cardSub}>{entry.role || "—"}</div>
@@ -888,7 +895,7 @@ function EntryRow({
           <div style={S.cardSub}>{(entry.team || []).join(", ") || "—"}</div>
         </div>
         <div style={S.soActionsCol}>
-          <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
+          <button className="avid-btn" style={S.iconGhost} onClick={toggleEdit} title="Edit">
             <Pencil size={14} />
           </button>
           <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
@@ -896,18 +903,21 @@ function EntryRow({
           </button>
         </div>
       </div>
-      <ProcessExpandedPanel
+      <RowExpandedPanel
         S={S}
         t={t}
         entry={entry}
+        mode={panel}
         expanded={expanded}
+        teamNames={teamNames}
+        onSaveEntry={onSaveEntry}
         onSetStage={onSetStage}
         onEditDate={onEditDate}
         onRestore={onRestore}
         onDecline={onDecline}
         onLogMeeting={onLogMeeting}
         onDeleteMeeting={onDeleteMeeting}
-        onDone={() => setExpanded(false)}
+        onDone={closePanel}
       />
     </div>
   );
@@ -978,16 +988,20 @@ function ProcessStatusControl({
   );
 }
 
-// The row's expanded detail: the same fixed Sent/Interview/Offer/Placed
-// tracker (centered), the activity log underneath it while there's
-// something to show, and a Done button to collapse back down. Always
-// mounted — the 0fr/1fr grid-rows trick (see .avid-expand) animates height
-// smoothly for both opening and closing, and never resizes the row above.
-function ProcessExpandedPanel({
+// The row's shared expansion: either the fixed Sent/Interview/Offer/Placed
+// tracker + activity log (mode "status"), or the low-key inline field
+// editor (mode "edit") -- never both. Always mounted regardless of mode or
+// open/closed state — the 0fr/1fr grid-rows trick (see .avid-expand)
+// animates height smoothly for both opening and closing, and never resizes
+// the row above.
+function RowExpandedPanel({
   S,
   t,
   entry,
+  mode,
   expanded,
+  teamNames,
+  onSaveEntry,
   onSetStage,
   onEditDate,
   onRestore,
@@ -999,7 +1013,10 @@ function ProcessExpandedPanel({
   S: Styles;
   t: Theme;
   entry: Entry;
+  mode: "status" | "edit" | null;
   expanded: boolean;
+  teamNames: string[];
+  onSaveEntry: (entry: Entry) => void;
   onSetStage: (stage: Stage) => void;
   onEditDate: (stage: Stage, date: string) => void;
   onRestore: () => void;
@@ -1021,35 +1038,220 @@ function ProcessExpandedPanel({
             gap: 18,
           }}
         >
-          <StageProgress
-            t={t}
-            stage={entry.stage}
-            declined={entry.declined}
-            declinedReason={entry.declinedReason}
-            history={entry.stageHistory}
-            onSetStage={onSetStage}
-            onEditDate={onEditDate}
-            onRestore={onRestore}
-            onDecline={onDecline}
-            large
-          />
-          {(entry.stage === "interview" || entry.meetingLog.length > 0) && (
-            <div style={{ width: "100%", maxWidth: 380 }}>
-              <ActivityLogPanel
-                S={S}
+          {mode === "edit" ? (
+            <EntryEditFields S={S} t={t} entry={entry} teamNames={teamNames} onSave={onSaveEntry} onDone={onDone} />
+          ) : (
+            <>
+              <StageProgress
                 t={t}
-                key={entry.meetingLog.length}
-                entry={entry}
-                onLog={onLogMeeting}
-                onDelete={onDeleteMeeting}
+                stage={entry.stage}
+                declined={entry.declined}
+                declinedReason={entry.declinedReason}
+                history={entry.stageHistory}
+                onSetStage={onSetStage}
+                onEditDate={onEditDate}
+                onRestore={onRestore}
+                onDecline={onDecline}
+                large
               />
-            </div>
+              {(entry.stage === "interview" || entry.meetingLog.length > 0) && (
+                <div style={{ width: "100%", maxWidth: 380 }}>
+                  <ActivityLogPanel
+                    S={S}
+                    t={t}
+                    key={entry.meetingLog.length}
+                    entry={entry}
+                    onLog={onLogMeeting}
+                    onDelete={onDeleteMeeting}
+                  />
+                </div>
+              )}
+              <button type="button" className="avid-btn" style={{ ...S.ghostBtn, alignSelf: "flex-end" }} onClick={onDone}>
+                Done
+              </button>
+            </>
           )}
-          <button type="button" className="avid-btn" style={{ ...S.ghostBtn, alignSelf: "flex-end" }} onClick={onDone}>
-            Done
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Low-key inline editor for the row's own fields (Date, Candidate, Company,
+// Role, Team, first-time/repeat) — no modal, values just look like plain
+// text until clicked. Edits are held as a local draft and only committed
+// (one PUT) when Done is clicked, matching the Status panel's Done button.
+function EntryEditFields({
+  S,
+  t,
+  entry,
+  teamNames,
+  onSave,
+  onDone,
+}: {
+  S: Styles;
+  t: Theme;
+  entry: Entry;
+  teamNames: string[];
+  onSave: (entry: Entry) => void;
+  onDone: () => void;
+}) {
+  const [draft, setDraft] = useState({
+    date: entry.date,
+    candidate: entry.candidate,
+    company: entry.company,
+    role: entry.role || "",
+    team: entry.team,
+    firstTime: entry.firstTime,
+  });
+  const toggleTeam = (name: string) =>
+    setDraft((d) => ({ ...d, team: d.team.includes(name) ? d.team.filter((n) => n !== name) : [...d.team, name] }));
+  const valid = draft.candidate.trim() && draft.company.trim() && draft.date;
+
+  return (
+    <div style={{ width: "100%", maxWidth: 460, display: "flex", flexDirection: "column", gap: 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div>
+          <div style={S.fieldLabel}>Date</div>
+          <input
+            type="date"
+            value={draft.date}
+            onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
+            style={inlineFieldStyle(t, S.cardSub)}
+          />
+        </div>
+        <InlineField
+          t={t}
+          label="Candidate"
+          value={draft.candidate}
+          onChange={(v) => setDraft((d) => ({ ...d, candidate: v }))}
+          placeholder="Full name"
+          textStyle={S.cardPrimary}
+          fieldLabelStyle={S.fieldLabel}
+        />
+        <InlineField
+          t={t}
+          label="Company"
+          value={draft.company}
+          onChange={(v) => setDraft((d) => ({ ...d, company: v }))}
+          placeholder="Client company"
+          textStyle={S.cardSub}
+          fieldLabelStyle={S.fieldLabel}
+        />
+        <InlineField
+          t={t}
+          label="Role"
+          value={draft.role}
+          onChange={(v) => setDraft((d) => ({ ...d, role: v }))}
+          placeholder="—"
+          textStyle={S.cardSub}
+          fieldLabelStyle={S.fieldLabel}
+        />
+      </div>
+      <div>
+        <div style={S.fieldLabel}>Team</div>
+        <div style={{ ...S.chipRow, marginTop: 6 }}>
+          {teamNames.map((name) => (
+            <button
+              type="button"
+              key={name}
+              className="avid-chip"
+              onClick={() => toggleTeam(name)}
+              style={{
+                ...S.chip,
+                borderColor: t.accent,
+                color: draft.team.includes(name) ? "#fff" : t.accent,
+                background: draft.team.includes(name) ? t.accent : "transparent",
+              }}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div style={S.fieldLabel}>Business type</div>
+        <div style={{ ...S.segWrap, marginTop: 6, display: "inline-flex" }}>
+          <button
+            type="button"
+            className="avid-btn"
+            style={draft.firstTime ? S.segBtnActive : S.segBtn}
+            onClick={() => setDraft((d) => ({ ...d, firstTime: true }))}
+          >
+            First-time
+          </button>
+          <button
+            type="button"
+            className="avid-btn"
+            style={!draft.firstTime ? S.segBtnActive : S.segBtn}
+            onClick={() => setDraft((d) => ({ ...d, firstTime: false }))}
+          >
+            Repeat
           </button>
         </div>
       </div>
+      <button
+        type="button"
+        className="avid-btn"
+        style={{ ...S.ghostBtn, alignSelf: "flex-end", opacity: valid ? 1 : 0.5 }}
+        disabled={!valid}
+        onClick={() => {
+          onSave({ ...entry, ...draft, role: draft.role || null });
+          onDone();
+        }}
+      >
+        Done
+      </button>
+    </div>
+  );
+}
+
+// A field's text renders as plain, borderless text until focused, when a
+// bottom border appears to hint you're now editing it — "click into any
+// text" rather than a bordered form input sitting there the whole time.
+function inlineFieldStyle(t: Theme, textStyle: CSSProperties, focused = false): CSSProperties {
+  return {
+    ...textStyle,
+    display: "block",
+    width: "100%",
+    border: "none",
+    borderBottom: `1px solid ${focused ? t.accent : "transparent"}`,
+    background: "transparent",
+    outline: "none",
+    padding: "2px 1px",
+    fontFamily: FONT,
+  };
+}
+
+function InlineField({
+  t,
+  label,
+  value,
+  onChange,
+  placeholder,
+  textStyle,
+  fieldLabelStyle,
+}: {
+  t: Theme;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  textStyle: CSSProperties;
+  fieldLabelStyle: CSSProperties;
+}) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <div>
+      <div style={fieldLabelStyle}>{label}</div>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        placeholder={placeholder}
+        style={inlineFieldStyle(t, textStyle, focused)}
+      />
     </div>
   );
 }
@@ -1781,7 +1983,6 @@ function StageProgress({
 function EntryForm({
   S,
   t,
-  initial,
   user,
   teamNames,
   onClose,
@@ -1789,33 +1990,30 @@ function EntryForm({
 }: {
   S: Styles;
   t: Theme;
-  initial: Entry | null;
   user: string;
   teamNames: string[];
   onClose: () => void;
-  onSave: (entry: Entry, isNew: boolean) => void;
+  onSave: (entry: Entry) => void;
 }) {
-  const [form, setForm] = useState<Entry>(
-    initial || {
-      id: uid(),
-      date: todayISO(),
-      candidate: "",
-      company: "",
-      role: "",
-      interviewType: "Phone",
-      round: 1,
-      team: [user],
-      stage: "sent",
-      stageHistory: [],
-      meetingLog: [],
-      declined: false,
-      declinedReason: null,
-      notes: "",
-      addedBy: user,
-      createdAt: "",
-      firstTime: true,
-    }
-  );
+  const [form, setForm] = useState<Entry>({
+    id: uid(),
+    date: todayISO(),
+    candidate: "",
+    company: "",
+    role: "",
+    interviewType: "Phone",
+    round: 1,
+    team: [user],
+    stage: "sent",
+    stageHistory: [],
+    meetingLog: [],
+    declined: false,
+    declinedReason: null,
+    notes: "",
+    addedBy: user,
+    createdAt: "",
+    firstTime: true,
+  });
 
   const toggleTeam = (name: string) => {
     setForm((f) => {
@@ -1833,7 +2031,7 @@ function EntryForm({
     <div className="avid-overlay" style={S.modalOverlay} onClick={onClose}>
       <div className="avid-modal" style={S.modal} onClick={(e) => e.stopPropagation()}>
         <div style={S.modalHeader}>
-          <div style={S.modalTitle}>{initial ? "Edit send-out" : "New send-out"}</div>
+          <div style={S.modalTitle}>New send-out</div>
           <button className="avid-btn" style={S.iconGhost} onClick={onClose}>
             <X size={18} />
           </button>
@@ -1933,8 +2131,8 @@ function EntryForm({
           <button className="avid-btn" style={S.ghostBtn} onClick={onClose}>
             Cancel
           </button>
-          <button className="avid-btn" style={{ ...S.primaryBtn, opacity: valid ? 1 : 0.5 }} disabled={!valid} onClick={() => onSave(form, !initial)}>
-            {initial ? "Save changes" : "Log send-out"}
+          <button className="avid-btn" style={{ ...S.primaryBtn, opacity: valid ? 1 : 0.5 }} disabled={!valid} onClick={() => onSave(form)}>
+            Log send-out
           </button>
         </div>
       </div>
