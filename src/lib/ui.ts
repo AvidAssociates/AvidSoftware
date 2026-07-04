@@ -273,10 +273,15 @@ export function makeStyles(t: Theme) {
       padding: "18px 22px",
       borderBottom: `1px solid ${t.border}`,
     },
-    // Send-Outs row: Date, Candidate, Company, Status, Role, Team all share
-    // one flexible column width so they read as evenly spaced.
-    soCol: { flex: 1, minWidth: 0 },
-    soStatusCol: { flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" as const },
+    // Send-Outs row: 7 symmetric tracks -- 3 equal columns (Date, Candidate,
+    // Company), Status sized to its own content dead center, then 3 more
+    // equal columns (Role, Team, Actions) -- so Status always sits at the
+    // row's true center, matching the month picker above, no matter how
+    // wide its content gets.
+    soGrid: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto 1fr 1fr 1fr", alignItems: "center" as const },
+    soCol: { minWidth: 0 },
+    soStatusCol: { minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" as const },
+    soActionsCol: { minWidth: 0, display: "flex", justifyContent: "flex-end" as const },
     colActions: { width: 56, flexShrink: 0, display: "flex", justifyContent: "flex-end" },
     colRecruiter: { width: 140, flexShrink: 0 },
     colClient: { flex: 1, minWidth: 160 },

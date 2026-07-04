@@ -607,14 +607,14 @@ function Dashboard({
             </div>
           ) : (
             <div>
-              <div style={S.cardHeaderRow}>
+              <div style={{ ...S.cardHeaderRow, ...S.soGrid }}>
                 <div style={S.soCol}>Date</div>
                 <div style={S.soCol}>Candidate</div>
                 <div style={S.soCol}>Company</div>
-                <div style={S.soCol}>Status</div>
+                <div style={S.soStatusCol}>Status</div>
                 <div style={S.soCol}>Role</div>
                 <div style={S.soCol}>Team</div>
-                <div style={S.colActions} />
+                <div style={S.soActionsCol} />
               </div>
               {filteredEntries.map((e) => (
                 <EntryRow
@@ -788,7 +788,7 @@ function EntryRow({
     <div>
       <div
         className="avid-row avid-row-enter"
-        style={expanded ? { ...S.cardRow, borderBottom: "none" } : S.cardRow}
+        style={expanded ? { ...S.cardRow, ...S.soGrid, borderBottom: "none" } : { ...S.cardRow, ...S.soGrid }}
       >
         <div style={S.soCol}>
           <div style={S.cardSub}>{fmtDate(entry.date)}</div>
@@ -808,7 +808,7 @@ function EntryRow({
         <div style={S.soCol}>
           <div style={S.cardSub}>{(entry.team || []).join(", ") || "—"}</div>
         </div>
-        <div style={S.colActions}>
+        <div style={S.soActionsCol}>
           <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
             <Pencil size={14} />
           </button>
@@ -1473,8 +1473,18 @@ function StageProgress({
     };
   }, [declineMenuOpen]);
 
+  // In large mode the decline control is pulled out of normal flow (absolute,
+  // anchored off the track's own box) so it never adds width the outer
+  // centering has to account for — the dots stay dead center regardless of
+  // whether "Declined" is showing.
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: large ? 22 : 14 }}>
+    <div
+      style={
+        large
+          ? { position: "relative", width: trackWidth }
+          : { display: "flex", alignItems: "flex-start", gap: 14 }
+      }
+    >
       <div style={{ width: trackWidth }}>
         <div style={{ position: "relative", height: dotSize + 4 }}>
           <div
@@ -1626,7 +1636,13 @@ function StageProgress({
           </div>
         )}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: large ? 10 : 8, height: dotSize + 4 }}>
+      <div
+        style={
+          large
+            ? { position: "absolute", left: "100%", top: 0, marginLeft: 22, display: "flex", alignItems: "center", gap: 10, height: dotSize + 4, whiteSpace: "nowrap" }
+            : { display: "flex", alignItems: "center", gap: 8, height: dotSize + 4 }
+        }
+      >
         {!large && (
           <span style={{ fontSize: 12.5, fontWeight: 600, color, minWidth: 64 }}>
             {declined ? "Declined" : PIPELINE[idx].label}
