@@ -61,7 +61,7 @@ export default function BillingsSummary({
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 36, flexWrap: "wrap" as const, marginBottom: 20 }}>
+      <div style={{ display: "flex", justifyContent: "center", gap: 36, flexWrap: "wrap" as const, marginBottom: 20 }}>
         <Stat t={t} label="Monthly Avg Needed" value={monthlyAvgNeeded !== null ? money(monthlyAvgNeeded) : "—"} />
         <Stat t={t} label="Monthly Billings" value={money(companyMonth)} color={monthColor} sub={monthSub} />
         <Stat t={t} label="Company YTD" value={money(companyYtd)} color="#4FBF82" />
@@ -76,8 +76,8 @@ export default function BillingsSummary({
       <div style={S.reportTableWrap}>
         <div style={{ ...S.reportTableHeadRow, gridTemplateColumns: cols }}>
           <div style={centered}>Recruiter</div>
-          <div style={centered}>Monthly Personal</div>
-          <div style={centered}>Monthly Total</div>
+          <div style={centered}>MTD Personal</div>
+          <div style={centered}>MTD Total</div>
           <div style={centered}>YTD Personal</div>
           <div style={centered}>YTD Total</div>
         </div>
