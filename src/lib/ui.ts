@@ -201,10 +201,10 @@ export function makeStyles(t: Theme) {
       background: "transparent",
       color: t.ink,
     },
-    selectPillWrap: { position: "relative" as const, display: "flex", alignItems: "center" },
+    // Trigger for the glass dropdowns in the toolbar (GlassSelect renders
+    // its own inline chevron, so no absolute-positioned chevron overlay).
     selectPill: {
-      appearance: "none" as const,
-      padding: "8px 28px 8px 12px",
+      padding: "8px 12px",
       border: `1px solid ${t.border}`,
       borderRadius: 9,
       fontSize: 13,
@@ -213,7 +213,6 @@ export function makeStyles(t: Theme) {
       color: t.ink,
       cursor: "pointer",
     },
-    selectPillChevron: { position: "absolute" as const, right: 10, pointerEvents: "none" as const },
     primaryBtn: {
       display: "flex",
       alignItems: "center",

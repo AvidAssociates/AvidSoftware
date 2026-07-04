@@ -767,16 +767,13 @@ function SelectPill({
   labels?: Record<string, string>;
 }) {
   return (
-    <div style={S.selectPillWrap}>
-      <select style={S.selectPill} value={value} onChange={(e) => onChange(e.target.value)}>
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {labels?.[o] || o}
-          </option>
-        ))}
-      </select>
-      <ChevronDown size={13} color={S._t.mutedSoft} style={S.selectPillChevron} />
-    </div>
+    <GlassSelect
+      value={value}
+      options={options}
+      labels={labels}
+      onChange={onChange}
+      triggerStyle={S.selectPill}
+    />
   );
 }
 
@@ -845,11 +842,10 @@ function EntryRow({
   };
 
   const dateField = (
-    <input
-      type="date"
-      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5, textAlign: "center" }}
+    <GlassDatePicker
       value={draft.date}
-      onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
+      onChange={(iso) => setDraft((d) => ({ ...d, date: iso }))}
+      triggerStyle={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5, textAlign: "center" }}
     />
   );
   const candidateField = (
@@ -1250,21 +1246,15 @@ function ActivityLogPanel({
       {canAdd && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 10, borderTop: `1px solid ${t.border}` }}>
           <div style={{ display: "flex", gap: 6 }}>
-            <select
+            <GlassSelect
               value={draftType}
-              onChange={(e) => {
-                const type = e.target.value;
+              options={INTERVIEW_TYPES}
+              onChange={(type) => {
                 setDraftType(type);
                 setDraftRound(nextRoundForType(entry, type));
               }}
-              style={{ ...S.input, flex: 1, padding: "7px 9px", fontSize: 12.5 }}
-            >
-              {INTERVIEW_TYPES.map((tp) => (
-                <option key={tp} value={tp}>
-                  {tp}
-                </option>
-              ))}
-            </select>
+              triggerStyle={{ ...S.input, flex: 1, padding: "7px 9px", fontSize: 12.5 }}
+            />
             <input
               type="number"
               min="1"
@@ -1272,7 +1262,11 @@ function ActivityLogPanel({
               onChange={(e) => setDraftRound(Number(e.target.value))}
               style={{ ...S.input, width: 50, padding: "7px 9px", fontSize: 12.5 }}
             />
-            <MeetingDatePicker t={t} value={draftDate} onChange={setDraftDate} />
+            <GlassDatePicker
+              value={draftDate}
+              onChange={setDraftDate}
+              triggerStyle={{ ...S.input, padding: "7px 9px", fontSize: 12.5 }}
+            />
           </div>
           <button
             type="button"
@@ -1288,57 +1282,12 @@ function ActivityLogPanel({
   );
 }
 
-// A native date field, so the browser brings up its own calendar picker
-// (the same Apple one the New Send-Out form gets) — it still shows just
-// the value until clicked.
-function MeetingDatePicker({
-  t,
-  value,
-  onChange,
-}: {
-  t: Theme;
-  value: string;
-  onChange: (iso: string) => void;
-}) {
-  return (
-    <input
-      type="date"
-      value={value}
-      title="Click to change date"
-      onChange={(e) => {
-        if (e.target.value) onChange(e.target.value);
-      }}
-      style={{
-        border: `1px solid ${t.border}`,
-        borderRadius: 8,
-        background: t.surfaceAlt,
-        color: t.ink,
-        fontSize: 12.5,
-        fontFamily: FONT,
-        padding: "6px 9px",
-        cursor: "pointer",
-        whiteSpace: "nowrap",
-      }}
-    />
-  );
-}
-
-// A closed-by-default dropdown for picking any number of team members --
-// click the box to open a checklist, toggle as many names as you want, and
-// it stays open until you click away (so multiple picks don't require
-// reopening it each time). Same portaled-popover pattern as the decline-
-// reason menu, so it isn't clipped by the row's own layout.
-function TeamMultiSelect({
-  S,
-  teamNames,
-  selected,
-  onToggle,
-}: {
-  S: Styles;
-  teamNames: string[];
-  selected: string[];
-  onToggle: (name: string) => void;
-}) {
+// ---------- Liquid Glass pickers ----------
+// One shared anchor-and-dismiss brain for every glass popover: outside
+// click (scoped by data attribute) and Escape close it; placement keeps it
+// centered under its trigger and inside the viewport, re-measured on
+// scroll/resize.
+function useGlassPopover(attr: string, width: number, estHeight: number) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
@@ -1346,7 +1295,7 @@ function TeamMultiSelect({
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (e: MouseEvent) => {
-      if (!(e.target instanceof Element) || !e.target.closest("[data-team-popover]")) setOpen(false);
+      if (!(e.target instanceof Element) || !e.target.closest(`[${attr}]`)) setOpen(false);
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -1357,7 +1306,7 @@ function TeamMultiSelect({
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open]);
+  }, [open, attr]);
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- measures real DOM
@@ -1370,9 +1319,8 @@ function TeamMultiSelect({
       const el = btnRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      const width = 190;
       const left = Math.min(Math.max(rect.left + rect.width / 2, width / 2 + 8), window.innerWidth - width / 2 - 8);
-      const top = Math.min(rect.bottom + 6, window.innerHeight - 260);
+      const top = Math.min(rect.bottom + 6, Math.max(8, window.innerHeight - estHeight - 8));
       setPos({ top, left });
     };
     place();
@@ -1383,8 +1331,175 @@ function TeamMultiSelect({
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [open]);
+  }, [open, width, estHeight]);
 
+  return { open, setOpen, pos, btnRef };
+}
+
+// One shared row treatment for every glass menu: full-bleed (the pane's
+// big radius does the clipping), regular weight, with a leading checkmark
+// slot reserved so labels never shift as selection changes -- iOS menus.
+function glassMenuRow(withCheckSlot: boolean): React.CSSProperties {
+  return {
+    background: "transparent",
+    border: "none",
+    color: GLASS_FG,
+    textAlign: "left",
+    padding: withCheckSlot ? "11px 16px 11px 11px" : "11px 16px",
+    fontSize: 14.5,
+    fontWeight: 400,
+    fontFamily: FONT,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+  };
+}
+
+function GlassCheckSlot({ checked }: { checked: boolean }) {
+  return (
+    <span style={{ width: 20, display: "flex", justifyContent: "center", flexShrink: 0 }}>
+      {checked && <Check size={15} color={GLASS_FG} strokeWidth={2.5} />}
+    </span>
+  );
+}
+
+// Single-select dropdown on the glass menu system -- the app-wide
+// replacement for native <select>, so every dropdown matches (native
+// selects render the OS's own menu, which isn't glass on any platform).
+function GlassSelect({
+  value,
+  options,
+  labels,
+  onChange,
+  triggerStyle,
+}: {
+  value: string;
+  options: string[];
+  labels?: Record<string, string>;
+  onChange: (v: string) => void;
+  triggerStyle: React.CSSProperties;
+}) {
+  const { open, setOpen, pos, btnRef } = useGlassPopover("data-glass-select", 210, options.length * 42 + 16);
+  const display = labels?.[value] || value;
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        data-glass-select
+        onClick={() => setOpen((v) => !v)}
+        style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontFamily: FONT, ...triggerStyle }}
+      >
+        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "inherit" }}>
+          {display}
+        </span>
+        <ChevronDown size={12} style={{ flexShrink: 0, opacity: 0.6 }} />
+      </button>
+      {open &&
+        pos &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            data-glass-select
+            style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 1000 }}
+          >
+            <div
+              className="avid-glass-pop avid-glass-popover"
+              style={{ display: "flex", flexDirection: "column", minWidth: 210, maxHeight: 336, overflowY: "auto" }}
+            >
+              {options.map((opt, i) => (
+                <Fragment key={opt}>
+                  {i > 0 && <div className="avid-glass-sep" />}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange(opt);
+                      setOpen(false);
+                    }}
+                    className="avid-glass-option"
+                    style={glassMenuRow(true)}
+                  >
+                    <GlassCheckSlot checked={opt === value} />
+                    {labels?.[opt] || opt}
+                  </button>
+                </Fragment>
+              ))}
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
+
+// Date field on the glass system: shows just the value until clicked, then
+// opens the same glass calendar the stage tracker uses -- the app-wide
+// replacement for native <input type="date">, so every calendar matches.
+function GlassDatePicker({
+  value,
+  onChange,
+  triggerStyle,
+  placeholder = "Set date",
+}: {
+  value: string;
+  onChange: (iso: string) => void;
+  triggerStyle: React.CSSProperties;
+  placeholder?: string;
+}) {
+  const { open, setOpen, pos, btnRef } = useGlassPopover("data-glass-date", 262, 330);
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        data-glass-date
+        title="Click to change date"
+        onClick={() => setOpen((v) => !v)}
+        style={{ cursor: "pointer", whiteSpace: "nowrap", fontFamily: FONT, ...triggerStyle }}
+      >
+        {value ? fmtDate(value) : placeholder}
+      </button>
+      {open &&
+        pos &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            data-glass-date
+            style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 1000 }}
+          >
+            <div className="avid-glass-pop avid-glass-popover" style={{ padding: "12px 10px 10px" }}>
+              <MiniCalendar
+                value={value || null}
+                onSelect={(iso) => {
+                  onChange(iso);
+                  setOpen(false);
+                }}
+              />
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
+
+// A closed-by-default dropdown for picking any number of team members --
+// same glass menu as GlassSelect, but toggling doesn't dismiss, so several
+// names can be checked in one visit.
+function TeamMultiSelect({
+  S,
+  teamNames,
+  selected,
+  onToggle,
+}: {
+  S: Styles;
+  teamNames: string[];
+  selected: string[];
+  onToggle: (name: string) => void;
+}) {
+  const { open, setOpen, pos, btnRef } = useGlassPopover("data-team-popover", 210, teamNames.length * 42 + 16);
   const label = selected.length ? selected.join("/") : "Select team";
 
   return (
@@ -1392,6 +1507,7 @@ function TeamMultiSelect({
       <button
         ref={btnRef}
         type="button"
+        data-team-popover
         onClick={() => setOpen((v) => !v)}
         style={{
           ...S.input,
@@ -1420,41 +1536,20 @@ function TeamMultiSelect({
               className="avid-glass-pop avid-glass-popover"
               style={{ display: "flex", flexDirection: "column", minWidth: 210 }}
             >
-              {teamNames.map((name, i) => {
-                const checked = selected.includes(name);
-                return (
-                  <Fragment key={name}>
-                    {i > 0 && <div className="avid-glass-sep" />}
-                    <button
-                      type="button"
-                      onClick={() => onToggle(name)}
-                      className="avid-glass-option"
-                      style={{
-                        background: "transparent",
-                        border: "none",
-                        color: GLASS_FG,
-                        textAlign: "left",
-                        padding: "11px 16px 11px 11px",
-                        fontSize: 14.5,
-                        fontWeight: 400,
-                        fontFamily: FONT,
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 7,
-                      }}
-                    >
-                      {/* Leading checkmark slot, like iOS menus -- reserved even
-                          when unchecked so labels don't shift as items toggle */}
-                      <span style={{ width: 20, display: "flex", justifyContent: "center", flexShrink: 0 }}>
-                        {checked && <Check size={15} color={GLASS_FG} strokeWidth={2.5} />}
-                      </span>
-                      {name}
-                    </button>
-                  </Fragment>
-                );
-              })}
+              {teamNames.map((name, i) => (
+                <Fragment key={name}>
+                  {i > 0 && <div className="avid-glass-sep" />}
+                  <button
+                    type="button"
+                    onClick={() => onToggle(name)}
+                    className="avid-glass-option"
+                    style={glassMenuRow(true)}
+                  >
+                    <GlassCheckSlot checked={selected.includes(name)} />
+                    {name}
+                  </button>
+                </Fragment>
+              ))}
             </div>
           </div>,
           document.body
@@ -2103,7 +2198,11 @@ function EntryForm({
 
         <div className="avid-form-grid" style={S.formGrid}>
           <Field S={S} label="Date">
-            <input type="date" style={S.input} value={form.date} onChange={set("date")} />
+            <GlassDatePicker
+              value={form.date}
+              onChange={(iso) => setForm((f) => ({ ...f, date: iso }))}
+              triggerStyle={{ ...S.input, textAlign: "left" }}
+            />
           </Field>
           <Field S={S} label="Candidate">
             <input style={S.input} placeholder="Full name" value={form.candidate} onChange={set("candidate")} />
@@ -2115,11 +2214,12 @@ function EntryForm({
             <input style={S.input} placeholder="e.g. Account Manager" value={form.role || ""} onChange={set("role")} />
           </Field>
           <Field S={S} label="Interview type">
-            <select style={S.input} value={form.interviewType} onChange={set("interviewType")}>
-              {INTERVIEW_TYPES.map((tp) => (
-                <option key={tp}>{tp}</option>
-              ))}
-            </select>
+            <GlassSelect
+              value={form.interviewType}
+              options={INTERVIEW_TYPES}
+              onChange={(tp) => setForm((f) => ({ ...f, interviewType: tp }))}
+              triggerStyle={{ ...S.input, textAlign: "left" }}
+            />
           </Field>
           <Field S={S} label="Round">
             <input
@@ -2151,24 +2251,7 @@ function EntryForm({
             </div>
           </Field>
           <Field S={S} label="Team" full>
-            <div style={S.chipRow}>
-              {teamNames.map((name) => (
-                <button
-                  type="button"
-                  key={name}
-                  className="avid-chip"
-                  onClick={() => toggleTeam(name)}
-                  style={{
-                    ...S.chip,
-                    borderColor: t.accent,
-                    color: form.team.includes(name) ? "#fff" : t.accent,
-                    background: form.team.includes(name) ? t.accent : "transparent",
-                  }}
-                >
-                  {name}
-                </button>
-              ))}
-            </div>
+            <TeamMultiSelect S={S} teamNames={teamNames} selected={form.team} onToggle={toggleTeam} />
           </Field>
           <Field S={S} label="Progress" full>
             <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "4px 0" }}>
@@ -2259,7 +2342,11 @@ function BillingForm({
 
         <div className="avid-form-grid" style={S.formGrid}>
           <Field S={S} label="Date">
-            <input type="date" style={S.input} value={form.date} onChange={set("date")} />
+            <GlassDatePicker
+              value={form.date}
+              onChange={(iso) => setForm((f) => ({ ...f, date: iso }))}
+              triggerStyle={{ ...S.input, textAlign: "left" }}
+            />
           </Field>
           <Field S={S} label="Amount ($)">
             <input
@@ -2273,24 +2360,7 @@ function BillingForm({
             />
           </Field>
           <Field S={S} label="Team" full>
-            <div style={S.chipRow}>
-              {teamNames.map((name) => (
-                <button
-                  type="button"
-                  key={name}
-                  className="avid-chip"
-                  onClick={() => toggleTeam(name)}
-                  style={{
-                    ...S.chip,
-                    borderColor: t.accent,
-                    color: form.team.includes(name) ? "#fff" : t.accent,
-                    background: form.team.includes(name) ? t.accent : "transparent",
-                  }}
-                >
-                  {name}
-                </button>
-              ))}
-            </div>
+            <TeamMultiSelect S={S} teamNames={teamNames} selected={form.team} onToggle={toggleTeam} />
             <div style={{ fontSize: 11.5, color: t.mutedSoft, marginTop: 8 }}>
               One person = solo deal (counts toward their Personal total). Two or more = team deal — the full amount
               credits everyone listed, toward Total only.
