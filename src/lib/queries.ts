@@ -1,4 +1,5 @@
 import { getDb } from "./db";
+import { uid } from "./ui";
 import { Billing, Entry, MeetingLogEntry, ProductionGoals, Retainer, RosterMember, StageEvent } from "./types";
 
 type EntryRow = {
@@ -49,7 +50,7 @@ function toEntry(row: EntryRow): Entry {
 // actively interviewing.
 function seedMeetingLog(stage: string, interviewType: string, round: number, date: string): MeetingLogEntry[] {
   if (stage !== "interview" && stage !== "offer" && stage !== "placed") return [];
-  return [{ type: interviewType, round, date }];
+  return [{ id: uid(), type: interviewType, round, date }];
 }
 
 function lastEventDateOf(history: StageEvent[], stage: string): string | null {
@@ -232,9 +233,32 @@ export async function logMeeting(
   `) as { meeting_log: MeetingLogEntry[] }[];
   if (!existing) return null;
 
-  const meetingLog = [...(existing.meeting_log ?? []), { type, round, date }];
+  const meetingLog = [...(existing.meeting_log ?? []), { id: uid(), type, round, date }];
   const [row] = (await db.sql`
     UPDATE pipeline_entries SET meeting_log = ${JSON.stringify(meetingLog)}, interview_type = ${type}, round = ${round}
+    WHERE id = ${id}
+    RETURNING *
+  `) as EntryRow[];
+  return toEntry(row);
+}
+
+// Removes a single mistakenly-logged meeting. The entry's current
+// type/round follows whatever is now the last remaining meeting (or stays
+// put if the log is now empty).
+export async function deleteMeetingLogEntry(id: string, meetingId: string): Promise<Entry | null> {
+  const db = getDb();
+  const [existing] = (await db.sql`
+    SELECT meeting_log, interview_type, round FROM pipeline_entries WHERE id = ${id}
+  `) as { meeting_log: MeetingLogEntry[]; interview_type: string; round: number }[];
+  if (!existing) return null;
+
+  const meetingLog = (existing.meeting_log ?? []).filter((m) => m.id !== meetingId);
+  const last = meetingLog[meetingLog.length - 1];
+  const interviewType = last?.type ?? existing.interview_type;
+  const round = last?.round ?? existing.round;
+
+  const [row] = (await db.sql`
+    UPDATE pipeline_entries SET meeting_log = ${JSON.stringify(meetingLog)}, interview_type = ${interviewType}, round = ${round}
     WHERE id = ${id}
     RETURNING *
   `) as EntryRow[];

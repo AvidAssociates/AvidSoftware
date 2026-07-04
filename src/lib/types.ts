@@ -13,6 +13,7 @@ export type DeclineReason = "candidate" | "client";
 // shape, and without creating a duplicate entry for the same candidate the
 // way the paper sheet does.
 export type MeetingLogEntry = {
+  id: string;
   type: string;
   round: number;
   date: string;

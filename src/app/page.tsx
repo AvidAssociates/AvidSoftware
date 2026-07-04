@@ -22,6 +22,7 @@ import { Billing, DeclineReason, Entry, RosterMember, Stage, StageEvent } from "
 import {
   ADMIN,
   DEFAULT_TEAM,
+  FONT,
   INTERVIEW_TYPES,
   PIPELINE,
   STAGE_COLOR,
@@ -312,9 +313,27 @@ function Dashboard({
   // of writing a whole new send-out entry — the fixed 4-stage tracker never
   // changes, only the log inside the Interview stage grows.
   const logMeeting = async (entry: Entry, type: string, round: number, date: string) => {
-    const optimistic = { ...entry, interviewType: type, round, meetingLog: [...entry.meetingLog, { type, round, date }] };
+    const optimistic = {
+      ...entry,
+      interviewType: type,
+      round,
+      meetingLog: [...entry.meetingLog, { id: uid(), type, round, date }],
+    };
     applyEntry(optimistic);
     const res = await send(`/api/entries/${entry.id}/meeting-log`, "PATCH", { type, round, date });
+    if (res.ok) applyEntry(await res.json());
+  };
+  const deleteMeeting = async (entry: Entry, meetingId: string) => {
+    const meetingLog = entry.meetingLog.filter((m) => m.id !== meetingId);
+    const last = meetingLog[meetingLog.length - 1];
+    const optimistic = {
+      ...entry,
+      meetingLog,
+      interviewType: last?.type ?? entry.interviewType,
+      round: last?.round ?? entry.round,
+    };
+    applyEntry(optimistic);
+    const res = await send(`/api/entries/${entry.id}/meeting-log/${meetingId}`, "DELETE");
     if (res.ok) applyEntry(await res.json());
   };
   const saveBilling = async (billing: Billing, isNew: boolean) => {
@@ -608,6 +627,7 @@ function Dashboard({
                   onRestore={() => setDeclined(e, false)}
                   onDecline={(reason) => setDeclined(e, true, reason)}
                   onLogMeeting={(type, round, date) => logMeeting(e, type, round, date)}
+                  onDeleteMeeting={(meetingId) => deleteMeeting(e, meetingId)}
                 />
               ))}
             </div>
@@ -744,6 +764,7 @@ function EntryRow({
   onRestore,
   onDecline,
   onLogMeeting,
+  onDeleteMeeting,
 }: {
   S: Styles;
   t: Theme;
@@ -755,20 +776,45 @@ function EntryRow({
   onRestore: () => void;
   onDecline: (reason: DeclineReason) => void;
   onLogMeeting: (type: string, round: number, date: string) => void;
+  onDeleteMeeting: (meetingId: string) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   return (
-    <div className="avid-row avid-row-enter" style={S.cardRow}>
-      <div style={S.soCol}>
-        <div style={S.cardSub}>{fmtDate(entry.date)}</div>
+    <div>
+      <div
+        className="avid-row avid-row-enter"
+        style={expanded ? { ...S.cardRow, borderBottom: "none" } : S.cardRow}
+      >
+        <div style={S.soCol}>
+          <div style={S.cardSub}>{fmtDate(entry.date)}</div>
+        </div>
+        <div style={S.soCol}>
+          <div style={S.cardPrimary}>{entry.candidate}</div>
+        </div>
+        <div style={S.soCol}>
+          <div style={S.cardSub}>{entry.company}</div>
+        </div>
+        <div style={S.soStatusCol}>
+          <ProcessStatusControl t={t} entry={entry} expanded={expanded} onToggle={() => setExpanded((v) => !v)} />
+        </div>
+        <div style={S.soCol}>
+          <div style={S.cardSub}>{entry.role || "—"}</div>
+        </div>
+        <div style={S.soCol}>
+          <div style={S.cardSub}>{(entry.team || []).join(", ") || "—"}</div>
+        </div>
+        <div style={S.colActions}>
+          <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
+            <Pencil size={14} />
+          </button>
+          <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
+            <Trash2 size={14} />
+          </button>
+        </div>
       </div>
-      <div style={S.soCol}>
-        <div style={S.cardPrimary}>{entry.candidate}</div>
-      </div>
-      <div style={S.soCol}>
-        <div style={S.cardSub}>{entry.company}</div>
-      </div>
-      <div style={S.soStatusCol}>
-        <ProcessStatusControl
+      {expanded && (
+        <ProcessExpandedPanel
+          S={S}
           t={t}
           entry={entry}
           onSetStage={onSetStage}
@@ -776,37 +822,139 @@ function EntryRow({
           onRestore={onRestore}
           onDecline={onDecline}
           onLogMeeting={onLogMeeting}
+          onDeleteMeeting={onDeleteMeeting}
+          onDone={() => setExpanded(false)}
         />
-      </div>
-      <div style={S.soCol}>
-        <div style={S.cardSub}>{entry.role || "—"}</div>
-      </div>
-      <div style={S.soCol}>
-        <div style={S.cardSub}>{(entry.team || []).join(", ") || "—"}</div>
-      </div>
-      <div style={S.colActions}>
-        <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
-          <Pencil size={14} />
-        </button>
-        <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
-          <Trash2 size={14} />
-        </button>
-      </div>
+      )}
     </div>
   );
 }
 
-const PROCESS_POPOVER_WIDTH = 420;
+// A compact status icon standing in for the whole process — click it to
+// expand the row into the full timeline (Sent date, Interview's meeting
+// log, Offer, Placed) instead of opening a floating popover.
+function ProcessStatusControl({
+  t,
+  entry,
+  expanded,
+  onToggle,
+}: {
+  t: Theme;
+  entry: Entry;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const idx = Math.max(0, PIPELINE.findIndex((s) => s.key === entry.stage));
+  const color = entry.declined ? t.danger : STAGE_COLOR[entry.stage];
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={expanded ? "Hide process" : "View process"}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        border: "none",
+        background: "none",
+        padding: 0,
+        cursor: "pointer",
+        font: "inherit",
+      }}
+    >
+      <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, flexShrink: 0 }} />
+      <span style={{ fontSize: 12.5, fontWeight: 700, color }}>{entry.declined ? "Declined" : PIPELINE[idx].label}</span>
+    </button>
+  );
+}
+
+// The row's expanded detail: the same fixed Sent/Interview/Offer/Placed
+// tracker (centered), the meeting log underneath it while Interview is
+// active, and a Done button to collapse back down. Rendered as a normal
+// block below the row so it pushes the next row down, instead of floating
+// over the page.
+function ProcessExpandedPanel({
+  S,
+  t,
+  entry,
+  onSetStage,
+  onEditDate,
+  onRestore,
+  onDecline,
+  onLogMeeting,
+  onDeleteMeeting,
+  onDone,
+}: {
+  S: Styles;
+  t: Theme;
+  entry: Entry;
+  onSetStage: (stage: Stage) => void;
+  onEditDate: (stage: Stage, date: string) => void;
+  onRestore: () => void;
+  onDecline: (reason: DeclineReason) => void;
+  onLogMeeting: (type: string, round: number, date: string) => void;
+  onDeleteMeeting: (meetingId: string) => void;
+  onDone: () => void;
+}) {
+  return (
+    <div
+      className="avid-row-enter"
+      style={{
+        padding: "4px 22px 20px",
+        borderBottom: `1px solid ${t.border}`,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 18,
+      }}
+    >
+      <StageProgress
+        t={t}
+        stage={entry.stage}
+        declined={entry.declined}
+        declinedReason={entry.declinedReason}
+        history={entry.stageHistory}
+        onSetStage={onSetStage}
+        onEditDate={onEditDate}
+        onRestore={onRestore}
+        onDecline={onDecline}
+        large
+      />
+      {(entry.stage === "interview" || entry.meetingLog.length > 0) && (
+        <div style={{ width: "100%", maxWidth: 380 }}>
+          <MeetingLogPanel
+            S={S}
+            t={t}
+            key={entry.meetingLog.length}
+            entry={entry}
+            onLog={onLogMeeting}
+            onDelete={onDeleteMeeting}
+          />
+        </div>
+      )}
+      <button type="button" className="avid-btn" style={{ ...S.ghostBtn, alignSelf: "flex-end" }} onClick={onDone}>
+        Done
+      </button>
+    </div>
+  );
+}
 
 // The list of logged meetings (Phone R1, then Phone R2, then Face-to-Face
-// R1, ...) plus a way to add the next one, while still in Interview.
-// Purely presentational — the popover that hosts it owns open/close state.
+// R1, ...) plus a way to add the next one, while still in Interview. Each
+// entry can be deleted (logged by mistake); the date defaults to today and
+// only opens a picker if clicked.
 function MeetingLogPanel({
+  S,
+  t,
   entry,
   onLog,
+  onDelete,
 }: {
+  S: Styles;
+  t: Theme;
   entry: Entry;
   onLog: (type: string, round: number, date: string) => void;
+  onDelete: (meetingId: string) => void;
 }) {
   const last = entry.meetingLog[entry.meetingLog.length - 1];
   const [draftType, setDraftType] = useState(last?.type || entry.interviewType || "Phone");
@@ -815,51 +963,56 @@ function MeetingLogPanel({
   const canAdd = entry.stage === "interview" && !entry.declined;
 
   return (
-    <div style={{ paddingTop: 10, marginTop: 10, borderTop: `1px solid ${STAGE_POPOVER_FG}22` }}>
+    <div>
       <div
         style={{
           fontSize: 10.5,
           fontWeight: 700,
           letterSpacing: 0.4,
           textTransform: "uppercase",
-          opacity: 0.6,
+          color: t.mutedSoft,
           marginBottom: 8,
         }}
       >
         Meeting log
       </div>
       {entry.meetingLog.length === 0 ? (
-        <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 10 }}>No meetings logged yet.</div>
+        <div style={{ fontSize: 12, color: t.mutedSoft, marginBottom: 10 }}>No meetings logged yet.</div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
-          {entry.meetingLog.map((m, i) => (
-            <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 600 }}>
-              <span>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 10 }}>
+          {entry.meetingLog.map((m) => (
+            <div
+              key={m.id}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0" }}
+            >
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: t.ink }}>
                 {m.type} · R{m.round}
               </span>
-              <span style={{ opacity: 0.6, fontVariantNumeric: "tabular-nums" }}>{fmtDate(m.date)}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 12, color: t.muted, fontVariantNumeric: "tabular-nums" }}>{fmtDate(m.date)}</span>
+                <button
+                  type="button"
+                  onClick={() => onDelete(m.id)}
+                  title="Remove this meeting"
+                  style={{ border: "none", background: "none", padding: 2, cursor: "pointer", color: t.mutedSoft, display: "flex" }}
+                >
+                  <X size={12} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
       )}
       {canAdd && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 10, borderTop: `1px solid ${t.border}` }}>
           <div style={{ display: "flex", gap: 6 }}>
             <select
               value={draftType}
               onChange={(e) => setDraftType(e.target.value)}
-              style={{
-                flex: 1,
-                fontSize: 12,
-                background: "transparent",
-                color: STAGE_POPOVER_FG,
-                border: `1px solid ${STAGE_POPOVER_FG}33`,
-                borderRadius: 6,
-                padding: "5px 6px",
-              }}
+              style={{ ...S.input, flex: 1, padding: "7px 9px", fontSize: 12.5 }}
             >
               {INTERVIEW_TYPES.map((tp) => (
-                <option key={tp} value={tp} style={{ color: "#000" }}>
+                <option key={tp} value={tp}>
                   {tp}
                 </option>
               ))}
@@ -869,44 +1022,15 @@ function MeetingLogPanel({
               min="1"
               value={draftRound}
               onChange={(e) => setDraftRound(Number(e.target.value))}
-              style={{
-                width: 48,
-                fontSize: 12,
-                background: "transparent",
-                color: STAGE_POPOVER_FG,
-                border: `1px solid ${STAGE_POPOVER_FG}33`,
-                borderRadius: 6,
-                padding: "5px 6px",
-              }}
+              style={{ ...S.input, width: 50, padding: "7px 9px", fontSize: 12.5 }}
             />
+            <MeetingDatePicker t={t} value={draftDate} onChange={setDraftDate} />
           </div>
-          <input
-            type="date"
-            value={draftDate}
-            onChange={(e) => setDraftDate(e.target.value)}
-            style={{
-              fontSize: 12,
-              background: "transparent",
-              color: STAGE_POPOVER_FG,
-              border: `1px solid ${STAGE_POPOVER_FG}33`,
-              borderRadius: 6,
-              padding: "5px 6px",
-              colorScheme: "dark",
-            }}
-          />
           <button
             type="button"
+            className="avid-btn"
+            style={{ ...S.ghostBtn, textAlign: "center" as const, padding: "8px 10px", fontSize: 12.5 }}
             onClick={() => onLog(draftType, draftRound, draftDate)}
-            style={{
-              fontSize: 12,
-              fontWeight: 700,
-              background: STAGE_POPOVER_FG,
-              color: STAGE_POPOVER_BG,
-              border: "none",
-              borderRadius: 6,
-              padding: "6px 8px",
-              cursor: "pointer",
-            }}
           >
             + Log meeting
           </button>
@@ -916,37 +1040,26 @@ function MeetingLogPanel({
   );
 }
 
-// A compact status icon standing in for the whole process — click it to
-// see the full timeline (Sent date, then Interview's meeting log, Offer,
-// Placed) and act on it (advance a stage, fix a date, decline, or log the
-// next meeting), all in one place instead of a wide always-on tracker.
-function ProcessStatusControl({
+// A small date field that shows a plain value (defaulting to today) and
+// only opens a calendar to change it when clicked — no always-open date
+// input taking up space.
+function MeetingDatePicker({
   t,
-  entry,
-  onSetStage,
-  onEditDate,
-  onRestore,
-  onDecline,
-  onLogMeeting,
+  value,
+  onChange,
 }: {
   t: Theme;
-  entry: Entry;
-  onSetStage: (stage: Stage) => void;
-  onEditDate: (stage: Stage, date: string) => void;
-  onRestore: () => void;
-  onDecline: (reason: DeclineReason) => void;
-  onLogMeeting: (type: string, round: number, date: string) => void;
+  value: string;
+  onChange: (iso: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
-  const idx = Math.max(0, PIPELINE.findIndex((s) => s.key === entry.stage));
-  const color = entry.declined ? t.danger : STAGE_COLOR[entry.stage];
 
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (e: MouseEvent) => {
-      if (!(e.target instanceof Element) || !e.target.closest("[data-process-popover]")) setOpen(false);
+      if (!(e.target instanceof Element) || !e.target.closest("[data-meeting-date-popover]")) setOpen(false);
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -970,9 +1083,9 @@ function ProcessStatusControl({
       const el = btnRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      const width = PROCESS_POPOVER_WIDTH;
+      const width = 224;
       const left = Math.min(Math.max(rect.left + rect.width / 2, width / 2 + 8), window.innerWidth - width / 2 - 8);
-      const top = Math.min(rect.bottom + 10, window.innerHeight - 340);
+      const top = Math.min(rect.bottom + 8, window.innerHeight - 300);
       setPos({ top, left });
     };
     place();
@@ -991,29 +1104,27 @@ function ProcessStatusControl({
         ref={btnRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        title="View process"
+        title="Click to change date"
         style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 8,
-          border: "none",
-          background: "none",
-          padding: 0,
+          border: `1px solid ${t.border}`,
+          borderRadius: 8,
+          background: t.surfaceAlt,
+          color: t.ink,
+          fontSize: 12.5,
+          fontFamily: FONT,
+          padding: "7px 9px",
           cursor: "pointer",
-          font: "inherit",
+          whiteSpace: "nowrap",
         }}
       >
-        <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, flexShrink: 0 }} />
-        <span style={{ fontSize: 12.5, fontWeight: 700, color }}>
-          {entry.declined ? "Declined" : PIPELINE[idx].label}
-        </span>
+        {fmtDate(value)}
       </button>
       {open &&
         pos &&
         typeof document !== "undefined" &&
         createPortal(
           <div
-            data-process-popover
+            data-meeting-date-popover
             style={{
               position: "fixed",
               top: pos.top,
@@ -1021,28 +1132,19 @@ function ProcessStatusControl({
               transform: "translateX(-50%)",
               background: STAGE_POPOVER_BG,
               color: STAGE_POPOVER_FG,
-              padding: 14,
+              padding: 10,
               borderRadius: 12,
               boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
               zIndex: 1000,
-              width: PROCESS_POPOVER_WIDTH,
             }}
           >
-            <StageProgress
-              t={t}
-              stage={entry.stage}
-              declined={entry.declined}
-              declinedReason={entry.declinedReason}
-              history={entry.stageHistory}
-              onSetStage={onSetStage}
-              onEditDate={onEditDate}
-              onRestore={onRestore}
-              onDecline={onDecline}
-              large
+            <MiniCalendar
+              value={value}
+              onSelect={(iso) => {
+                onChange(iso);
+                setOpen(false);
+              }}
             />
-            {(entry.stage === "interview" || entry.meetingLog.length > 0) && (
-              <MeetingLogPanel key={entry.meetingLog.length} entry={entry} onLog={onLogMeeting} />
-            )}
           </div>,
           document.body
         )}
