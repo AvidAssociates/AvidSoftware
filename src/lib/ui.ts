@@ -289,6 +289,11 @@ export function makeStyles(t: Theme) {
     // Role's gap to Status mirror Company's, so the row reads balanced
     // outward from the centered Status.
     soColRight: { minWidth: 0, textAlign: "right" as const },
+    // When a value wraps to a second line, the lines center against each
+    // other instead of leaving a ragged edge. The shrink-wrapped block
+    // itself still anchors to its column's edge (left half left, right
+    // half right), so single-line cells don't move at all.
+    soCellText: { display: "inline-block" as const, maxWidth: "100%", textAlign: "center" as const },
     soStatusCol: { minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" as const },
     soActionsCol: { minWidth: 0, display: "flex", justifyContent: "flex-end" as const },
     colActions: { width: 56, flexShrink: 0, display: "flex", justifyContent: "flex-end" },

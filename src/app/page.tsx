@@ -796,13 +796,13 @@ function EntryRow({
       >
         <div style={S.soGroup}>
           <div style={S.soCol}>
-            <div style={S.cardSub}>{fmtDate(entry.date)}</div>
+            <div style={{ ...S.cardSub, ...S.soCellText }}>{fmtDate(entry.date)}</div>
           </div>
           <div style={S.soCol}>
-            <div style={S.cardPrimary}>{entry.candidate}</div>
+            <div style={{ ...S.cardPrimary, ...S.soCellText }}>{entry.candidate}</div>
           </div>
           <div style={S.soCol}>
-            <div style={S.cardSub}>{entry.company}</div>
+            <div style={{ ...S.cardSub, ...S.soCellText }}>{entry.company}</div>
           </div>
         </div>
         <div style={S.soStatusCol}>
@@ -810,10 +810,10 @@ function EntryRow({
         </div>
         <div style={S.soGroup}>
           <div style={S.soColRight}>
-            <div style={S.cardSub}>{entry.role || "—"}</div>
+            <div style={{ ...S.cardSub, ...S.soCellText }}>{entry.role || "—"}</div>
           </div>
           <div style={S.soColRight}>
-            <div style={S.cardSub}>{(entry.team || []).join(", ") || "—"}</div>
+            <div style={{ ...S.cardSub, ...S.soCellText }}>{(entry.team || []).join(", ") || "—"}</div>
           </div>
           <div style={S.soActionsCol}>
             <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
