@@ -630,7 +630,9 @@ function Dashboard({
                     <div style={S.soCol}>Candidate</div>
                     <div style={S.soCol}>Company</div>
                   </div>
-                  <div style={S.soStatusCol}>Status</div>
+                  <div style={S.soStatusCol}>
+                    <div style={S.soStatusInner}>Status</div>
+                  </div>
                   <div style={S.soGroup}>
                     <div style={S.soCol}>Role</div>
                     <div style={S.soCol}>Team</div>

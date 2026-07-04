@@ -288,12 +288,15 @@ export function makeStyles(t: Theme) {
     // centering, same as any ordinary table.
     soCol: { minWidth: 0, textAlign: "left" as const },
     soStatusCol: { minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" as const },
-    // A fixed-width box around the status dot+label, centered as a block
-    // within soStatusCol. Without this, centering the dot+label as a
-    // variable-width group moves the dot itself left/right depending on
-    // how long the label text is (e.g. "Sent" vs "Interview T(1)") -- a
-    // fixed box with left-aligned content keeps the dot at the exact same
-    // x on every row, since the box's own width never changes.
+    // The header ("Status") and every row's dot+label both sit inside this
+    // exact same fixed-width, left-anchored box, which is then centered as
+    // a block within soStatusCol. That's what pins the dot under the "S":
+    // both the header text and the dot are the first thing drawn at this
+    // box's left edge, and the box's own width and centering never change
+    // with content, so the header's left edge and every row's left edge
+    // land on the identical x. (Centering the dot+label as a bare
+    // variable-width group instead would drift the dot per row, since a
+    // longer label like "Interview T(1)" centers differently than "Sent".)
     soStatusInner: { width: 168, display: "flex", justifyContent: "flex-start" as const },
     soActionsCol: { minWidth: 0, display: "flex", justifyContent: "flex-end" as const },
     colActions: { width: 56, flexShrink: 0, display: "flex", justifyContent: "flex-end" },
