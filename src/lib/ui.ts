@@ -126,6 +126,10 @@ export function makeStyles(t: Theme) {
     hero: { padding: "36px 24px 28px", borderBottom: `1px solid ${t.border}` },
     heroEyebrow: { fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: t.mutedSoft, marginBottom: 8 },
     heroTitle: { fontSize: 34, fontWeight: 800, letterSpacing: -1, color: t.ink, margin: "0 0 24px" },
+    // Heading on the left, stats truly centered on the row (not just
+    // centered in the leftover space) via a mirrored 1fr/auto/1fr grid.
+    heroInlineRow: { display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center" as const, columnGap: 24 },
+    heroInlineTitle: { fontSize: 34, fontWeight: 800, letterSpacing: -1, color: t.ink, margin: 0 },
     heroStatsRow: { display: "flex", gap: 0, flexWrap: "wrap" as const },
     heroStat: { paddingRight: 36, marginRight: 36, borderRight: `1px solid ${t.border}` },
     heroStatValue: {
@@ -272,7 +276,7 @@ export function makeStyles(t: Theme) {
     // Send-Outs row: Date, Candidate, Company, Status, Role, Team all share
     // one flexible column width so they read as evenly spaced.
     soCol: { flex: 1, minWidth: 0 },
-    soStatusCol: { flex: 1, minWidth: 0, display: "flex", alignItems: "center" },
+    soStatusCol: { flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" as const },
     colActions: { width: 56, flexShrink: 0, display: "flex", justifyContent: "flex-end" },
     colRecruiter: { width: 140, flexShrink: 0 },
     colClient: { flex: 1, minWidth: 160 },

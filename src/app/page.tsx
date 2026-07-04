@@ -36,7 +36,7 @@ import {
 } from "@/lib/ui";
 import TVMode from "@/components/TVMode";
 import ReportView from "@/components/ReportView";
-import BillingsSummary from "@/components/BillingsSummary";
+import { BillingsGoalStats, BillingsTable } from "@/components/BillingsSummary";
 import LeaderboardView from "@/components/LeaderboardView";
 import SettingsModal from "@/components/SettingsModal";
 
@@ -478,43 +478,48 @@ function Dashboard({
       </header>
 
       <section style={S.hero} className="no-print">
-        <h1 style={S.heroTitle}>
-          {view === "sendouts"
-            ? "Send-Outs"
-            : view === "billings"
-              ? "Billings"
-              : view === "leaderboard"
-                ? "Leaderboard"
-                : "Production Reports"}
-        </h1>
         {view === "billings" ? (
-          <div style={{ marginTop: 16 }}>
-            <BillingsSummary billings={billings} teamNames={teamNames} monthKey={monthKey} year={monthCursorYear} goals={billingsGoals} t={t} />
+          <>
+            <div style={S.heroInlineRow}>
+              <h1 style={S.heroInlineTitle}>Billings</h1>
+              <BillingsGoalStats billings={billings} monthKey={monthKey} year={monthCursorYear} goals={billingsGoals} t={t} />
+              <div />
+            </div>
+            <div style={{ marginTop: 24 }}>
+              <BillingsTable billings={billings} teamNames={teamNames} monthKey={monthKey} year={monthCursorYear} t={t} />
+            </div>
+          </>
+        ) : view === "sendouts" ? (
+          <div style={S.heroInlineRow}>
+            <h1 style={S.heroInlineTitle}>Send-Outs</h1>
+            <div className="avid-hero-stats" style={S.heroStatsRow}>
+              <HeroStat S={S} label="Total" value={String(sendoutStats.total)} />
+              <HeroStat S={S} label="First-Time" value={String(sendoutStats.firstTimeCount)} color={t.accent} />
+              <HeroStat S={S} label="Active" value={String(sendoutStats.active)} color={STAGE_COLOR.interview} />
+              <HeroStat S={S} label="Placed" value={String(sendoutStats.placed)} color={STAGE_COLOR.placed} />
+              <HeroStat S={S} label="Declined" value={String(sendoutStats.declined)} color={t.danger} />
+            </div>
+            <div />
           </div>
         ) : (
-          <div style={S.heroStatsRow}>
-            {view === "sendouts" ? (
-              <>
-                <HeroStat S={S} label="Total" value={String(sendoutStats.total)} />
-                <HeroStat S={S} label="First-Time" value={String(sendoutStats.firstTimeCount)} color={t.accent} />
-                <HeroStat S={S} label="Active" value={String(sendoutStats.active)} color={STAGE_COLOR.interview} />
-                <HeroStat S={S} label="Placed" value={String(sendoutStats.placed)} color={STAGE_COLOR.placed} />
-                <HeroStat S={S} label="Declined" value={String(sendoutStats.declined)} color={t.danger} />
-              </>
-            ) : view === "leaderboard" ? (
-              <>
-                <HeroStat S={S} label="Send-Outs" value={String(leaderboardStats.total)} />
-                <HeroStat S={S} label="First-Time" value={String(leaderboardStats.firstTimeCount)} color={t.accent} />
-                <HeroStat S={S} label="Top This Month" value={leaderboardStats.topName} color={STAGE_COLOR.placed} />
-              </>
-            ) : (
-              <>
-                <HeroStat S={S} label="Billed YTD" value={money(reportStats.total)} color={STAGE_COLOR.placed} />
-                <HeroStat S={S} label="Deals" value={String(reportStats.deals)} />
-                <HeroStat S={S} label="Top Producer" value={reportStats.topName} color={t.accent} />
-              </>
-            )}
-          </div>
+          <>
+            <h1 style={S.heroTitle}>{view === "leaderboard" ? "Leaderboard" : "Production Reports"}</h1>
+            <div className="avid-hero-stats" style={S.heroStatsRow}>
+              {view === "leaderboard" ? (
+                <>
+                  <HeroStat S={S} label="Send-Outs" value={String(leaderboardStats.total)} />
+                  <HeroStat S={S} label="First-Time" value={String(leaderboardStats.firstTimeCount)} color={t.accent} />
+                  <HeroStat S={S} label="Top This Month" value={leaderboardStats.topName} color={STAGE_COLOR.placed} />
+                </>
+              ) : (
+                <>
+                  <HeroStat S={S} label="Billed YTD" value={money(reportStats.total)} color={STAGE_COLOR.placed} />
+                  <HeroStat S={S} label="Deals" value={String(reportStats.deals)} />
+                  <HeroStat S={S} label="Top Producer" value={reportStats.topName} color={t.accent} />
+                </>
+              )}
+            </div>
+          </>
         )}
       </section>
 
@@ -812,27 +817,37 @@ function EntryRow({
           </button>
         </div>
       </div>
-      {expanded && (
-        <ProcessExpandedPanel
-          S={S}
-          t={t}
-          entry={entry}
-          onSetStage={onSetStage}
-          onEditDate={onEditDate}
-          onRestore={onRestore}
-          onDecline={onDecline}
-          onLogMeeting={onLogMeeting}
-          onDeleteMeeting={onDeleteMeeting}
-          onDone={() => setExpanded(false)}
-        />
-      )}
+      <ProcessExpandedPanel
+        S={S}
+        t={t}
+        entry={entry}
+        expanded={expanded}
+        onSetStage={onSetStage}
+        onEditDate={onEditDate}
+        onRestore={onRestore}
+        onDecline={onDecline}
+        onLogMeeting={onLogMeeting}
+        onDeleteMeeting={onDeleteMeeting}
+        onDone={() => setExpanded(false)}
+      />
     </div>
   );
 }
 
+// Compact activity-log labels matching the office shorthand: T = Telephone,
+// F = Face-to-Face, V = Video, each with its round in parens. The Offer
+// marker (auto-logged when that stage is reached) just reads "Offer".
+const MEETING_TYPE_CODE: Record<string, string> = { Phone: "T", "Face-to-Face": "F", Video: "V" };
+function activityLabel(type: string, round: number) {
+  if (type === "Offer") return "Offer";
+  return `${MEETING_TYPE_CODE[type] ?? type[0]}(${round})`;
+}
+
 // A compact status icon standing in for the whole process — click it to
-// expand the row into the full timeline (Sent date, Interview's meeting
-// log, Offer, Placed) instead of opening a floating popover.
+// expand the row into the full timeline (Sent date, Interview's activity
+// log, Offer, Placed) instead of opening a floating popover. While in
+// Interview, it also shows the latest logged meeting (e.g. "Interview
+// T(2)") so the most recent update is visible without expanding.
 function ProcessStatusControl({
   t,
   entry,
@@ -846,6 +861,9 @@ function ProcessStatusControl({
 }) {
   const idx = Math.max(0, PIPELINE.findIndex((s) => s.key === entry.stage));
   const color = entry.declined ? t.danger : STAGE_COLOR[entry.stage];
+  const last = entry.meetingLog[entry.meetingLog.length - 1];
+  const label = entry.declined ? "Declined" : PIPELINE[idx].label;
+  const suffix = !entry.declined && entry.stage === "interview" && last ? ` ${activityLabel(last.type, last.round)}` : "";
   return (
     <button
       type="button"
@@ -863,20 +881,24 @@ function ProcessStatusControl({
       }}
     >
       <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, flexShrink: 0 }} />
-      <span style={{ fontSize: 12.5, fontWeight: 700, color }}>{entry.declined ? "Declined" : PIPELINE[idx].label}</span>
+      <span style={{ fontSize: 12.5, fontWeight: 700, color }}>
+        {label}
+        {suffix}
+      </span>
     </button>
   );
 }
 
 // The row's expanded detail: the same fixed Sent/Interview/Offer/Placed
-// tracker (centered), the meeting log underneath it while Interview is
-// active, and a Done button to collapse back down. Rendered as a normal
-// block below the row so it pushes the next row down, instead of floating
-// over the page.
+// tracker (centered), the activity log underneath it while there's
+// something to show, and a Done button to collapse back down. Always
+// mounted — the 0fr/1fr grid-rows trick (see .avid-expand) animates height
+// smoothly for both opening and closing, and never resizes the row above.
 function ProcessExpandedPanel({
   S,
   t,
   entry,
+  expanded,
   onSetStage,
   onEditDate,
   onRestore,
@@ -888,6 +910,7 @@ function ProcessExpandedPanel({
   S: Styles;
   t: Theme;
   entry: Entry;
+  expanded: boolean;
   onSetStage: (stage: Stage) => void;
   onEditDate: (stage: Stage, date: string) => void;
   onRestore: () => void;
@@ -897,53 +920,57 @@ function ProcessExpandedPanel({
   onDone: () => void;
 }) {
   return (
-    <div
-      className="avid-row-enter"
-      style={{
-        padding: "4px 22px 20px",
-        borderBottom: `1px solid ${t.border}`,
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 18,
-      }}
-    >
-      <StageProgress
-        t={t}
-        stage={entry.stage}
-        declined={entry.declined}
-        declinedReason={entry.declinedReason}
-        history={entry.stageHistory}
-        onSetStage={onSetStage}
-        onEditDate={onEditDate}
-        onRestore={onRestore}
-        onDecline={onDecline}
-        large
-      />
-      {(entry.stage === "interview" || entry.meetingLog.length > 0) && (
-        <div style={{ width: "100%", maxWidth: 380 }}>
-          <MeetingLogPanel
-            S={S}
+    <div className="avid-expand" style={{ gridTemplateRows: expanded ? "1fr" : "0fr" }}>
+      <div>
+        <div
+          style={{
+            padding: "4px 22px 20px",
+            borderBottom: `1px solid ${t.border}`,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 18,
+          }}
+        >
+          <StageProgress
             t={t}
-            key={entry.meetingLog.length}
-            entry={entry}
-            onLog={onLogMeeting}
-            onDelete={onDeleteMeeting}
+            stage={entry.stage}
+            declined={entry.declined}
+            declinedReason={entry.declinedReason}
+            history={entry.stageHistory}
+            onSetStage={onSetStage}
+            onEditDate={onEditDate}
+            onRestore={onRestore}
+            onDecline={onDecline}
+            large
           />
+          {(entry.stage === "interview" || entry.meetingLog.length > 0) && (
+            <div style={{ width: "100%", maxWidth: 380 }}>
+              <ActivityLogPanel
+                S={S}
+                t={t}
+                key={entry.meetingLog.length}
+                entry={entry}
+                onLog={onLogMeeting}
+                onDelete={onDeleteMeeting}
+              />
+            </div>
+          )}
+          <button type="button" className="avid-btn" style={{ ...S.ghostBtn, alignSelf: "flex-end" }} onClick={onDone}>
+            Done
+          </button>
         </div>
-      )}
-      <button type="button" className="avid-btn" style={{ ...S.ghostBtn, alignSelf: "flex-end" }} onClick={onDone}>
-        Done
-      </button>
+      </div>
     </div>
   );
 }
 
-// The list of logged meetings (Phone R1, then Phone R2, then Face-to-Face
-// R1, ...) plus a way to add the next one, while still in Interview. Each
-// entry can be deleted (logged by mistake); the date defaults to today and
-// only opens a picker if clicked.
-function MeetingLogPanel({
+// The activity log: every logged meeting (T(1), then T(2), then F(1), ...)
+// plus the Offer marker once that stage is reached, and a way to log the
+// next meeting while still in Interview. Each entry can be deleted (logged
+// by mistake); the date defaults to today and only opens a picker if
+// clicked.
+function ActivityLogPanel({
   S,
   t,
   entry,
@@ -956,9 +983,9 @@ function MeetingLogPanel({
   onLog: (type: string, round: number, date: string) => void;
   onDelete: (meetingId: string) => void;
 }) {
-  const last = entry.meetingLog[entry.meetingLog.length - 1];
-  const [draftType, setDraftType] = useState(last?.type || entry.interviewType || "Phone");
-  const [draftRound, setDraftRound] = useState((last?.round || entry.round || 0) + 1);
+  const lastMeeting = [...entry.meetingLog].reverse().find((m) => m.type !== "Offer");
+  const [draftType, setDraftType] = useState(lastMeeting?.type || "Phone");
+  const [draftRound, setDraftRound] = useState(lastMeeting ? lastMeeting.round + 1 : 1);
   const [draftDate, setDraftDate] = useState(todayISO());
   const canAdd = entry.stage === "interview" && !entry.declined;
 
@@ -974,10 +1001,10 @@ function MeetingLogPanel({
           marginBottom: 8,
         }}
       >
-        Meeting log
+        Activity log
       </div>
       {entry.meetingLog.length === 0 ? (
-        <div style={{ fontSize: 12, color: t.mutedSoft, marginBottom: 10 }}>No meetings logged yet.</div>
+        <div style={{ fontSize: 12, color: t.mutedSoft, marginBottom: 10 }}>Nothing logged yet.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 10 }}>
           {entry.meetingLog.map((m) => (
@@ -985,15 +1012,13 @@ function MeetingLogPanel({
               key={m.id}
               style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0" }}
             >
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: t.ink }}>
-                {m.type} · R{m.round}
-              </span>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: t.ink }}>{activityLabel(m.type, m.round)}</span>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 12, color: t.muted, fontVariantNumeric: "tabular-nums" }}>{fmtDate(m.date)}</span>
                 <button
                   type="button"
                   onClick={() => onDelete(m.id)}
-                  title="Remove this meeting"
+                  title="Remove this entry"
                   style={{ border: "none", background: "none", padding: 2, cursor: "pointer", color: t.mutedSoft, display: "flex" }}
                 >
                   <X size={12} />
@@ -1125,26 +1150,26 @@ function MeetingDatePicker({
         createPortal(
           <div
             data-meeting-date-popover
-            style={{
-              position: "fixed",
-              top: pos.top,
-              left: pos.left,
-              transform: "translateX(-50%)",
-              background: STAGE_POPOVER_BG,
-              color: STAGE_POPOVER_FG,
-              padding: 10,
-              borderRadius: 12,
-              boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
-              zIndex: 1000,
-            }}
+            style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 1000 }}
           >
-            <MiniCalendar
-              value={value}
-              onSelect={(iso) => {
-                onChange(iso);
-                setOpen(false);
+            <div
+              className="avid-pop-in"
+              style={{
+                background: STAGE_POPOVER_BG,
+                color: STAGE_POPOVER_FG,
+                padding: 10,
+                borderRadius: 12,
+                boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
               }}
-            />
+            >
+              <MiniCalendar
+                value={value}
+                onSelect={(iso) => {
+                  onChange(iso);
+                  setOpen(false);
+                }}
+              />
+            </div>
           </div>,
           document.body
         )}
@@ -1495,27 +1520,33 @@ function StageProgress({
                     typeof document !== "undefined" &&
                     createPortal(
                       <div
-                        data-stage-popover
                         style={{
                           position: "fixed",
                           top: popoverPos.top,
                           left: popoverPos.left,
                           transform: "translateX(-50%)",
-                          background: STAGE_POPOVER_BG,
-                          color: STAGE_POPOVER_FG,
-                          padding: "10px",
-                          borderRadius: 12,
-                          boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
                           zIndex: 1000,
                         }}
                       >
-                        <MiniCalendar
-                          value={lastEventDate(history, s.key)}
-                          onSelect={(iso) => {
-                            onEditDate(s.key, iso);
-                            setOpenIdx(null);
+                        <div
+                          data-stage-popover
+                          className="avid-pop-in"
+                          style={{
+                            background: STAGE_POPOVER_BG,
+                            color: STAGE_POPOVER_FG,
+                            padding: "10px",
+                            borderRadius: 12,
+                            boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
                           }}
-                        />
+                        >
+                          <MiniCalendar
+                            value={lastEventDate(history, s.key)}
+                            onSelect={(iso) => {
+                              onEditDate(s.key, iso);
+                              setOpenIdx(null);
+                            }}
+                          />
+                        </div>
                       </div>,
                       document.body
                     )}
@@ -1606,18 +1637,15 @@ function StageProgress({
             declinePos &&
             typeof document !== "undefined" &&
             createPortal(
-              <div
+              <div style={{ position: "fixed", top: declinePos.top, left: declinePos.left, transform: "translateY(-50%)", zIndex: 1000 }}>
+                <div
                 data-decline-popover
+                className="avid-pop-in"
                 style={{
-                  position: "fixed",
-                  top: declinePos.top,
-                  left: declinePos.left,
-                  transform: "translateY(-50%)",
                   background: STAGE_POPOVER_BG,
                   borderRadius: 9,
                   padding: 4,
                   boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
-                  zIndex: 1000,
                   display: "flex",
                   flexDirection: "column",
                   minWidth: 176,
@@ -1647,6 +1675,7 @@ function StageProgress({
                     {r.label}
                   </button>
                 ))}
+                </div>
               </div>,
               document.body
             )}
@@ -1674,17 +1703,8 @@ function StageProgress({
             <Ban size={large ? 18 : 14} />
           </button>
         </div>
-        {large && (
-          <span
-            style={{
-              fontSize: 13.5,
-              fontWeight: 700,
-              color: t.danger,
-              width: 62,
-              flexShrink: 0,
-              opacity: declined ? 1 : 0,
-            }}
-          >
+        {large && declined && (
+          <span style={{ fontSize: 13.5, fontWeight: 700, color: t.danger, flexShrink: 0, whiteSpace: "nowrap" }}>
             Declined
           </span>
         )}

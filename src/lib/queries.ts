@@ -44,13 +44,11 @@ function toEntry(row: EntryRow): Entry {
   };
 }
 
-// A brand-new or freshly-advanced entry that has reached the Interview
-// stage (or beyond) always has at least one logged meeting — seeded from
-// its current type/round — so the log is never empty while a candidate is
-// actively interviewing.
-function seedMeetingLog(stage: string, interviewType: string, round: number, date: string): MeetingLogEntry[] {
-  if (stage !== "interview" && stage !== "offer" && stage !== "placed") return [];
-  return [{ id: uid(), type: interviewType, round, date }];
+// The activity log's entries are either a logged meeting (Phone/Video/
+// Face-to-Face + round) or a stage marker like "Offer" (round unused) —
+// same shape, so both render in one chronological list.
+function activityEntry(type: string, round: number, date: string): MeetingLogEntry {
+  return { id: uid(), type, round, date };
 }
 
 function lastEventDateOf(history: StageEvent[], stage: string): string | null {
@@ -89,7 +87,9 @@ export async function createEntry(input: {
   const db = getDb();
   // The Sent date defaults to the send-out's own date — no other default.
   const history: StageEvent[] = [{ stage: input.stage as Entry["stage"], date: input.date }];
-  const meetingLog = seedMeetingLog(input.stage, input.interviewType, input.round, input.date);
+  // No meeting is logged automatically -- the user picks when they've
+  // actually held one. Created straight into Offer (rare) still marks it.
+  const meetingLog = input.stage === "offer" ? [activityEntry("Offer", 0, input.date)] : [];
   const [row] = (await db.sql`
     INSERT INTO pipeline_entries (id, date, candidate, company, role, interview_type, round, team, stage, stage_history, meeting_log, declined, declined_reason, notes, added_by, first_time)
     VALUES (
@@ -143,13 +143,13 @@ export async function updateEntry(
     history = [...history, { stage: input.stage as Entry["stage"], date: todayISO() }];
   }
 
-  // Reaching Interview (or beyond) for the first time seeds the meeting
-  // log from the current type/round, same as a brand-new entry created
-  // straight into that stage — the log is never empty while active.
-  const meetingLog =
-    (existing.meeting_log ?? []).length === 0
-      ? seedMeetingLog(input.stage, input.interviewType, input.round, lastEventDateOf(history, "interview") ?? todayISO())
-      : existing.meeting_log;
+  // Reaching Offer logs it as an activity, same as a logged meeting --
+  // Interview itself is never auto-logged, the user picks when they've
+  // actually held a meeting.
+  let meetingLog = existing.meeting_log ?? [];
+  if (input.stage === "offer" && existing.stage !== "offer") {
+    meetingLog = [...meetingLog, activityEntry("Offer", 0, lastEventDateOf(history, "offer") ?? todayISO())];
+  }
 
   const [row] = (await db.sql`
     UPDATE pipeline_entries SET
@@ -189,8 +189,8 @@ export async function setStageEventDate(
 ): Promise<Entry | null> {
   const db = getDb();
   const [existing] = (await db.sql`
-    SELECT stage, stage_history, meeting_log, interview_type, round FROM pipeline_entries WHERE id = ${id}
-  `) as { stage: string; stage_history: StageEvent[]; meeting_log: MeetingLogEntry[]; interview_type: string; round: number }[];
+    SELECT stage, stage_history, meeting_log FROM pipeline_entries WHERE id = ${id}
+  `) as { stage: string; stage_history: StageEvent[]; meeting_log: MeetingLogEntry[] }[];
   if (!existing) return null;
 
   const history = existing.stage_history ?? [];
@@ -205,10 +205,10 @@ export async function setStageEventDate(
       ? stage
       : existing.stage;
 
-  const meetingLog =
-    (existing.meeting_log ?? []).length === 0
-      ? seedMeetingLog(newStage, existing.interview_type, existing.round, lastEventDateOf(updatedHistory, "interview") ?? date)
-      : existing.meeting_log;
+  let meetingLog = existing.meeting_log ?? [];
+  if (newStage === "offer" && existing.stage !== "offer") {
+    meetingLog = [...meetingLog, activityEntry("Offer", 0, lastEventDateOf(updatedHistory, "offer") ?? date)];
+  }
 
   const [row] = (await db.sql`
     UPDATE pipeline_entries SET stage_history = ${JSON.stringify(updatedHistory)}, stage = ${newStage}, meeting_log = ${JSON.stringify(meetingLog)}

@@ -194,12 +194,49 @@ select::-ms-expand {
   animation: stagePop 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* A hero stats row's last item shouldn't reserve its divider's width —
+   otherwise the visible stats sit slightly left of true-center when the
+   row is centered as a block (the divider is invisible dead space). */
+.avid-hero-stats > *:last-child {
+  border-right: none !important;
+  margin-right: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* ---- row expand/collapse (Send-Outs process panel) ---- */
+/* The 0fr/1fr grid-rows trick animates height without measuring it in
+   JS, and keeps the panel mounted through the closing transition too. */
+.avid-expand {
+  display: grid;
+  transition: grid-template-rows 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.avid-expand > * {
+  overflow: hidden;
+}
+
+/* ---- small popovers that open from a click (calendar, etc.) ---- */
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.avid-pop-in {
+  animation: popIn 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  transform-origin: top center;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .avid-stage-active,
   .avid-stage-pop,
   .avid-row-enter,
   .avid-modal,
   .avid-overlay,
+  .avid-pop-in,
   .tv-rise,
   .tv-bar,
   .tv-progress {
@@ -209,7 +246,8 @@ select::-ms-expand {
   .avid-chip,
   .avid-row,
   .avid-stage-fill,
-  .avid-stage-dot {
+  .avid-stage-dot,
+  .avid-expand {
     transition: none !important;
   }
 }

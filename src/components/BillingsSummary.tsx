@@ -19,27 +19,23 @@ function totalCount(person: string, list: Billing[]) {
   return list.filter((b) => b.team.includes(person)).length;
 }
 
-export default function BillingsSummary({
+// The goal stat row only — split out from the table so it can sit inline
+// with the "Billings" heading instead of stacked below it.
+export function BillingsGoalStats({
   billings,
-  teamNames,
   monthKey,
   year,
   goals,
   t,
 }: {
   billings: Billing[];
-  teamNames: string[];
   monthKey: string;
   year: number;
   goals: { yearlyGoal: number | null; monthlyGoal: number | null };
   t: Theme;
 }) {
-  const S = makeStyles(t);
-
   const month = Number(monthKey.slice(5, 7));
   const monthFees = billings.filter((b) => b.date?.startsWith(monthKey));
-  // Company-wide totals are a plain sum — a team deal is counted once here,
-  // even though it also counts toward every listed person's own total.
   const ytdFees = billings.filter((b) => b.date?.startsWith(String(year)) && Number(b.date.slice(5, 7)) <= month);
   const companyMonth = monthFees.reduce((s, b) => s + b.amount, 0);
   const companyYtd = ytdFees.reduce((s, b) => s + b.amount, 0);
@@ -56,41 +52,61 @@ export default function BillingsSummary({
       : `${money(Math.abs(monthDiff))} short of goal`
     : undefined;
 
+  return (
+    <div style={{ display: "flex", gap: 32, flexWrap: "wrap" as const }}>
+      <Stat t={t} label="Monthly Avg Needed" value={monthlyAvgNeeded !== null ? money(monthlyAvgNeeded) : "—"} />
+      <Stat t={t} label="Monthly Billings" value={money(companyMonth)} color={monthColor} sub={monthSub} />
+      <Stat t={t} label="Company YTD" value={money(companyYtd)} color="#4FBF82" />
+      <Stat
+        t={t}
+        label="% to Goal"
+        value={pctToGoal !== null ? `${Math.round(pctToGoal * 100)}%` : "—"}
+        color={pctToGoal !== null ? (pctToGoal >= 1 ? "#4FBF82" : t.accent) : undefined}
+      />
+    </div>
+  );
+}
+
+// The per-recruiter MTD/YTD table only.
+export function BillingsTable({
+  billings,
+  teamNames,
+  monthKey,
+  year,
+  t,
+}: {
+  billings: Billing[];
+  teamNames: string[];
+  monthKey: string;
+  year: number;
+  t: Theme;
+}) {
+  const S = makeStyles(t);
+  const month = Number(monthKey.slice(5, 7));
+  const monthFees = billings.filter((b) => b.date?.startsWith(monthKey));
+  const ytdFees = billings.filter((b) => b.date?.startsWith(String(year)) && Number(b.date.slice(5, 7)) <= month);
+
   const cols = "repeat(5, 1fr)";
   const centered = { textAlign: "center" as const };
 
   return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "center", gap: 36, flexWrap: "wrap" as const, marginBottom: 20 }}>
-        <Stat t={t} label="Monthly Avg Needed" value={monthlyAvgNeeded !== null ? money(monthlyAvgNeeded) : "—"} />
-        <Stat t={t} label="Monthly Billings" value={money(companyMonth)} color={monthColor} sub={monthSub} />
-        <Stat t={t} label="Company YTD" value={money(companyYtd)} color="#4FBF82" />
-        <Stat
-          t={t}
-          label="% to Goal"
-          value={pctToGoal !== null ? `${Math.round(pctToGoal * 100)}%` : "—"}
-          color={pctToGoal !== null ? (pctToGoal >= 1 ? "#4FBF82" : t.accent) : undefined}
-        />
+    <div style={S.reportTableWrap}>
+      <div style={{ ...S.reportTableHeadRow, gridTemplateColumns: cols }}>
+        <div style={centered}>Recruiter</div>
+        <div style={centered}>MTD Personal</div>
+        <div style={centered}>MTD Total</div>
+        <div style={centered}>YTD Personal</div>
+        <div style={centered}>YTD Total</div>
       </div>
-
-      <div style={S.reportTableWrap}>
-        <div style={{ ...S.reportTableHeadRow, gridTemplateColumns: cols }}>
-          <div style={centered}>Recruiter</div>
-          <div style={centered}>MTD Personal</div>
-          <div style={centered}>MTD Total</div>
-          <div style={centered}>YTD Personal</div>
-          <div style={centered}>YTD Total</div>
+      {teamNames.map((name) => (
+        <div key={name} style={{ ...S.reportTableRow, gridTemplateColumns: cols }}>
+          <div style={{ ...S.reportTableCell, ...centered }}>{name}</div>
+          <MoneyCell S={S} amount={personalSum(name, monthFees)} count={personalCount(name, monthFees)} />
+          <MoneyCell S={S} amount={totalSum(name, monthFees)} count={totalCount(name, monthFees)} />
+          <MoneyCell S={S} amount={personalSum(name, ytdFees)} count={personalCount(name, ytdFees)} />
+          <MoneyCell S={S} amount={totalSum(name, ytdFees)} count={totalCount(name, ytdFees)} />
         </div>
-        {teamNames.map((name) => (
-          <div key={name} style={{ ...S.reportTableRow, gridTemplateColumns: cols }}>
-            <div style={{ ...S.reportTableCell, ...centered }}>{name}</div>
-            <MoneyCell S={S} amount={personalSum(name, monthFees)} count={personalCount(name, monthFees)} />
-            <MoneyCell S={S} amount={totalSum(name, monthFees)} count={totalCount(name, monthFees)} />
-            <MoneyCell S={S} amount={personalSum(name, ytdFees)} count={personalCount(name, ytdFees)} />
-            <MoneyCell S={S} amount={totalSum(name, ytdFees)} count={totalCount(name, ytdFees)} />
-          </div>
-        ))}
-      </div>
+      ))}
     </div>
   );
 }
