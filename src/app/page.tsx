@@ -808,11 +808,93 @@ function EntryRow({
   onLogMeeting: (type: string, round: number, date: string) => void;
   onDeleteMeeting: (meetingId: string) => void;
 }) {
-  // Status and Edit are two buttons for the exact same expansion -- either
-  // one opens/closes the same panel (tracker, activity log, and now the
-  // row's own editable fields, all together).
+  // Status and Edit are two buttons for the exact same expansion. While
+  // expanded, the row's OWN cells (Date, Candidate, Company, Role, Team)
+  // turn into editable fields in place -- not a duplicate set of fields
+  // added somewhere else. Below the row, the tracker/activity log/bottom
+  // bar are unchanged.
   const [expanded, setExpanded] = useState(false);
   const toggleExpanded = () => setExpanded((v) => !v);
+
+  const makeDraft = () => ({
+    date: entry.date,
+    candidate: entry.candidate,
+    company: entry.company,
+    role: entry.role || "",
+    team: entry.team,
+    firstTime: entry.firstTime,
+  });
+  const [draft, setDraft] = useState(makeDraft);
+  // Every time the row expands, start from the entry's current values --
+  // adjusted during render (not an effect), same pattern StageProgress uses
+  // for its pop animation below.
+  const [prevExpanded, setPrevExpanded] = useState(expanded);
+  if (expanded !== prevExpanded) {
+    setPrevExpanded(expanded);
+    if (expanded) setDraft(makeDraft());
+  }
+  const toggleTeam = (name: string) =>
+    setDraft((d) => ({ ...d, team: d.team.includes(name) ? d.team.filter((n) => n !== name) : [...d.team, name] }));
+  const canSave = Boolean(draft.candidate.trim() && draft.company.trim() && draft.date);
+  const handleSave = () => {
+    onSaveEntry({ ...entry, ...draft, role: draft.role || null });
+    setExpanded(false);
+  };
+
+  const dateField = (
+    <input
+      type="date"
+      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5 }}
+      value={draft.date}
+      onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
+    />
+  );
+  const candidateField = (
+    <input
+      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 13.5, fontWeight: 600 }}
+      value={draft.candidate}
+      placeholder="Full name"
+      onChange={(e) => setDraft((d) => ({ ...d, candidate: e.target.value }))}
+    />
+  );
+  const companyField = (
+    <input
+      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5 }}
+      value={draft.company}
+      placeholder="Client company"
+      onChange={(e) => setDraft((d) => ({ ...d, company: e.target.value }))}
+    />
+  );
+  const roleField = (
+    <input
+      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5 }}
+      value={draft.role}
+      placeholder="e.g. Account Manager"
+      onChange={(e) => setDraft((d) => ({ ...d, role: e.target.value }))}
+    />
+  );
+  const teamField = (
+    <div style={{ ...S.chipRow, gap: 5 }}>
+      {teamNames.map((name) => (
+        <button
+          type="button"
+          key={name}
+          className="avid-chip"
+          onClick={() => toggleTeam(name)}
+          style={{
+            ...S.chip,
+            padding: "3px 10px",
+            fontSize: 11.5,
+            borderColor: t.accent,
+            color: draft.team.includes(name) ? "#fff" : t.accent,
+            background: draft.team.includes(name) ? t.accent : "transparent",
+          }}
+        >
+          {name}
+        </button>
+      ))}
+    </div>
+  );
 
   if (mobile) {
     // Phone layout: a stacked card — the 7-column grid can't fit a phone.
@@ -828,13 +910,27 @@ function EntryRow({
             gap: 10,
           }}
         >
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-            <div style={S.cardPrimary}>{entry.candidate}</div>
-            <div style={{ ...S.cardSub, marginTop: 0, whiteSpace: "nowrap" }}>{fmtDate(entry.date)}</div>
-          </div>
-          <div style={{ ...S.cardSub, marginTop: 0 }}>
-            {[entry.company, entry.role, (entry.team || []).join(", ")].filter(Boolean).join(" · ")}
-          </div>
+          {expanded ? (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {candidateField}
+                {dateField}
+              </div>
+              {companyField}
+              {roleField}
+              {teamField}
+            </>
+          ) : (
+            <>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+                <div style={S.cardPrimary}>{entry.candidate}</div>
+                <div style={{ ...S.cardSub, marginTop: 0, whiteSpace: "nowrap" }}>{fmtDate(entry.date)}</div>
+              </div>
+              <div style={{ ...S.cardSub, marginTop: 0 }}>
+                {[entry.company, entry.role, (entry.team || []).join(", ")].filter(Boolean).join(" · ")}
+              </div>
+            </>
+          )}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <ProcessStatusControl t={t} entry={entry} expanded={expanded} onToggle={toggleExpanded} />
             <div style={{ display: "flex", gap: 2 }}>
@@ -852,15 +948,16 @@ function EntryRow({
           t={t}
           entry={entry}
           expanded={expanded}
-          teamNames={teamNames}
-          onSaveEntry={onSaveEntry}
+          firstTime={draft.firstTime}
+          onToggleFirstTime={(firstTime) => setDraft((d) => ({ ...d, firstTime }))}
+          canSave={canSave}
+          onSave={handleSave}
           onSetStage={onSetStage}
           onEditDate={onEditDate}
           onRestore={onRestore}
           onDecline={onDecline}
           onLogMeeting={onLogMeeting}
           onDeleteMeeting={onDeleteMeeting}
-          onDone={() => setExpanded(false)}
         />
       </div>
     );
@@ -872,23 +969,15 @@ function EntryRow({
         className="avid-row avid-row-enter"
         style={expanded ? { ...S.cardRow, ...S.soGrid, borderBottom: "none" } : { ...S.cardRow, ...S.soGrid }}
       >
-        <div style={S.soCol}>
-          <div style={S.cardSub}>{fmtDate(entry.date)}</div>
-        </div>
-        <div style={S.soCol}>
-          <div style={S.cardPrimary}>{entry.candidate}</div>
-        </div>
-        <div style={S.soCol}>
-          <div style={S.cardSub}>{entry.company}</div>
-        </div>
+        <div style={S.soCol}>{expanded ? dateField : <div style={S.cardSub}>{fmtDate(entry.date)}</div>}</div>
+        <div style={S.soCol}>{expanded ? candidateField : <div style={S.cardPrimary}>{entry.candidate}</div>}</div>
+        <div style={S.soCol}>{expanded ? companyField : <div style={S.cardSub}>{entry.company}</div>}</div>
         <div style={S.soStatusCol}>
           <ProcessStatusControl t={t} entry={entry} expanded={expanded} onToggle={toggleExpanded} />
         </div>
+        <div style={S.soCol}>{expanded ? roleField : <div style={S.cardSub}>{entry.role || "—"}</div>}</div>
         <div style={S.soCol}>
-          <div style={S.cardSub}>{entry.role || "—"}</div>
-        </div>
-        <div style={S.soCol}>
-          <div style={S.cardSub}>{(entry.team || []).join(", ") || "—"}</div>
+          {expanded ? teamField : <div style={S.cardSub}>{(entry.team || []).join(", ") || "—"}</div>}
         </div>
         <div style={S.soActionsCol}>
           <button className="avid-btn" style={S.iconGhost} onClick={toggleExpanded} title="Edit">
@@ -904,15 +993,16 @@ function EntryRow({
         t={t}
         entry={entry}
         expanded={expanded}
-        teamNames={teamNames}
-        onSaveEntry={onSaveEntry}
+        firstTime={draft.firstTime}
+        onToggleFirstTime={(firstTime) => setDraft((d) => ({ ...d, firstTime }))}
+        canSave={canSave}
+        onSave={handleSave}
         onSetStage={onSetStage}
         onEditDate={onEditDate}
         onRestore={onRestore}
         onDecline={onDecline}
         onLogMeeting={onLogMeeting}
         onDeleteMeeting={onDeleteMeeting}
-        onDone={() => setExpanded(false)}
       />
     </div>
   );
@@ -983,65 +1073,45 @@ function ProcessStatusControl({
   );
 }
 
-// The row's one shared expansion -- opened by either Status or Edit, always
-// showing everything together: the row's own fields as editable text boxes,
-// then the exact same fixed Sent/Interview/Offer/Placed tracker and activity
-// log as before (unchanged), then a bottom bar with the First-time/Repeat
-// tab at the left and Save at the right. Always mounted regardless of
-// open/closed state — the 0fr/1fr grid-rows trick (see .avid-expand)
-// animates height smoothly both ways, and never resizes the row above.
+// The row's one shared expansion -- opened by either Status or Edit. The
+// row's own fields (Date, Candidate, Company, Role, Team) become editable
+// right in their own columns above this, in place -- this panel is just the
+// unchanged Sent/Interview/Offer/Placed tracker and activity log, plus a
+// bottom bar (First-time/Repeat tab at the left, Save at the right). Always
+// mounted regardless of open/closed state — the 0fr/1fr grid-rows trick
+// (see .avid-expand) animates height smoothly both ways, and never resizes
+// the row above.
 function RowExpandedPanel({
   S,
   t,
   entry,
   expanded,
-  teamNames,
-  onSaveEntry,
+  firstTime,
+  onToggleFirstTime,
+  canSave,
+  onSave,
   onSetStage,
   onEditDate,
   onRestore,
   onDecline,
   onLogMeeting,
   onDeleteMeeting,
-  onDone,
 }: {
   S: Styles;
   t: Theme;
   entry: Entry;
   expanded: boolean;
-  teamNames: string[];
-  onSaveEntry: (entry: Entry) => void;
+  firstTime: boolean;
+  onToggleFirstTime: (firstTime: boolean) => void;
+  canSave: boolean;
+  onSave: () => void;
   onSetStage: (stage: Stage) => void;
   onEditDate: (stage: Stage, date: string) => void;
   onRestore: () => void;
   onDecline: (reason: DeclineReason) => void;
   onLogMeeting: (type: string, round: number, date: string) => void;
   onDeleteMeeting: (meetingId: string) => void;
-  onDone: () => void;
 }) {
-  const makeDraft = () => ({
-    date: entry.date,
-    candidate: entry.candidate,
-    company: entry.company,
-    role: entry.role || "",
-    team: entry.team,
-    firstTime: entry.firstTime,
-  });
-  const [draft, setDraft] = useState(makeDraft);
-  // Every time the panel opens, start from the entry's current values --
-  // otherwise a stale draft from a prior open (never saved) would resurface.
-  // Adjusted during render (not an effect) per the same pattern StageProgress
-  // uses for its pop animation below.
-  const [prevExpanded, setPrevExpanded] = useState(expanded);
-  if (expanded !== prevExpanded) {
-    setPrevExpanded(expanded);
-    if (expanded) setDraft(makeDraft());
-  }
-
-  const toggleTeam = (name: string) =>
-    setDraft((d) => ({ ...d, team: d.team.includes(name) ? d.team.filter((n) => n !== name) : [...d.team, name] }));
-  const valid = draft.candidate.trim() && draft.company.trim() && draft.date;
-
   return (
     <div className="avid-expand" style={{ gridTemplateRows: expanded ? "1fr" : "0fr" }}>
       <div>
@@ -1055,66 +1125,6 @@ function RowExpandedPanel({
             gap: 18,
           }}
         >
-          <div className="avid-form-grid" style={{ width: "100%", maxWidth: 460, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <div>
-              <div style={S.fieldLabel}>Date</div>
-              <input
-                type="date"
-                style={{ ...S.input, marginTop: 4 }}
-                value={draft.date}
-                onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
-              />
-            </div>
-            <div>
-              <div style={S.fieldLabel}>Candidate</div>
-              <input
-                style={{ ...S.input, marginTop: 4 }}
-                placeholder="Full name"
-                value={draft.candidate}
-                onChange={(e) => setDraft((d) => ({ ...d, candidate: e.target.value }))}
-              />
-            </div>
-            <div>
-              <div style={S.fieldLabel}>Company</div>
-              <input
-                style={{ ...S.input, marginTop: 4 }}
-                placeholder="Client company"
-                value={draft.company}
-                onChange={(e) => setDraft((d) => ({ ...d, company: e.target.value }))}
-              />
-            </div>
-            <div>
-              <div style={S.fieldLabel}>Role</div>
-              <input
-                style={{ ...S.input, marginTop: 4 }}
-                placeholder="e.g. Account Manager"
-                value={draft.role}
-                onChange={(e) => setDraft((d) => ({ ...d, role: e.target.value }))}
-              />
-            </div>
-          </div>
-          <div style={{ width: "100%", maxWidth: 460 }}>
-            <div style={S.fieldLabel}>Team</div>
-            <div style={{ ...S.chipRow, marginTop: 6 }}>
-              {teamNames.map((name) => (
-                <button
-                  type="button"
-                  key={name}
-                  className="avid-chip"
-                  onClick={() => toggleTeam(name)}
-                  style={{
-                    ...S.chip,
-                    borderColor: t.accent,
-                    color: draft.team.includes(name) ? "#fff" : t.accent,
-                    background: draft.team.includes(name) ? t.accent : "transparent",
-                  }}
-                >
-                  {name}
-                </button>
-              ))}
-            </div>
-          </div>
-
           <StageProgress
             t={t}
             stage={entry.stage}
@@ -1145,16 +1155,16 @@ function RowExpandedPanel({
               <button
                 type="button"
                 className="avid-btn"
-                style={draft.firstTime ? S.segBtnActive : S.segBtn}
-                onClick={() => setDraft((d) => ({ ...d, firstTime: true }))}
+                style={firstTime ? S.segBtnActive : S.segBtn}
+                onClick={() => onToggleFirstTime(true)}
               >
                 First-time
               </button>
               <button
                 type="button"
                 className="avid-btn"
-                style={!draft.firstTime ? S.segBtnActive : S.segBtn}
-                onClick={() => setDraft((d) => ({ ...d, firstTime: false }))}
+                style={!firstTime ? S.segBtnActive : S.segBtn}
+                onClick={() => onToggleFirstTime(false)}
               >
                 Repeat
               </button>
@@ -1162,12 +1172,9 @@ function RowExpandedPanel({
             <button
               type="button"
               className="avid-btn"
-              style={{ ...S.ghostBtn, opacity: valid ? 1 : 0.5 }}
-              disabled={!valid}
-              onClick={() => {
-                onSaveEntry({ ...entry, ...draft, role: draft.role || null });
-                onDone();
-              }}
+              style={{ ...S.ghostBtn, opacity: canSave ? 1 : 0.5 }}
+              disabled={!canSave}
+              onClick={onSave}
             >
               Save
             </button>
