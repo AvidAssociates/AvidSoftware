@@ -599,7 +599,9 @@ function Dashboard({
               className="avid-btn" style={S.primaryBtn}
               onClick={() => {
                 if (view === "sendouts") {
-                  setShowEntryForm(true);
+                  // Toggles the inline new-send-out row at the top of the
+                  // table -- clicking again slides it back away (cancel).
+                  setShowEntryForm((v) => !v);
                 } else {
                   setEditingBilling(null);
                   setShowBillingForm(true);
@@ -620,24 +622,36 @@ function Dashboard({
             <ReportView billings={billings} teamNames={teamNames} year={reportYear} goals={reportGoals} t={t} isDark={isDark} />
           </div>
         ) : view === "sendouts" ? (
-          filteredEntries.length === 0 ? (
-            <div style={S.empty}>
-              {entries.length === 0 ? "No send-outs yet — add the first one." : "Nothing matches these filters."}
-            </div>
-          ) : (
-            <div>
-              {!isMobile && (
-                <div style={{ ...S.cardHeaderRow, ...S.soGrid }}>
-                  <div style={S.soCol}>Date</div>
-                  <div style={S.soCol}>Candidate</div>
-                  <div style={S.soCol}>Company</div>
-                  <div style={S.soStatusCol}>Status</div>
-                  <div style={S.soCol}>Role</div>
-                  <div style={S.soCol}>Team</div>
-                  <div style={S.soActionsCol}>Actions</div>
-                </div>
-              )}
-              {filteredEntries.map((e) => (
+          <div>
+            {!isMobile && (filteredEntries.length > 0 || showEntryForm) && (
+              <div style={{ ...S.cardHeaderRow, ...S.soGrid }}>
+                <div style={S.soCol}>Date</div>
+                <div style={S.soCol}>Candidate</div>
+                <div style={S.soCol}>Company</div>
+                <div style={S.soStatusCol}>Status</div>
+                <div style={S.soCol}>Role</div>
+                <div style={S.soCol}>Team</div>
+                <div style={S.soActionsCol}>Actions</div>
+              </div>
+            )}
+            <NewEntryRow
+              S={S}
+              t={t}
+              mobile={isMobile}
+              teamNames={teamNames}
+              user={user}
+              open={showEntryForm}
+              onSave={async (entry) => {
+                await saveEntry(entry, true);
+                setShowEntryForm(false);
+              }}
+            />
+            {filteredEntries.length === 0 && !showEntryForm ? (
+              <div style={S.empty}>
+                {entries.length === 0 ? "No send-outs yet — add the first one." : "Nothing matches these filters."}
+              </div>
+            ) : (
+              filteredEntries.map((e) => (
                 <EntryRow
                   key={e.id}
                   S={S}
@@ -654,9 +668,9 @@ function Dashboard({
                   onLogMeeting={(type, round, date) => logMeeting(e, type, round, date)}
                   onDeleteMeeting={(meetingId) => deleteMeeting(e, meetingId)}
                 />
-              ))}
-            </div>
-          )
+              ))
+            )}
+          </div>
         ) : view === "leaderboard" ? (
           <div style={S.reportPad}>
             <LeaderboardView entries={monthEntries} teamNames={teamNames} t={t} />
@@ -697,20 +711,6 @@ function Dashboard({
           </div>
         )}
       </div>
-
-      {showEntryForm && (
-        <EntryForm
-          S={S}
-          t={t}
-          user={user}
-          teamNames={teamNames}
-          onClose={() => setShowEntryForm(false)}
-          onSave={async (entry) => {
-            await saveEntry(entry, true);
-            setShowEntryForm(false);
-          }}
-        />
-      )}
 
       {showBillingForm && (
         <BillingForm
@@ -988,6 +988,180 @@ function EntryRow({
         onLogMeeting={onLogMeeting}
         onDeleteMeeting={onDeleteMeeting}
       />
+    </div>
+  );
+}
+
+// The inline replacement for the old New Send-Out dialog: "+ New" slides
+// this row in at the top of the table (pushing the current top send-out
+// down), looking exactly like an existing row in edit mode -- the same
+// per-column fields with prompt placeholders, Status pre-set to Sent, and
+// the same bottom bar (First-time/Repeat tab, Save). Always mounted; the
+// 0fr/1fr grid-rows trick animates the slide both ways.
+function NewEntryRow({
+  S,
+  t,
+  mobile,
+  teamNames,
+  user,
+  open,
+  onSave,
+}: {
+  S: Styles;
+  t: Theme;
+  mobile?: boolean;
+  teamNames: string[];
+  user: string;
+  open: boolean;
+  onSave: (entry: Entry) => void;
+}) {
+  const emptyDraft = { date: "", candidate: "", company: "", role: "", team: [] as string[], firstTime: true };
+  const [draft, setDraft] = useState(emptyDraft);
+  // Fresh blank fields every time the row slides open -- adjusted during
+  // render (not an effect), same pattern as EntryRow's edit draft.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) setDraft(emptyDraft);
+  }
+  const toggleTeam = (name: string) =>
+    setDraft((d) => ({ ...d, team: d.team.includes(name) ? d.team.filter((n) => n !== name) : [...d.team, name] }));
+  const canSave = Boolean(draft.candidate.trim() && draft.company.trim() && draft.date);
+  const handleSave = () =>
+    onSave({
+      id: uid(),
+      date: draft.date,
+      candidate: draft.candidate.trim(),
+      company: draft.company.trim(),
+      role: draft.role.trim() || null,
+      interviewType: "Phone",
+      round: 1,
+      team: draft.team,
+      stage: "sent",
+      stageHistory: [],
+      meetingLog: [],
+      declined: false,
+      declinedReason: null,
+      notes: "",
+      addedBy: user,
+      createdAt: "",
+      firstTime: draft.firstTime,
+    });
+
+  const dateField = (
+    <GlassDatePicker
+      value={draft.date}
+      onChange={(iso) => setDraft((d) => ({ ...d, date: iso }))}
+      placeholder="Select Date"
+      triggerStyle={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5, textAlign: "center" }}
+    />
+  );
+  const candidateField = (
+    <input
+      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 13.5, fontWeight: 600, textAlign: "center" }}
+      value={draft.candidate}
+      placeholder="Candidate Name"
+      onChange={(e) => setDraft((d) => ({ ...d, candidate: e.target.value }))}
+    />
+  );
+  const companyField = (
+    <input
+      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5, textAlign: "center" }}
+      value={draft.company}
+      placeholder="Company Name"
+      onChange={(e) => setDraft((d) => ({ ...d, company: e.target.value }))}
+    />
+  );
+  const roleField = (
+    <input
+      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5, textAlign: "center" }}
+      value={draft.role}
+      placeholder="Role Name"
+      onChange={(e) => setDraft((d) => ({ ...d, role: e.target.value }))}
+    />
+  );
+  const teamField = <TeamMultiSelect S={S} teamNames={teamNames} selected={draft.team} onToggle={toggleTeam} />;
+  // Every new send-out starts at Sent, same as the pipeline itself.
+  const sentStatus = (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+      <span style={{ width: 10, height: 10, borderRadius: "50%", background: STAGE_COLOR.sent, flexShrink: 0 }} />
+      <span style={{ fontSize: 12.5, fontWeight: 700, color: STAGE_COLOR.sent }}>Sent</span>
+    </span>
+  );
+  const bottomBar = (
+    <div
+      style={{
+        padding: mobile ? "0 16px 14px" : "0 22px 20px",
+        borderBottom: `1px solid ${t.border}`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+      }}
+    >
+      <div style={S.segWrap}>
+        <button
+          type="button"
+          className="avid-btn"
+          style={draft.firstTime ? S.segBtnActive : S.segBtn}
+          onClick={() => setDraft((d) => ({ ...d, firstTime: true }))}
+        >
+          First-time
+        </button>
+        <button
+          type="button"
+          className="avid-btn"
+          style={!draft.firstTime ? S.segBtnActive : S.segBtn}
+          onClick={() => setDraft((d) => ({ ...d, firstTime: false }))}
+        >
+          Repeat
+        </button>
+      </div>
+      <button
+        type="button"
+        className="avid-btn"
+        style={{ ...S.ghostBtn, opacity: canSave ? 1 : 0.5 }}
+        disabled={!canSave}
+        onClick={handleSave}
+      >
+        Save
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="avid-expand" style={{ gridTemplateRows: open ? "1fr" : "0fr" }}>
+      <div>
+        {mobile ? (
+          <div
+            style={{
+              padding: "16px 16px 14px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}
+          >
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {candidateField}
+              {dateField}
+            </div>
+            {companyField}
+            {roleField}
+            {teamField}
+            {sentStatus}
+          </div>
+        ) : (
+          <div style={{ ...S.cardRow, ...S.soGrid, borderBottom: "none" }}>
+            <div style={S.soCol}>{dateField}</div>
+            <div style={S.soCol}>{candidateField}</div>
+            <div style={S.soCol}>{companyField}</div>
+            <div style={S.soStatusCol}>{sentStatus}</div>
+            <div style={S.soCol}>{roleField}</div>
+            <div style={S.soCol}>{teamField}</div>
+            <div style={S.soActionsCol} />
+          </div>
+        )}
+        {bottomBar}
+      </div>
     </div>
   );
 }
@@ -1500,7 +1674,7 @@ function TeamMultiSelect({
   onToggle: (name: string) => void;
 }) {
   const { open, setOpen, pos, btnRef } = useGlassPopover("data-team-popover", 210, teamNames.length * 42 + 16);
-  const label = selected.length ? selected.join("/") : "Select team";
+  const label = selected.length ? selected.join("/") : "Select Team";
 
   return (
     <>
@@ -2133,155 +2307,6 @@ function StageProgress({
             Declined
           </span>
         )}
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
-function EntryForm({
-  S,
-  t,
-  user,
-  teamNames,
-  onClose,
-  onSave,
-}: {
-  S: Styles;
-  t: Theme;
-  user: string;
-  teamNames: string[];
-  onClose: () => void;
-  onSave: (entry: Entry) => void;
-}) {
-  const [form, setForm] = useState<Entry>({
-    id: uid(),
-    date: todayISO(),
-    candidate: "",
-    company: "",
-    role: "",
-    interviewType: "Phone",
-    round: 1,
-    team: [user],
-    stage: "sent",
-    stageHistory: [],
-    meetingLog: [],
-    declined: false,
-    declinedReason: null,
-    notes: "",
-    addedBy: user,
-    createdAt: "",
-    firstTime: true,
-  });
-
-  const toggleTeam = (name: string) => {
-    setForm((f) => {
-      const has = f.team.includes(name);
-      return { ...f, team: has ? f.team.filter((n) => n !== name) : [...f.team, name] };
-    });
-  };
-  const set =
-    (k: "date" | "candidate" | "company" | "role" | "interviewType" | "notes") =>
-    (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
-      setForm((f) => ({ ...f, [k]: e.target.value }));
-  const valid = form.candidate.trim() && form.company.trim() && form.date;
-
-  return (
-    <div className="avid-overlay" style={S.modalOverlay} onClick={onClose}>
-      <div className="avid-modal" style={S.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={S.modalHeader}>
-          <div style={S.modalTitle}>New send-out</div>
-          <button className="avid-btn" style={S.iconGhost} onClick={onClose}>
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="avid-form-grid" style={S.formGrid}>
-          <Field S={S} label="Date">
-            <GlassDatePicker
-              value={form.date}
-              onChange={(iso) => setForm((f) => ({ ...f, date: iso }))}
-              triggerStyle={{ ...S.input, textAlign: "left" }}
-            />
-          </Field>
-          <Field S={S} label="Candidate">
-            <input style={S.input} placeholder="Full name" value={form.candidate} onChange={set("candidate")} />
-          </Field>
-          <Field S={S} label="Company">
-            <input style={S.input} placeholder="Client company" value={form.company} onChange={set("company")} />
-          </Field>
-          <Field S={S} label="Role">
-            <input style={S.input} placeholder="e.g. Account Manager" value={form.role || ""} onChange={set("role")} />
-          </Field>
-          <Field S={S} label="Interview type">
-            <GlassSelect
-              value={form.interviewType}
-              options={INTERVIEW_TYPES}
-              onChange={(tp) => setForm((f) => ({ ...f, interviewType: tp }))}
-              triggerStyle={{ ...S.input, textAlign: "left" }}
-            />
-          </Field>
-          <Field S={S} label="Round">
-            <input
-              type="number"
-              min="1"
-              style={S.input}
-              value={form.round}
-              onChange={(e) => setForm((f) => ({ ...f, round: Number(e.target.value) }))}
-            />
-          </Field>
-          <Field S={S} label="Business type">
-            <div style={S.segWrap}>
-              <button
-                type="button"
-                className="avid-btn"
-                style={form.firstTime ? S.segBtnActive : S.segBtn}
-                onClick={() => setForm((f) => ({ ...f, firstTime: true }))}
-              >
-                First-time
-              </button>
-              <button
-                type="button"
-                className="avid-btn"
-                style={!form.firstTime ? S.segBtnActive : S.segBtn}
-                onClick={() => setForm((f) => ({ ...f, firstTime: false }))}
-              >
-                Repeat
-              </button>
-            </div>
-          </Field>
-          <Field S={S} label="Team" full>
-            <TeamMultiSelect S={S} teamNames={teamNames} selected={form.team} onToggle={toggleTeam} />
-          </Field>
-          <Field S={S} label="Progress" full>
-            <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "4px 0" }}>
-              <StageProgress
-                t={t}
-                stage={form.stage}
-                declined={form.declined}
-                onSetStage={(stage) => setForm((f) => ({ ...f, stage, declined: false }))}
-                onToggleDeclined={() => setForm((f) => ({ ...f, declined: !f.declined }))}
-              />
-            </div>
-          </Field>
-          <Field S={S} label="Notes" full>
-            <textarea
-              style={{ ...S.input, minHeight: 60, fontFamily: "inherit", resize: "vertical" }}
-              placeholder="Optional context…"
-              value={form.notes || ""}
-              onChange={set("notes")}
-            />
-          </Field>
-        </div>
-
-        <div style={S.modalFooter}>
-          <button className="avid-btn" style={S.ghostBtn} onClick={onClose}>
-            Cancel
-          </button>
-          <button className="avid-btn" style={{ ...S.primaryBtn, opacity: valid ? 1 : 0.5 }} disabled={!valid} onClick={() => onSave(form)}>
-            Log send-out
-          </button>
-        </div>
       </div>
     </div>
   );
