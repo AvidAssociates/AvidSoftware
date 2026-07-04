@@ -150,19 +150,31 @@ export async function updateEntry(
 
   const newStageDate = input.stageDate || todayISO();
   let history = existing.stage_history ?? [];
-  if (input.stage !== existing.stage && !history.some((h) => h.stage === input.stage)) {
-    history = [...history, { stage: input.stage as Entry["stage"], date: newStageDate }];
+  // Insert-or-update, same as setStageEventDate below: if this send-out had
+  // already reached this stage before (e.g. it was advanced to Offer, moved
+  // back to Interview, and is now being advanced to Offer again), re-arriving
+  // at it just now should re-stamp today's date, not silently keep whatever
+  // date was recorded the first time. The old "only append if missing" guard
+  // left stale dates in place on a re-arrival, which then leaked into the
+  // activity log below via lastEventDateOf.
+  if (input.stage !== existing.stage) {
+    const idx = history.map((h) => h.stage).lastIndexOf(input.stage as Entry["stage"]);
+    history =
+      idx === -1
+        ? [...history, { stage: input.stage as Entry["stage"], date: newStageDate }]
+        : history.map((h, i) => (i === idx ? { ...h, date: newStageDate } : h));
   }
 
   // Reaching Offer or Placed logs it as an activity, same as a logged
   // meeting -- Interview itself is never auto-logged, the user picks when
-  // they've actually held a meeting.
+  // they've actually held a meeting. Uses newStageDate directly (not a
+  // history lookup) so it can't inherit a stale date from a prior visit.
   let meetingLog = existing.meeting_log ?? [];
   if (input.stage === "offer" && existing.stage !== "offer") {
-    meetingLog = [...meetingLog, activityEntry("Offer", 0, lastEventDateOf(history, "offer") ?? newStageDate)];
+    meetingLog = [...meetingLog, activityEntry("Offer", 0, newStageDate)];
   }
   if (input.stage === "placed" && existing.stage !== "placed") {
-    meetingLog = [...meetingLog, activityEntry("Placed", 0, lastEventDateOf(history, "placed") ?? newStageDate)];
+    meetingLog = [...meetingLog, activityEntry("Placed", 0, newStageDate)];
   }
 
   const [row] = (await db.sql`
