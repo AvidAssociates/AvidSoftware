@@ -1073,9 +1073,9 @@ function ActivityLogPanel({
   );
 }
 
-// A small date field that shows a plain value (defaulting to today) and
-// only opens a calendar to change it when clicked — no always-open date
-// input taking up space.
+// A native date field, so the browser brings up its own calendar picker
+// (the same Apple one the New Send-Out form gets) — it still shows just
+// the value until clicked.
 function MeetingDatePicker({
   t,
   value,
@@ -1085,103 +1085,26 @@ function MeetingDatePicker({
   value: string;
   onChange: (iso: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-  const btnRef = useRef<HTMLButtonElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (e: MouseEvent) => {
-      if (!(e.target instanceof Element) || !e.target.closest("[data-meeting-date-popover]")) setOpen(false);
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect -- measures real DOM
-       layout (getBoundingClientRect), which is only available in an effect */
-    if (!open) {
-      setPos(null);
-      return;
-    }
-    const place = () => {
-      const el = btnRef.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      const width = 224;
-      const left = Math.min(Math.max(rect.left + rect.width / 2, width / 2 + 8), window.innerWidth - width / 2 - 8);
-      const top = Math.min(rect.bottom + 8, window.innerHeight - 300);
-      setPos({ top, left });
-    };
-    place();
-    /* eslint-enable react-hooks/set-state-in-effect */
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
-    return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
-    };
-  }, [open]);
-
   return (
-    <>
-      <button
-        ref={btnRef}
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        title="Click to change date"
-        style={{
-          border: `1px solid ${t.border}`,
-          borderRadius: 8,
-          background: t.surfaceAlt,
-          color: t.ink,
-          fontSize: 12.5,
-          fontFamily: FONT,
-          padding: "7px 9px",
-          cursor: "pointer",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {fmtDate(value)}
-      </button>
-      {open &&
-        pos &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            data-meeting-date-popover
-            style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 1000 }}
-          >
-            <div
-              className="avid-pop-in"
-              style={{
-                background: STAGE_POPOVER_BG,
-                color: STAGE_POPOVER_FG,
-                padding: 10,
-                borderRadius: 12,
-                boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
-              }}
-            >
-              <MiniCalendar
-                value={value}
-                onSelect={(iso) => {
-                  onChange(iso);
-                  setOpen(false);
-                }}
-              />
-            </div>
-          </div>,
-          document.body
-        )}
-    </>
+    <input
+      type="date"
+      value={value}
+      title="Click to change date"
+      onChange={(e) => {
+        if (e.target.value) onChange(e.target.value);
+      }}
+      style={{
+        border: `1px solid ${t.border}`,
+        borderRadius: 8,
+        background: t.surfaceAlt,
+        color: t.ink,
+        fontSize: 12.5,
+        fontFamily: FONT,
+        padding: "6px 9px",
+        cursor: "pointer",
+        whiteSpace: "nowrap",
+      }}
+    />
   );
 }
 
