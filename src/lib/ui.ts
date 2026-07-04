@@ -273,12 +273,14 @@ export function makeStyles(t: Theme) {
       padding: "18px 22px",
       borderBottom: `1px solid ${t.border}`,
     },
-    // Send-Outs row: 7 equal columns -- Date, Candidate, Company, then
-    // Status sized to its own content dead center, then Role, Team,
-    // Actions -- so every column (Actions included) is the same width, and
-    // Status sits exactly on the row's true center (3 equal columns flank
-    // it on each side), lined up with the month picker above.
-    soGrid: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto 1fr 1fr 1fr", alignItems: "center" as const },
+    // Send-Outs row: Status is an auto track sized to its own content, kept
+    // dead center by giving the three columns on each side equal *combined*
+    // fr weight (0.6+1.3+1.3 = 1.5+0.9+0.8 = 3.2), so it still lines up
+    // exactly under the month picker above. Within each side, weights are
+    // tuned to each column's real content -- Company/Role can run long,
+    // Date/Team/Actions are almost always short -- so short values don't
+    // leave a big dead gap before the next column starts.
+    soGrid: { display: "grid", gridTemplateColumns: "0.6fr 1.3fr 1.3fr auto 1.5fr 0.9fr 0.8fr", alignItems: "center" as const },
     soCol: { minWidth: 0 },
     // Padding (not just the grid gap) so Status always has real breathing
     // room on both sides -- an "auto" track hugs its own content tightly,
