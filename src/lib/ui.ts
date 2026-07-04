@@ -269,10 +269,10 @@ export function makeStyles(t: Theme) {
       padding: "18px 22px",
       borderBottom: `1px solid ${t.border}`,
     },
-    colCandidate: { width: 220, flexShrink: 0 },
-    colMeetingType: { width: 130, flexShrink: 0 },
-    colStatus: { width: 150, flexShrink: 0, display: "flex", alignItems: "center" },
-    colTeam: { width: 150, flexShrink: 0 },
+    // Send-Outs row: Date, Candidate, Company, Status, Role, Team all share
+    // one flexible column width so they read as evenly spaced.
+    soCol: { flex: 1, minWidth: 0 },
+    soStatusCol: { flex: 1, minWidth: 0, display: "flex", alignItems: "center" },
     colActions: { width: 56, flexShrink: 0, display: "flex", justifyContent: "flex-end" },
     colRecruiter: { width: 140, flexShrink: 0 },
     colClient: { flex: 1, minWidth: 160 },
@@ -280,7 +280,6 @@ export function makeStyles(t: Theme) {
     colDate: { width: 90, flexShrink: 0 },
     cardPrimary: { fontSize: 14.5, fontWeight: 600, color: t.ink },
     cardSub: { fontSize: 12.5, color: t.muted, marginTop: 3, fontWeight: 500 },
-    cardSubDim: { color: t.mutedSoft },
     amountText: { fontSize: 15, fontWeight: 700, color: t.ink, fontVariantNumeric: "tabular-nums" as const },
 
     empty: { padding: "48px 20px", textAlign: "center" as const, color: t.mutedSoft, fontSize: 14 },

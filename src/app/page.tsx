@@ -584,11 +584,12 @@ function Dashboard({
           ) : (
             <div>
               <div style={S.cardHeaderRow}>
-                <div style={S.colCandidate}>Candidate</div>
-                <div style={S.colMeetingType}>Type</div>
-                <div style={S.colStatus}>Status</div>
-                <div style={S.colTeam}>Team</div>
-                <div style={S.colDate}>Date</div>
+                <div style={S.soCol}>Date</div>
+                <div style={S.soCol}>Candidate</div>
+                <div style={S.soCol}>Company</div>
+                <div style={S.soCol}>Status</div>
+                <div style={S.soCol}>Role</div>
+                <div style={S.soCol}>Team</div>
                 <div style={S.colActions} />
               </div>
               {filteredEntries.map((e) => (
@@ -755,18 +756,18 @@ function EntryRow({
   onDecline: (reason: DeclineReason) => void;
   onLogMeeting: (type: string, round: number, date: string) => void;
 }) {
-  const lastMeeting = entry.meetingLog[entry.meetingLog.length - 1];
   return (
     <div className="avid-row avid-row-enter" style={S.cardRow}>
-      <div style={S.colCandidate}>
+      <div style={S.soCol}>
+        <div style={S.cardSub}>{fmtDate(entry.date)}</div>
+      </div>
+      <div style={S.soCol}>
         <div style={S.cardPrimary}>{entry.candidate}</div>
+      </div>
+      <div style={S.soCol}>
         <div style={S.cardSub}>{entry.company}</div>
-        <div style={{ ...S.cardSub, ...S.cardSubDim }}>{entry.role || "—"}</div>
       </div>
-      <div style={S.colMeetingType}>
-        <div style={S.cardSub}>{lastMeeting ? `${lastMeeting.type} · R${lastMeeting.round}` : "—"}</div>
-      </div>
-      <div style={S.colStatus}>
+      <div style={S.soStatusCol}>
         <ProcessStatusControl
           t={t}
           entry={entry}
@@ -777,11 +778,11 @@ function EntryRow({
           onLogMeeting={onLogMeeting}
         />
       </div>
-      <div style={S.colTeam}>
-        <div style={S.cardSub}>{(entry.team || []).join(", ") || "—"}</div>
+      <div style={S.soCol}>
+        <div style={S.cardSub}>{entry.role || "—"}</div>
       </div>
-      <div style={S.colDate}>
-        <div style={S.cardSub}>{fmtDate(entry.date)}</div>
+      <div style={S.soCol}>
+        <div style={S.cardSub}>{(entry.team || []).join(", ") || "—"}</div>
       </div>
       <div style={S.colActions}>
         <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
