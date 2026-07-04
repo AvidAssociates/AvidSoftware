@@ -273,12 +273,15 @@ export function makeStyles(t: Theme) {
       padding: "18px 22px",
       borderBottom: `1px solid ${t.border}`,
     },
-    // Send-Outs row: 7 symmetric tracks -- 3 equal columns (Date, Candidate,
-    // Company), Status sized to its own content dead center, then 3 more
-    // equal columns (Role, Team, Actions) -- so Status always sits at the
-    // row's true center, matching the month picker above, no matter how
-    // wide its content gets.
-    soGrid: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto 1fr 1fr 1fr", alignItems: "center" as const },
+    // Send-Outs row: a matching 56px spacer on the far left balances the
+    // Actions column on the far right, so the middle 1fr/auto/1fr block
+    // (Date-Candidate-Company | Status | Role-Team) is exactly as wide on
+    // each side -- Status sits dead center, lined up with the month picker
+    // above, no matter how wide its content gets. Actions gets its own
+    // compact column instead of sharing width with a data column.
+    soGrid: { display: "grid", gridTemplateColumns: "56px 1fr auto 1fr 56px", alignItems: "center" as const },
+    soGroupLeft: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, minWidth: 0 },
+    soGroupRight: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, minWidth: 0 },
     soCol: { minWidth: 0 },
     soStatusCol: { minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" as const },
     soActionsCol: { minWidth: 0, display: "flex", justifyContent: "flex-end" as const },
