@@ -81,16 +81,19 @@ select::-ms-expand {
   background-color: rgba(140, 146, 240, 0.05);
 }
 
+/* The app-wide "you can click me" cue: anything interactive grows a touch
+   and brightens on hover -- bold enough to notice, small enough to stay
+   serious -- then compresses slightly on press. */
 .avid-btn {
-  transition: filter 0.15s ease, transform 0.12s ease, opacity 0.15s ease,
-    background-color 0.15s ease, color 0.15s ease;
+  transition: filter 0.15s ease, transform 0.15s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease;
 }
 .avid-btn:hover:not(:disabled) {
   filter: brightness(1.15);
-  transform: translateY(-1px);
+  transform: translateY(-1px) scale(1.04);
 }
 .avid-btn:active:not(:disabled) {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.98);
   filter: brightness(0.96);
 }
 
@@ -104,11 +107,16 @@ select::-ms-expand {
 
 .avid-cal-day,
 .avid-cal-nav {
-  transition: background-color 0.12s ease;
+  transition: background-color 0.12s ease, transform 0.15s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .avid-cal-day:hover,
 .avid-cal-nav:hover {
   background-color: rgba(255, 255, 255, 0.12);
+  transform: scale(1.18);
+}
+.avid-cal-day:active,
+.avid-cal-nav:active {
+  transform: scale(1);
 }
 
 @keyframes overlayIn {
@@ -155,22 +163,12 @@ select::-ms-expand {
   transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1),
     background-color 0.35s ease;
 }
+/* No halo/pulse shadows on the dots -- the click affordance is the
+   pronounced hover growth (driven inline via hoverIdx), not a glow. */
 .avid-stage-dot {
   transition: background-color 0.32s cubic-bezier(0.16, 1, 0.3, 1),
-    border-color 0.32s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s ease,
-    box-shadow 0.25s ease;
-}
-@keyframes stagePulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 var(--pulse-color, transparent);
-  }
-  50% {
-    box-shadow: 0 0 0 9px transparent;
-  }
-}
-.avid-stage-active {
-  animation: stagePulse 2.2s ease-in-out infinite;
+    border-color 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.18s cubic-bezier(0.32, 0.72, 0, 1);
 }
 @keyframes stagePop {
   0% {
@@ -315,7 +313,6 @@ select::-ms-expand {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .avid-stage-active,
   .avid-stage-pop,
   .avid-row-enter,
   .avid-modal,

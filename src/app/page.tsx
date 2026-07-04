@@ -1220,6 +1220,7 @@ function ProcessStatusControl({
   return (
     <button
       type="button"
+      className="avid-btn"
       onClick={onToggle}
       title={expanded ? "Hide process" : "View process"}
       style={{
@@ -1417,6 +1418,7 @@ function ActivityLogPanel({
                 <span style={{ fontSize: 12, color: t.muted, fontVariantNumeric: "tabular-nums" }}>{fmtDate(m.date)}</span>
                 <button
                   type="button"
+                  className="avid-btn"
                   onClick={() => onDelete(m.id)}
                   title="Remove this entry"
                   style={{ border: "none", background: "none", padding: 2, cursor: "pointer", color: t.mutedSoft, display: "flex" }}
@@ -1574,6 +1576,7 @@ function GlassSelect({
         ref={btnRef}
         type="button"
         data-glass-select
+        className="avid-btn"
         onClick={() => setOpen((v) => !v)}
         style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontFamily: FONT, ...triggerStyle }}
       >
@@ -1640,6 +1643,7 @@ function GlassDatePicker({
         ref={btnRef}
         type="button"
         data-glass-date
+        className="avid-btn"
         title="Click to change date"
         onClick={() => setOpen((v) => !v)}
         style={{ cursor: "pointer", whiteSpace: "nowrap", fontFamily: FONT, ...triggerStyle }}
@@ -1693,6 +1697,7 @@ function TeamMultiSelect({
         ref={btnRef}
         type="button"
         data-team-popover
+        className="avid-btn"
         onClick={() => setOpen((v) => !v)}
         style={{
           ...S.input,
@@ -2122,7 +2127,6 @@ function StageProgress({
           />
           <div style={{ position: "relative", display: "flex", justifyContent: "space-between" }}>
             {PIPELINE.map((s, i) => {
-              const isActive = i === idx && !declined;
               return (
                 <div
                   key={`dot-${i}`}
@@ -2194,21 +2198,17 @@ function StageProgress({
                       onSetStage?.(s.key);
                     }}
                     title={s.label}
-                    className={`avid-stage-dot${poppedIdx === i ? " avid-stage-pop" : ""}${large && isActive ? " avid-stage-active" : ""}`}
-                    style={
-                      {
-                        width: dotSize,
-                        height: dotSize,
-                        borderRadius: "50%",
-                        border: `2px solid ${declined ? t.trackBg : i <= idx ? color : t.trackBg}`,
-                        background: declined ? t.surface : i <= idx ? color : t.surface,
-                        cursor: "pointer",
-                        padding: 0,
-                        boxShadow: large && isActive ? `0 0 0 5px ${color}22` : "none",
-                        transform: hoverIdx === i ? "scale(1.15)" : "scale(1)",
-                        "--pulse-color": `${color}40`,
-                      } as React.CSSProperties
-                    }
+                    className={`avid-stage-dot${poppedIdx === i ? " avid-stage-pop" : ""}`}
+                    style={{
+                      width: dotSize,
+                      height: dotSize,
+                      borderRadius: "50%",
+                      border: `2px solid ${declined ? t.trackBg : i <= idx ? color : t.trackBg}`,
+                      background: declined ? t.surface : i <= idx ? color : t.surface,
+                      cursor: "pointer",
+                      padding: 0,
+                      transform: hoverIdx === i ? "scale(1.45)" : "scale(1)",
+                    }}
                   />
                 </div>
               );
@@ -2291,6 +2291,7 @@ function StageProgress({
             )}
           <button
             ref={declineBtnRef}
+            className="avid-btn"
             onClick={() => {
               if (declined) {
                 if (onRestore) onRestore();
