@@ -874,25 +874,24 @@ function EntryRow({
     />
   );
   const teamField = (
-    <div style={{ ...S.chipRow, gap: 5 }}>
-      {teamNames.map((name) => (
-        <button
-          type="button"
-          key={name}
-          className="avid-chip"
-          onClick={() => toggleTeam(name)}
-          style={{
-            ...S.chip,
-            padding: "3px 10px",
-            fontSize: 11.5,
-            borderColor: t.accent,
-            color: draft.team.includes(name) ? "#fff" : t.accent,
-            background: draft.team.includes(name) ? t.accent : "transparent",
-          }}
-        >
-          {name}
-        </button>
-      ))}
+    <div style={{ display: "flex", justifyContent: "center" }}>
+      <div style={{ ...S.segWrap, flexWrap: "wrap" as const }}>
+        {teamNames.map((name) => (
+          <button
+            type="button"
+            key={name}
+            className="avid-btn"
+            onClick={() => toggleTeam(name)}
+            style={{
+              ...(draft.team.includes(name) ? S.segBtnActive : S.segBtn),
+              padding: "5px 11px",
+              fontSize: 11.5,
+            }}
+          >
+            {name}
+          </button>
+        ))}
+      </div>
     </div>
   );
 
@@ -927,7 +926,7 @@ function EntryRow({
                 <div style={{ ...S.cardSub, marginTop: 0, whiteSpace: "nowrap" }}>{fmtDate(entry.date)}</div>
               </div>
               <div style={{ ...S.cardSub, marginTop: 0 }}>
-                {[entry.company, entry.role, (entry.team || []).join(", ")].filter(Boolean).join(" · ")}
+                {[entry.company, entry.role, (entry.team || []).join("/")].filter(Boolean).join(" · ")}
               </div>
             </>
           )}
@@ -977,7 +976,7 @@ function EntryRow({
         </div>
         <div style={S.soCol}>{expanded ? roleField : <div style={S.cardSub}>{entry.role || "—"}</div>}</div>
         <div style={S.soCol}>
-          {expanded ? teamField : <div style={S.cardSub}>{(entry.team || []).join(", ") || "—"}</div>}
+          {expanded ? teamField : <div style={S.cardSub}>{(entry.team || []).join("/") || "—"}</div>}
         </div>
         <div style={S.soActionsCol}>
           <button className="avid-btn" style={S.iconGhost} onClick={toggleExpanded} title="Edit">
