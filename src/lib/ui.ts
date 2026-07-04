@@ -296,8 +296,15 @@ export function makeStyles(t: Theme) {
     // line stays left-aligned (ragged right), same as any ordinary table.
     soCol: { minWidth: 0, textAlign: "left" as const },
     soStatusCol: { minWidth: 0, textAlign: "left" as const },
-    // Actions hug the row's right edge, mirroring Date at the left edge.
-    soActionsCol: { minWidth: 0, display: "flex", justifyContent: "flex-end" as const },
+    // Actions is left-aligned like every other column -- its icons start at
+    // the column's left edge, NOT jammed against the row's right edge.
+    // Right-aligning it (the obvious "actions on the right" instinct) is
+    // exactly what made Team look marooned: every other column's content
+    // sits at its column-left, so a right-anchored Actions put a whole
+    // extra column-width of empty space between Team's text and the icons.
+    // Left-aligning it puts the Team->Actions gap on the same even cadence
+    // as Date->Candidate.
+    soActionsCol: { minWidth: 0, display: "flex", justifyContent: "flex-start" as const },
     colActions: { width: 56, flexShrink: 0, display: "flex", justifyContent: "flex-end" },
     colRecruiter: { width: 140, flexShrink: 0 },
     colClient: { flex: 1, minWidth: 160 },
