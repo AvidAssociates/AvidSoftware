@@ -273,19 +273,17 @@ export function makeStyles(t: Theme) {
       padding: "18px 22px",
       borderBottom: `1px solid ${t.border}`,
     },
-    // Send-Outs row: Status is an auto track sized to its own content, kept
-    // dead center by giving the three columns on each side equal *combined*
-    // fr weight (0.6+1.3+1.3 = 1.5+0.9+0.8 = 3.2), so it still lines up
-    // exactly under the month picker above. Within each side, weights are
-    // tuned to each column's real content -- Company/Role can run long,
-    // Date/Team/Actions are almost always short -- so short values don't
-    // leave a big dead gap before the next column starts.
-    soGrid: { display: "grid", gridTemplateColumns: "0.6fr 1.3fr 1.3fr auto 1.5fr 0.9fr 0.8fr", alignItems: "center" as const },
+    // Send-Outs row: two identical halves flanking a center Status track.
+    // Each half is its own 3-equal-column grid (Date/Candidate/Company on
+    // the left, Role/Team/Actions on the right), so the columns within each
+    // half are always equally spaced by construction, both halves mirror
+    // each other, and Status sits on the row's true center under the month
+    // picker. The center track's 220px minimum guarantees Role can never
+    // crowd the Status text no matter how short the status label is.
+    soGrid: { display: "grid", gridTemplateColumns: "1fr minmax(220px, auto) 1fr", alignItems: "center" as const },
+    soGroup: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", alignItems: "center" as const, gap: 20, minWidth: 0 },
     soCol: { minWidth: 0 },
-    // Padding (not just the grid gap) so Status always has real breathing
-    // room on both sides -- an "auto" track hugs its own content tightly,
-    // unlike the 1fr columns which usually have slack from shorter text.
-    soStatusCol: { minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" as const, padding: "0 32px" },
+    soStatusCol: { minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center" as const },
     soActionsCol: { minWidth: 0, display: "flex", justifyContent: "flex-end" as const },
     colActions: { width: 56, flexShrink: 0, display: "flex", justifyContent: "flex-end" },
     colRecruiter: { width: 140, flexShrink: 0 },
