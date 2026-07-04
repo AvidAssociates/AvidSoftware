@@ -1417,15 +1417,14 @@ function TeamMultiSelect({
             style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 1000 }}
           >
             <div
-              className="avid-pop-in"
+              className="avid-pop-in avid-glass-popover"
               style={{
-                background: STAGE_POPOVER_BG,
-                borderRadius: 9,
-                padding: 4,
-                boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+                borderRadius: 16,
+                padding: 6,
                 display: "flex",
                 flexDirection: "column",
-                minWidth: 176,
+                gap: 1,
+                minWidth: 180,
               }}
             >
               {teamNames.map((name) => {
@@ -1435,39 +1434,40 @@ function TeamMultiSelect({
                     key={name}
                     type="button"
                     onClick={() => onToggle(name)}
-                    className="avid-decline-option"
+                    className="avid-glass-option"
                     style={{
                       background: "transparent",
                       border: "none",
-                      color: STAGE_POPOVER_FG,
+                      color: "#F5F5F7",
                       textAlign: "left",
-                      padding: "7px 9px",
-                      fontSize: 12.5,
-                      fontWeight: 600,
-                      borderRadius: 6,
+                      padding: "8px 10px",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      borderRadius: 10,
                       cursor: "pointer",
                       whiteSpace: "nowrap",
                       display: "flex",
                       alignItems: "center",
-                      gap: 9,
+                      justifyContent: "space-between",
+                      gap: 12,
                     }}
                   >
+                    <span>{name}</span>
                     <span
                       style={{
-                        width: 15,
-                        height: 15,
-                        borderRadius: 4,
-                        border: `1.5px solid ${checked ? STAGE_POPOVER_FG : "rgba(240,237,231,0.35)"}`,
-                        background: checked ? STAGE_POPOVER_FG : "transparent",
+                        width: 18,
+                        height: 18,
+                        borderRadius: "50%",
+                        border: checked ? "none" : "1.5px solid rgba(245,245,247,0.4)",
+                        background: checked ? "#F5F5F7" : "transparent",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         flexShrink: 0,
                       }}
                     >
-                      {checked && <Check size={11} color={STAGE_POPOVER_BG} strokeWidth={3} />}
+                      {checked && <Check size={12} color="#1C1C1E" strokeWidth={3} />}
                     </span>
-                    {name}
                   </button>
                 );
               })}

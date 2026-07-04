@@ -230,6 +230,33 @@ select::-ms-expand {
   transform-origin: top center;
 }
 
+/* ---- Liquid Glass popover (Team multi-select) ---- */
+/* Frosted, translucent black -- not the app's opaque theme surface. The
+   inset highlight on top and hairline border are what read as "glass" (a
+   specular edge) rather than a flat dark panel; backdrop-filter does the
+   actual blur-through-to-content. Fixed dark look regardless of light/dark
+   theme, same rationale as the decline-menu's fixed STAGE_POPOVER colors. */
+.avid-glass-popover {
+  background: rgba(30, 30, 32, 0.7);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.5),
+    0 4px 14px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+.avid-glass-option {
+  transition: background-color 0.12s ease;
+}
+.avid-glass-option:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+.avid-glass-option:active {
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .avid-stage-active,
   .avid-stage-pop,
