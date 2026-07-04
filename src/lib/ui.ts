@@ -289,20 +289,15 @@ export function makeStyles(t: Theme) {
       alignItems: "center" as const,
       columnGap: 20,
     },
-    // Header and data both left-aligned, so a value starts directly under
-    // its header's first letter (Account Manager's "A" under Role's "R"),
-    // and the Status dot sits directly under the "S" of STATUS -- both are
-    // the first thing drawn at the column's left edge. A wrapped second
-    // line stays left-aligned (ragged right), same as any ordinary table.
-    soCol: { minWidth: 0, textAlign: "left" as const },
-    soStatusCol: { minWidth: 0, textAlign: "left" as const },
-    // Date sits flush to the row's left content edge; Actions sits flush to
-    // the right content edge -- exact mirror images. That's what makes the
-    // space before Date equal the space after Actions (both are just the
-    // row's own left/right padding), and it keeps the row visually
-    // symmetric about the centered Status. So Actions alone is
-    // right-aligned; every other column is left-aligned under its header.
-    soActionsCol: { minWidth: 0, display: "flex", justifyContent: "flex-end" as const },
+    // Every column -- header and data alike -- is center-aligned within its
+    // track, so each value is centered under its (also centered) header,
+    // and the whole row reads symmetrically. Since all 7 tracks are equal
+    // and the middle one is Status, centering keeps Status dead-center
+    // under the month picker, and each column's content is centered on its
+    // own even slot.
+    soCol: { minWidth: 0, textAlign: "center" as const },
+    soStatusCol: { minWidth: 0, textAlign: "center" as const },
+    soActionsCol: { minWidth: 0, display: "flex", justifyContent: "center" as const },
     colActions: { width: 56, flexShrink: 0, display: "flex", justifyContent: "flex-end" },
     colRecruiter: { width: 140, flexShrink: 0 },
     colClient: { flex: 1, minWidth: 160 },
