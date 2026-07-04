@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import type { ChangeEvent, CSSProperties, ReactNode } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 import {
   Plus,
   Search,
@@ -808,14 +808,11 @@ function EntryRow({
   onLogMeeting: (type: string, round: number, date: string) => void;
   onDeleteMeeting: (meetingId: string) => void;
 }) {
-  // The row has one shared expansion, not two: clicking Status shows the
-  // process tracker, clicking Edit shows editable fields, and clicking
-  // whichever one is already open collapses it. They can never both be open.
-  const [panel, setPanel] = useState<"status" | "edit" | null>(null);
-  const expanded = panel !== null;
-  const toggleStatus = () => setPanel((p) => (p === "status" ? null : "status"));
-  const toggleEdit = () => setPanel((p) => (p === "edit" ? null : "edit"));
-  const closePanel = () => setPanel(null);
+  // Status and Edit are two buttons for the exact same expansion -- either
+  // one opens/closes the same panel (tracker, activity log, and now the
+  // row's own editable fields, all together).
+  const [expanded, setExpanded] = useState(false);
+  const toggleExpanded = () => setExpanded((v) => !v);
 
   if (mobile) {
     // Phone layout: a stacked card — the 7-column grid can't fit a phone.
@@ -839,9 +836,9 @@ function EntryRow({
             {[entry.company, entry.role, (entry.team || []).join(", ")].filter(Boolean).join(" · ")}
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <ProcessStatusControl t={t} entry={entry} expanded={panel === "status"} onToggle={toggleStatus} />
+            <ProcessStatusControl t={t} entry={entry} expanded={expanded} onToggle={toggleExpanded} />
             <div style={{ display: "flex", gap: 2 }}>
-              <button className="avid-btn" style={S.iconGhost} onClick={toggleEdit} title="Edit">
+              <button className="avid-btn" style={S.iconGhost} onClick={toggleExpanded} title="Edit">
                 <Pencil size={14} />
               </button>
               <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
@@ -854,7 +851,6 @@ function EntryRow({
           S={S}
           t={t}
           entry={entry}
-          mode={panel}
           expanded={expanded}
           teamNames={teamNames}
           onSaveEntry={onSaveEntry}
@@ -864,7 +860,7 @@ function EntryRow({
           onDecline={onDecline}
           onLogMeeting={onLogMeeting}
           onDeleteMeeting={onDeleteMeeting}
-          onDone={closePanel}
+          onDone={() => setExpanded(false)}
         />
       </div>
     );
@@ -886,7 +882,7 @@ function EntryRow({
           <div style={S.cardSub}>{entry.company}</div>
         </div>
         <div style={S.soStatusCol}>
-          <ProcessStatusControl t={t} entry={entry} expanded={panel === "status"} onToggle={toggleStatus} />
+          <ProcessStatusControl t={t} entry={entry} expanded={expanded} onToggle={toggleExpanded} />
         </div>
         <div style={S.soCol}>
           <div style={S.cardSub}>{entry.role || "—"}</div>
@@ -895,7 +891,7 @@ function EntryRow({
           <div style={S.cardSub}>{(entry.team || []).join(", ") || "—"}</div>
         </div>
         <div style={S.soActionsCol}>
-          <button className="avid-btn" style={S.iconGhost} onClick={toggleEdit} title="Edit">
+          <button className="avid-btn" style={S.iconGhost} onClick={toggleExpanded} title="Edit">
             <Pencil size={14} />
           </button>
           <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
@@ -907,7 +903,6 @@ function EntryRow({
         S={S}
         t={t}
         entry={entry}
-        mode={panel}
         expanded={expanded}
         teamNames={teamNames}
         onSaveEntry={onSaveEntry}
@@ -917,7 +912,7 @@ function EntryRow({
         onDecline={onDecline}
         onLogMeeting={onLogMeeting}
         onDeleteMeeting={onDeleteMeeting}
-        onDone={closePanel}
+        onDone={() => setExpanded(false)}
       />
     </div>
   );
@@ -988,17 +983,17 @@ function ProcessStatusControl({
   );
 }
 
-// The row's shared expansion: either the fixed Sent/Interview/Offer/Placed
-// tracker + activity log (mode "status"), or the low-key inline field
-// editor (mode "edit") -- never both. Always mounted regardless of mode or
+// The row's one shared expansion -- opened by either Status or Edit, always
+// showing everything together: the row's own fields as editable text boxes,
+// then the exact same fixed Sent/Interview/Offer/Placed tracker and activity
+// log as before (unchanged), then a bottom bar with the First-time/Repeat
+// tab at the left and Save at the right. Always mounted regardless of
 // open/closed state — the 0fr/1fr grid-rows trick (see .avid-expand)
-// animates height smoothly for both opening and closing, and never resizes
-// the row above.
+// animates height smoothly both ways, and never resizes the row above.
 function RowExpandedPanel({
   S,
   t,
   entry,
-  mode,
   expanded,
   teamNames,
   onSaveEntry,
@@ -1013,7 +1008,6 @@ function RowExpandedPanel({
   S: Styles;
   t: Theme;
   entry: Entry;
-  mode: "status" | "edit" | null;
   expanded: boolean;
   teamNames: string[];
   onSaveEntry: (entry: Entry) => void;
@@ -1025,6 +1019,29 @@ function RowExpandedPanel({
   onDeleteMeeting: (meetingId: string) => void;
   onDone: () => void;
 }) {
+  const makeDraft = () => ({
+    date: entry.date,
+    candidate: entry.candidate,
+    company: entry.company,
+    role: entry.role || "",
+    team: entry.team,
+    firstTime: entry.firstTime,
+  });
+  const [draft, setDraft] = useState(makeDraft);
+  // Every time the panel opens, start from the entry's current values --
+  // otherwise a stale draft from a prior open (never saved) would resurface.
+  // Adjusted during render (not an effect) per the same pattern StageProgress
+  // uses for its pop animation below.
+  const [prevExpanded, setPrevExpanded] = useState(expanded);
+  if (expanded !== prevExpanded) {
+    setPrevExpanded(expanded);
+    if (expanded) setDraft(makeDraft());
+  }
+
+  const toggleTeam = (name: string) =>
+    setDraft((d) => ({ ...d, team: d.team.includes(name) ? d.team.filter((n) => n !== name) : [...d.team, name] }));
+  const valid = draft.candidate.trim() && draft.company.trim() && draft.date;
+
   return (
     <div className="avid-expand" style={{ gridTemplateRows: expanded ? "1fr" : "0fr" }}>
       <div>
@@ -1038,220 +1055,125 @@ function RowExpandedPanel({
             gap: 18,
           }}
         >
-          {mode === "edit" ? (
-            <EntryEditFields S={S} t={t} entry={entry} teamNames={teamNames} onSave={onSaveEntry} onDone={onDone} />
-          ) : (
-            <>
-              <StageProgress
-                t={t}
-                stage={entry.stage}
-                declined={entry.declined}
-                declinedReason={entry.declinedReason}
-                history={entry.stageHistory}
-                onSetStage={onSetStage}
-                onEditDate={onEditDate}
-                onRestore={onRestore}
-                onDecline={onDecline}
-                large
+          <div className="avid-form-grid" style={{ width: "100%", maxWidth: 460, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <div>
+              <div style={S.fieldLabel}>Date</div>
+              <input
+                type="date"
+                style={{ ...S.input, marginTop: 4 }}
+                value={draft.date}
+                onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
               />
-              {(entry.stage === "interview" || entry.meetingLog.length > 0) && (
-                <div style={{ width: "100%", maxWidth: 380 }}>
-                  <ActivityLogPanel
-                    S={S}
-                    t={t}
-                    key={entry.meetingLog.length}
-                    entry={entry}
-                    onLog={onLogMeeting}
-                    onDelete={onDeleteMeeting}
-                  />
-                </div>
-              )}
-              <button type="button" className="avid-btn" style={{ ...S.ghostBtn, alignSelf: "flex-end" }} onClick={onDone}>
-                Done
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
+            </div>
+            <div>
+              <div style={S.fieldLabel}>Candidate</div>
+              <input
+                style={{ ...S.input, marginTop: 4 }}
+                placeholder="Full name"
+                value={draft.candidate}
+                onChange={(e) => setDraft((d) => ({ ...d, candidate: e.target.value }))}
+              />
+            </div>
+            <div>
+              <div style={S.fieldLabel}>Company</div>
+              <input
+                style={{ ...S.input, marginTop: 4 }}
+                placeholder="Client company"
+                value={draft.company}
+                onChange={(e) => setDraft((d) => ({ ...d, company: e.target.value }))}
+              />
+            </div>
+            <div>
+              <div style={S.fieldLabel}>Role</div>
+              <input
+                style={{ ...S.input, marginTop: 4 }}
+                placeholder="e.g. Account Manager"
+                value={draft.role}
+                onChange={(e) => setDraft((d) => ({ ...d, role: e.target.value }))}
+              />
+            </div>
+          </div>
+          <div style={{ width: "100%", maxWidth: 460 }}>
+            <div style={S.fieldLabel}>Team</div>
+            <div style={{ ...S.chipRow, marginTop: 6 }}>
+              {teamNames.map((name) => (
+                <button
+                  type="button"
+                  key={name}
+                  className="avid-chip"
+                  onClick={() => toggleTeam(name)}
+                  style={{
+                    ...S.chip,
+                    borderColor: t.accent,
+                    color: draft.team.includes(name) ? "#fff" : t.accent,
+                    background: draft.team.includes(name) ? t.accent : "transparent",
+                  }}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          </div>
 
-// Low-key inline editor for the row's own fields (Date, Candidate, Company,
-// Role, Team, first-time/repeat) — no modal, values just look like plain
-// text until clicked. Edits are held as a local draft and only committed
-// (one PUT) when Done is clicked, matching the Status panel's Done button.
-function EntryEditFields({
-  S,
-  t,
-  entry,
-  teamNames,
-  onSave,
-  onDone,
-}: {
-  S: Styles;
-  t: Theme;
-  entry: Entry;
-  teamNames: string[];
-  onSave: (entry: Entry) => void;
-  onDone: () => void;
-}) {
-  const [draft, setDraft] = useState({
-    date: entry.date,
-    candidate: entry.candidate,
-    company: entry.company,
-    role: entry.role || "",
-    team: entry.team,
-    firstTime: entry.firstTime,
-  });
-  const toggleTeam = (name: string) =>
-    setDraft((d) => ({ ...d, team: d.team.includes(name) ? d.team.filter((n) => n !== name) : [...d.team, name] }));
-  const valid = draft.candidate.trim() && draft.company.trim() && draft.date;
-
-  return (
-    <div style={{ width: "100%", maxWidth: 460, display: "flex", flexDirection: "column", gap: 18 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <div>
-          <div style={S.fieldLabel}>Date</div>
-          <input
-            type="date"
-            value={draft.date}
-            onChange={(e) => setDraft((d) => ({ ...d, date: e.target.value }))}
-            style={inlineFieldStyle(t, S.cardSub)}
+          <StageProgress
+            t={t}
+            stage={entry.stage}
+            declined={entry.declined}
+            declinedReason={entry.declinedReason}
+            history={entry.stageHistory}
+            onSetStage={onSetStage}
+            onEditDate={onEditDate}
+            onRestore={onRestore}
+            onDecline={onDecline}
+            large
           />
-        </div>
-        <InlineField
-          t={t}
-          label="Candidate"
-          value={draft.candidate}
-          onChange={(v) => setDraft((d) => ({ ...d, candidate: v }))}
-          placeholder="Full name"
-          textStyle={S.cardPrimary}
-          fieldLabelStyle={S.fieldLabel}
-        />
-        <InlineField
-          t={t}
-          label="Company"
-          value={draft.company}
-          onChange={(v) => setDraft((d) => ({ ...d, company: v }))}
-          placeholder="Client company"
-          textStyle={S.cardSub}
-          fieldLabelStyle={S.fieldLabel}
-        />
-        <InlineField
-          t={t}
-          label="Role"
-          value={draft.role}
-          onChange={(v) => setDraft((d) => ({ ...d, role: v }))}
-          placeholder="—"
-          textStyle={S.cardSub}
-          fieldLabelStyle={S.fieldLabel}
-        />
-      </div>
-      <div>
-        <div style={S.fieldLabel}>Team</div>
-        <div style={{ ...S.chipRow, marginTop: 6 }}>
-          {teamNames.map((name) => (
+          {(entry.stage === "interview" || entry.meetingLog.length > 0) && (
+            <div style={{ width: "100%", maxWidth: 380 }}>
+              <ActivityLogPanel
+                S={S}
+                t={t}
+                key={entry.meetingLog.length}
+                entry={entry}
+                onLog={onLogMeeting}
+                onDelete={onDeleteMeeting}
+              />
+            </div>
+          )}
+
+          <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={S.segWrap}>
+              <button
+                type="button"
+                className="avid-btn"
+                style={draft.firstTime ? S.segBtnActive : S.segBtn}
+                onClick={() => setDraft((d) => ({ ...d, firstTime: true }))}
+              >
+                First-time
+              </button>
+              <button
+                type="button"
+                className="avid-btn"
+                style={!draft.firstTime ? S.segBtnActive : S.segBtn}
+                onClick={() => setDraft((d) => ({ ...d, firstTime: false }))}
+              >
+                Repeat
+              </button>
+            </div>
             <button
               type="button"
-              key={name}
-              className="avid-chip"
-              onClick={() => toggleTeam(name)}
-              style={{
-                ...S.chip,
-                borderColor: t.accent,
-                color: draft.team.includes(name) ? "#fff" : t.accent,
-                background: draft.team.includes(name) ? t.accent : "transparent",
+              className="avid-btn"
+              style={{ ...S.ghostBtn, opacity: valid ? 1 : 0.5 }}
+              disabled={!valid}
+              onClick={() => {
+                onSaveEntry({ ...entry, ...draft, role: draft.role || null });
+                onDone();
               }}
             >
-              {name}
+              Save
             </button>
-          ))}
+          </div>
         </div>
       </div>
-      <div>
-        <div style={S.fieldLabel}>Business type</div>
-        <div style={{ ...S.segWrap, marginTop: 6, display: "inline-flex" }}>
-          <button
-            type="button"
-            className="avid-btn"
-            style={draft.firstTime ? S.segBtnActive : S.segBtn}
-            onClick={() => setDraft((d) => ({ ...d, firstTime: true }))}
-          >
-            First-time
-          </button>
-          <button
-            type="button"
-            className="avid-btn"
-            style={!draft.firstTime ? S.segBtnActive : S.segBtn}
-            onClick={() => setDraft((d) => ({ ...d, firstTime: false }))}
-          >
-            Repeat
-          </button>
-        </div>
-      </div>
-      <button
-        type="button"
-        className="avid-btn"
-        style={{ ...S.ghostBtn, alignSelf: "flex-end", opacity: valid ? 1 : 0.5 }}
-        disabled={!valid}
-        onClick={() => {
-          onSave({ ...entry, ...draft, role: draft.role || null });
-          onDone();
-        }}
-      >
-        Done
-      </button>
-    </div>
-  );
-}
-
-// A field's text renders as plain, borderless text until focused, when a
-// bottom border appears to hint you're now editing it — "click into any
-// text" rather than a bordered form input sitting there the whole time.
-function inlineFieldStyle(t: Theme, textStyle: CSSProperties, focused = false): CSSProperties {
-  return {
-    ...textStyle,
-    display: "block",
-    width: "100%",
-    border: "none",
-    borderBottom: `1px solid ${focused ? t.accent : "transparent"}`,
-    background: "transparent",
-    outline: "none",
-    padding: "2px 1px",
-    fontFamily: FONT,
-  };
-}
-
-function InlineField({
-  t,
-  label,
-  value,
-  onChange,
-  placeholder,
-  textStyle,
-  fieldLabelStyle,
-}: {
-  t: Theme;
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  textStyle: CSSProperties;
-  fieldLabelStyle: CSSProperties;
-}) {
-  const [focused, setFocused] = useState(false);
-  return (
-    <div>
-      <div style={fieldLabelStyle}>{label}</div>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        placeholder={placeholder}
-        style={inlineFieldStyle(t, textStyle, focused)}
-      />
     </div>
   );
 }
