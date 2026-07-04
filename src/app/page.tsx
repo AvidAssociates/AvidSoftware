@@ -17,7 +17,6 @@ import {
   Moon,
   Settings,
   Tv,
-  History,
 } from "lucide-react";
 import { Billing, DeclineReason, Entry, RosterMember, Stage, StageEvent } from "@/lib/types";
 import {
@@ -586,8 +585,8 @@ function Dashboard({
             <div>
               <div style={S.cardHeaderRow}>
                 <div style={S.colCandidate}>Candidate</div>
-                <div style={S.colRole}>Role</div>
-                <div style={S.colProgress}>Progress</div>
+                <div style={S.colMeetingType}>Type</div>
+                <div style={S.colStatus}>Status</div>
                 <div style={S.colTeam}>Team</div>
                 <div style={S.colDate}>Date</div>
                 <div style={S.colActions} />
@@ -756,34 +755,26 @@ function EntryRow({
   onDecline: (reason: DeclineReason) => void;
   onLogMeeting: (type: string, round: number, date: string) => void;
 }) {
+  const lastMeeting = entry.meetingLog[entry.meetingLog.length - 1];
   return (
     <div className="avid-row avid-row-enter" style={S.cardRow}>
       <div style={S.colCandidate}>
         <div style={S.cardPrimary}>{entry.candidate}</div>
         <div style={S.cardSub}>{entry.company}</div>
+        <div style={{ ...S.cardSub, ...S.cardSubDim }}>{entry.role || "—"}</div>
       </div>
-      <div style={S.colRole}>
-        <div style={S.cardPrimary}>{entry.role || "—"}</div>
-        <div style={{ ...S.cardSub, display: "flex", alignItems: "center", gap: 5 }}>
-          <span>
-            {entry.interviewType}
-            {entry.round ? ` · R${entry.round}` : ""}
-          </span>
-          <MeetingLogControl entry={entry} onLog={onLogMeeting} />
-        </div>
+      <div style={S.colMeetingType}>
+        <div style={S.cardSub}>{lastMeeting ? `${lastMeeting.type} · R${lastMeeting.round}` : "—"}</div>
       </div>
-      <div style={S.colProgress}>
-        <StageProgress
+      <div style={S.colStatus}>
+        <ProcessStatusControl
           t={t}
-          stage={entry.stage}
-          declined={entry.declined}
-          declinedReason={entry.declinedReason}
-          history={entry.stageHistory}
+          entry={entry}
           onSetStage={onSetStage}
           onEditDate={onEditDate}
           onRestore={onRestore}
           onDecline={onDecline}
-          large
+          onLogMeeting={onLogMeeting}
         />
       </div>
       <div style={S.colTeam}>
@@ -804,31 +795,157 @@ function EntryRow({
   );
 }
 
-const MEETING_LOG_POPOVER_WIDTH = 240;
+const PROCESS_POPOVER_WIDTH = 420;
 
-// A small floating log of every meeting held during the Interview stage
-// (Phone R1, then Phone R2, then Face-to-Face R1, ...) plus a way to add
-// the next one — replaces writing a whole new send-out entry each time the
-// meeting type/round moves forward. The fixed 4-stage tracker is untouched.
-function MeetingLogControl({
+// The list of logged meetings (Phone R1, then Phone R2, then Face-to-Face
+// R1, ...) plus a way to add the next one, while still in Interview.
+// Purely presentational — the popover that hosts it owns open/close state.
+function MeetingLogPanel({
   entry,
   onLog,
 }: {
   entry: Entry;
   onLog: (type: string, round: number, date: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-  const btnRef = useRef<HTMLButtonElement | null>(null);
   const last = entry.meetingLog[entry.meetingLog.length - 1];
   const [draftType, setDraftType] = useState(last?.type || entry.interviewType || "Phone");
   const [draftRound, setDraftRound] = useState((last?.round || entry.round || 0) + 1);
   const [draftDate, setDraftDate] = useState(todayISO());
+  const canAdd = entry.stage === "interview" && !entry.declined;
+
+  return (
+    <div style={{ paddingTop: 10, marginTop: 10, borderTop: `1px solid ${STAGE_POPOVER_FG}22` }}>
+      <div
+        style={{
+          fontSize: 10.5,
+          fontWeight: 700,
+          letterSpacing: 0.4,
+          textTransform: "uppercase",
+          opacity: 0.6,
+          marginBottom: 8,
+        }}
+      >
+        Meeting log
+      </div>
+      {entry.meetingLog.length === 0 ? (
+        <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 10 }}>No meetings logged yet.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
+          {entry.meetingLog.map((m, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 600 }}>
+              <span>
+                {m.type} · R{m.round}
+              </span>
+              <span style={{ opacity: 0.6, fontVariantNumeric: "tabular-nums" }}>{fmtDate(m.date)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {canAdd && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: "flex", gap: 6 }}>
+            <select
+              value={draftType}
+              onChange={(e) => setDraftType(e.target.value)}
+              style={{
+                flex: 1,
+                fontSize: 12,
+                background: "transparent",
+                color: STAGE_POPOVER_FG,
+                border: `1px solid ${STAGE_POPOVER_FG}33`,
+                borderRadius: 6,
+                padding: "5px 6px",
+              }}
+            >
+              {INTERVIEW_TYPES.map((tp) => (
+                <option key={tp} value={tp} style={{ color: "#000" }}>
+                  {tp}
+                </option>
+              ))}
+            </select>
+            <input
+              type="number"
+              min="1"
+              value={draftRound}
+              onChange={(e) => setDraftRound(Number(e.target.value))}
+              style={{
+                width: 48,
+                fontSize: 12,
+                background: "transparent",
+                color: STAGE_POPOVER_FG,
+                border: `1px solid ${STAGE_POPOVER_FG}33`,
+                borderRadius: 6,
+                padding: "5px 6px",
+              }}
+            />
+          </div>
+          <input
+            type="date"
+            value={draftDate}
+            onChange={(e) => setDraftDate(e.target.value)}
+            style={{
+              fontSize: 12,
+              background: "transparent",
+              color: STAGE_POPOVER_FG,
+              border: `1px solid ${STAGE_POPOVER_FG}33`,
+              borderRadius: 6,
+              padding: "5px 6px",
+              colorScheme: "dark",
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => onLog(draftType, draftRound, draftDate)}
+            style={{
+              fontSize: 12,
+              fontWeight: 700,
+              background: STAGE_POPOVER_FG,
+              color: STAGE_POPOVER_BG,
+              border: "none",
+              borderRadius: 6,
+              padding: "6px 8px",
+              cursor: "pointer",
+            }}
+          >
+            + Log meeting
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// A compact status icon standing in for the whole process — click it to
+// see the full timeline (Sent date, then Interview's meeting log, Offer,
+// Placed) and act on it (advance a stage, fix a date, decline, or log the
+// next meeting), all in one place instead of a wide always-on tracker.
+function ProcessStatusControl({
+  t,
+  entry,
+  onSetStage,
+  onEditDate,
+  onRestore,
+  onDecline,
+  onLogMeeting,
+}: {
+  t: Theme;
+  entry: Entry;
+  onSetStage: (stage: Stage) => void;
+  onEditDate: (stage: Stage, date: string) => void;
+  onRestore: () => void;
+  onDecline: (reason: DeclineReason) => void;
+  onLogMeeting: (type: string, round: number, date: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const idx = Math.max(0, PIPELINE.findIndex((s) => s.key === entry.stage));
+  const color = entry.declined ? t.danger : STAGE_COLOR[entry.stage];
 
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (e: MouseEvent) => {
-      if (!(e.target instanceof Element) || !e.target.closest("[data-meeting-log-popover]")) setOpen(false);
+      if (!(e.target instanceof Element) || !e.target.closest("[data-process-popover]")) setOpen(false);
     };
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -852,9 +969,9 @@ function MeetingLogControl({
       const el = btnRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      const width = MEETING_LOG_POPOVER_WIDTH;
-      const left = Math.min(Math.max(rect.left, width / 2 + 8), window.innerWidth - width / 2 - 8);
-      const top = Math.min(rect.bottom + 8, window.innerHeight - 260);
+      const width = PROCESS_POPOVER_WIDTH;
+      const left = Math.min(Math.max(rect.left + rect.width / 2, width / 2 + 8), window.innerWidth - width / 2 - 8);
+      const top = Math.min(rect.bottom + 10, window.innerHeight - 340);
       setPos({ top, left });
     };
     place();
@@ -867,35 +984,35 @@ function MeetingLogControl({
     };
   }, [open]);
 
-  if (entry.stage !== "interview" && entry.meetingLog.length === 0) return null;
-  const canAdd = entry.stage === "interview" && !entry.declined;
-
   return (
     <>
       <button
         ref={btnRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        title="Meeting log"
+        title="View process"
         style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
           border: "none",
           background: "none",
           padding: 0,
           cursor: "pointer",
-          color: "inherit",
-          opacity: 0.65,
-          display: "inline-flex",
-          alignItems: "center",
+          font: "inherit",
         }}
       >
-        <History size={12} />
+        <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, flexShrink: 0 }} />
+        <span style={{ fontSize: 12.5, fontWeight: 700, color }}>
+          {entry.declined ? "Declined" : PIPELINE[idx].label}
+        </span>
       </button>
       {open &&
         pos &&
         typeof document !== "undefined" &&
         createPortal(
           <div
-            data-meeting-log-popover
+            data-process-popover
             style={{
               position: "fixed",
               top: pos.top,
@@ -903,119 +1020,27 @@ function MeetingLogControl({
               transform: "translateX(-50%)",
               background: STAGE_POPOVER_BG,
               color: STAGE_POPOVER_FG,
-              padding: 12,
+              padding: 14,
               borderRadius: 12,
               boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
               zIndex: 1000,
-              width: MEETING_LOG_POPOVER_WIDTH,
+              width: PROCESS_POPOVER_WIDTH,
             }}
           >
-            <div
-              style={{
-                fontSize: 10.5,
-                fontWeight: 700,
-                letterSpacing: 0.4,
-                textTransform: "uppercase",
-                opacity: 0.6,
-                marginBottom: 8,
-              }}
-            >
-              Meeting log
-            </div>
-            {entry.meetingLog.length === 0 ? (
-              <div style={{ fontSize: 12, opacity: 0.6, marginBottom: 10 }}>No meetings logged yet.</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 10 }}>
-                {entry.meetingLog.map((m, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 600 }}>
-                    <span>
-                      {m.type} · R{m.round}
-                    </span>
-                    <span style={{ opacity: 0.6, fontVariantNumeric: "tabular-nums" }}>{fmtDate(m.date)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {canAdd && (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 6,
-                  paddingTop: 10,
-                  borderTop: `1px solid ${STAGE_POPOVER_FG}22`,
-                }}
-              >
-                <div style={{ display: "flex", gap: 6 }}>
-                  <select
-                    value={draftType}
-                    onChange={(e) => setDraftType(e.target.value)}
-                    style={{
-                      flex: 1,
-                      fontSize: 12,
-                      background: "transparent",
-                      color: STAGE_POPOVER_FG,
-                      border: `1px solid ${STAGE_POPOVER_FG}33`,
-                      borderRadius: 6,
-                      padding: "5px 6px",
-                    }}
-                  >
-                    {INTERVIEW_TYPES.map((tp) => (
-                      <option key={tp} value={tp} style={{ color: "#000" }}>
-                        {tp}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    min="1"
-                    value={draftRound}
-                    onChange={(e) => setDraftRound(Number(e.target.value))}
-                    style={{
-                      width: 48,
-                      fontSize: 12,
-                      background: "transparent",
-                      color: STAGE_POPOVER_FG,
-                      border: `1px solid ${STAGE_POPOVER_FG}33`,
-                      borderRadius: 6,
-                      padding: "5px 6px",
-                    }}
-                  />
-                </div>
-                <input
-                  type="date"
-                  value={draftDate}
-                  onChange={(e) => setDraftDate(e.target.value)}
-                  style={{
-                    fontSize: 12,
-                    background: "transparent",
-                    color: STAGE_POPOVER_FG,
-                    border: `1px solid ${STAGE_POPOVER_FG}33`,
-                    borderRadius: 6,
-                    padding: "5px 6px",
-                    colorScheme: "dark",
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    onLog(draftType, draftRound, draftDate);
-                    setOpen(false);
-                  }}
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 700,
-                    background: STAGE_POPOVER_FG,
-                    color: STAGE_POPOVER_BG,
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "6px 8px",
-                    cursor: "pointer",
-                  }}
-                >
-                  + Log meeting
-                </button>
-              </div>
+            <StageProgress
+              t={t}
+              stage={entry.stage}
+              declined={entry.declined}
+              declinedReason={entry.declinedReason}
+              history={entry.stageHistory}
+              onSetStage={onSetStage}
+              onEditDate={onEditDate}
+              onRestore={onRestore}
+              onDecline={onDecline}
+              large
+            />
+            {(entry.stage === "interview" || entry.meetingLog.length > 0) && (
+              <MeetingLogPanel key={entry.meetingLog.length} entry={entry} onLog={onLogMeeting} />
             )}
           </div>,
           document.body
