@@ -102,13 +102,6 @@ select::-ms-expand {
   transform: translateY(-1px);
 }
 
-.avid-decline-option {
-  transition: background-color 0.12s ease;
-}
-.avid-decline-option:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
 .avid-cal-day,
 .avid-cal-nav {
   transition: background-color 0.12s ease;
@@ -230,31 +223,82 @@ select::-ms-expand {
   transform-origin: top center;
 }
 
-/* ---- Liquid Glass popover (Team multi-select) ---- */
-/* Frosted, translucent black -- not the app's opaque theme surface. The
-   inset highlight on top and hairline border are what read as "glass" (a
-   specular edge) rather than a flat dark panel; backdrop-filter does the
-   actual blur-through-to-content. Fixed dark look regardless of light/dark
-   theme, same rationale as the decline-menu's fixed STAGE_POPOVER colors. */
+/* ---- Liquid Glass (iOS 26-style) popover material ---- */
+/* Modeled on Apple's three-layer glass anatomy: illumination (the deep
+   backdrop blur + saturation boost pulling color through the pane),
+   highlight (the specular rim below), and shadow (the layered drop
+   shadows separating the pane from content). Fixed dark "black glass"
+   regardless of app theme, like iOS dark-mode menus. */
 .avid-glass-popover {
-  background: rgba(30, 30, 32, 0.7);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
-  backdrop-filter: blur(28px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  position: relative;
+  border-radius: 22px;
+  overflow: hidden;
+  background: rgba(16, 16, 18, 0.6);
+  -webkit-backdrop-filter: blur(50px) saturate(180%);
+  backdrop-filter: blur(50px) saturate(180%);
   box-shadow:
-    0 24px 60px rgba(0, 0, 0, 0.5),
-    0 4px 14px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+    0 30px 70px rgba(0, 0, 0, 0.55),
+    0 6px 18px rgba(0, 0, 0, 0.38),
+    inset 0 0 20px rgba(255, 255, 255, 0.04);
 }
+/* The "lensing" edge: a 1px specular rim, brightest where the light
+   notionally hits (top-left), fading along the sides, with a soft bounce
+   at the bottom -- drawn as a gradient ring via mask-compositing so the
+   brightness genuinely varies around the edge (a flat border can't). */
+.avid-glass-popover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    155deg,
+    rgba(255, 255, 255, 0.5),
+    rgba(255, 255, 255, 0.14) 30%,
+    rgba(255, 255, 255, 0.05) 55%,
+    rgba(255, 255, 255, 0.24) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+/* Menu rows are full-bleed (the container's big radius clips them), with
+   iOS's edge-to-edge hairline separators between rows. */
 .avid-glass-option {
   transition: background-color 0.12s ease;
 }
 .avid-glass-option:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(255, 255, 255, 0.11);
 }
 .avid-glass-option:active {
-  background-color: rgba(255, 255, 255, 0.16);
+  background-color: rgba(255, 255, 255, 0.18);
+}
+.avid-glass-sep {
+  height: 1px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.09);
+}
+/* iOS menus "pop" open from the control that summoned them -- a quick
+   overshooting scale rather than the softer slide-in other popovers use. */
+@keyframes glassPop {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  55% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.avid-glass-pop {
+  animation: glassPop 0.3s cubic-bezier(0.34, 1.32, 0.5, 1);
+  transform-origin: top center;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -264,6 +308,7 @@ select::-ms-expand {
   .avid-modal,
   .avid-overlay,
   .avid-pop-in,
+  .avid-glass-pop,
   .tv-rise,
   .tv-bar,
   .tv-progress {

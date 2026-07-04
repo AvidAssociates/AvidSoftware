@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { Fragment, useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { ChangeEvent, ReactNode } from "react";
 import {
@@ -1417,58 +1417,42 @@ function TeamMultiSelect({
             style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 1000 }}
           >
             <div
-              className="avid-pop-in avid-glass-popover"
-              style={{
-                borderRadius: 16,
-                padding: 6,
-                display: "flex",
-                flexDirection: "column",
-                gap: 1,
-                minWidth: 180,
-              }}
+              className="avid-glass-pop avid-glass-popover"
+              style={{ display: "flex", flexDirection: "column", minWidth: 210 }}
             >
-              {teamNames.map((name) => {
+              {teamNames.map((name, i) => {
                 const checked = selected.includes(name);
                 return (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => onToggle(name)}
-                    className="avid-glass-option"
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: "#F5F5F7",
-                      textAlign: "left",
-                      padding: "8px 10px",
-                      fontSize: 13,
-                      fontWeight: 500,
-                      borderRadius: 10,
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 12,
-                    }}
-                  >
-                    <span>{name}</span>
-                    <span
+                  <Fragment key={name}>
+                    {i > 0 && <div className="avid-glass-sep" />}
+                    <button
+                      type="button"
+                      onClick={() => onToggle(name)}
+                      className="avid-glass-option"
                       style={{
-                        width: 18,
-                        height: 18,
-                        borderRadius: "50%",
-                        border: checked ? "none" : "1.5px solid rgba(245,245,247,0.4)",
-                        background: checked ? "#F5F5F7" : "transparent",
+                        background: "transparent",
+                        border: "none",
+                        color: GLASS_FG,
+                        textAlign: "left",
+                        padding: "11px 16px 11px 11px",
+                        fontSize: 14.5,
+                        fontWeight: 400,
+                        fontFamily: FONT,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
                         display: "flex",
                         alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
+                        gap: 7,
                       }}
                     >
-                      {checked && <Check size={12} color="#1C1C1E" strokeWidth={3} />}
-                    </span>
-                  </button>
+                      {/* Leading checkmark slot, like iOS menus -- reserved even
+                          when unchecked so labels don't shift as items toggle */}
+                      <span style={{ width: 20, display: "flex", justifyContent: "center", flexShrink: 0 }}>
+                        {checked && <Check size={15} color={GLASS_FG} strokeWidth={2.5} />}
+                      </span>
+                      {name}
+                    </button>
+                  </Fragment>
                 );
               })}
             </div>
@@ -1554,10 +1538,12 @@ function lastEventDate(history: StageEvent[], stage: Stage): string | null {
   return event?.date ?? null;
 }
 
-// Fixed dark-gray pill for the stage tooltip/decline-reason popover — same
-// look in both light and dark theme, not tied to the app's theme colors.
-const STAGE_POPOVER_BG = "#2A2A28";
-const STAGE_POPOVER_FG = "#F0EDE7";
+// Liquid Glass popover text colors -- Apple's dark-mode label colors
+// (label / secondaryLabel / tertiaryLabel on a dark pane), fixed regardless
+// of the app's own light/dark theme, same as iOS dark menus.
+const GLASS_FG = "#F5F5F7";
+const GLASS_FG_SECONDARY = "rgba(235,235,245,0.6)";
+const GLASS_FG_TERTIARY = "rgba(235,235,245,0.3)";
 
 const DECLINE_REASONS: { key: DeclineReason; label: string }[] = [
   { key: "candidate", label: "Rejected by candidate" },
@@ -1566,6 +1552,10 @@ const DECLINE_REASONS: { key: DeclineReason; label: string }[] = [
 
 const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 
+// Styled after iOS's inline date picker (dark): month + year bold at the
+// left of the header with the paging chevrons grouped at the right, a row
+// of dim single-letter weekday caps, and circular day cells -- the selected
+// day gets a translucent filled circle, today reads bold with a faint ring.
 function MiniCalendar({ value, onSelect }: { value: string | null; onSelect: (iso: string) => void }) {
   const initial = value ? new Date(`${value}T00:00:00`) : new Date();
   const [viewYear, setViewYear] = useState(initial.getFullYear());
@@ -1601,19 +1591,21 @@ function MiniCalendar({ value, onSelect }: { value: string | null; onSelect: (is
   ];
 
   return (
-    <div style={{ width: 208 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <button onClick={goPrev} className="avid-cal-nav" style={{ border: "none", background: "none", color: STAGE_POPOVER_FG, cursor: "pointer", display: "flex", padding: 3, borderRadius: 5 }}>
-          <ChevronLeft size={13} />
-        </button>
-        <span style={{ fontSize: 11.5, fontWeight: 700 }}>{monthLabel}</span>
-        <button onClick={goNext} className="avid-cal-nav" style={{ border: "none", background: "none", color: STAGE_POPOVER_FG, cursor: "pointer", display: "flex", padding: 3, borderRadius: 5 }}>
-          <ChevronRight size={13} />
-        </button>
+    <div style={{ width: 238, color: GLASS_FG }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 4px 10px 8px" }}>
+        <span style={{ fontSize: 14.5, fontWeight: 600, letterSpacing: -0.2 }}>{monthLabel}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <button onClick={goPrev} className="avid-cal-nav" style={{ border: "none", background: "none", color: GLASS_FG, cursor: "pointer", display: "flex", padding: 5, borderRadius: 7 }}>
+            <ChevronLeft size={16} strokeWidth={2.5} />
+          </button>
+          <button onClick={goNext} className="avid-cal-nav" style={{ border: "none", background: "none", color: GLASS_FG, cursor: "pointer", display: "flex", padding: 5, borderRadius: 7 }}>
+            <ChevronRight size={16} strokeWidth={2.5} />
+          </button>
+        </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 3 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 4 }}>
         {WEEKDAY_LABELS.map((d, i) => (
-          <div key={i} style={{ fontSize: 9.5, fontWeight: 700, textAlign: "center", opacity: 0.5 }}>
+          <div key={i} style={{ fontSize: 10.5, fontWeight: 600, textAlign: "center", color: GLASS_FG_TERTIARY }}>
             {d}
           </div>
         ))}
@@ -1630,16 +1622,17 @@ function MiniCalendar({ value, onSelect }: { value: string | null; onSelect: (is
               onClick={() => onSelect(iso)}
               className="avid-cal-day"
               style={{
-                width: 26,
-                height: 26,
-                borderRadius: 7,
+                width: 31,
+                height: 31,
+                borderRadius: "50%",
                 border: "none",
-                background: isSelected ? STAGE_POPOVER_FG : "transparent",
-                color: isSelected ? STAGE_POPOVER_BG : STAGE_POPOVER_FG,
-                fontSize: 11,
-                fontWeight: isToday ? 800 : 500,
+                background: isSelected ? "rgba(255,255,255,0.27)" : "transparent",
+                color: isSelected || isToday ? GLASS_FG : GLASS_FG_SECONDARY,
+                fontSize: 13,
+                fontWeight: isSelected || isToday ? 700 : 500,
                 cursor: "pointer",
-                boxShadow: isToday && !isSelected ? `inset 0 0 0 1px ${STAGE_POPOVER_FG}66` : "none",
+                fontVariantNumeric: "tabular-nums",
+                boxShadow: isToday && !isSelected ? "inset 0 0 0 1.5px rgba(245,245,247,0.4)" : "none",
               }}
             >
               {day}
@@ -1874,14 +1867,8 @@ function StageProgress({
                       >
                         <div
                           data-stage-popover
-                          className="avid-pop-in"
-                          style={{
-                            background: STAGE_POPOVER_BG,
-                            color: STAGE_POPOVER_FG,
-                            padding: "10px",
-                            borderRadius: 12,
-                            boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
-                          }}
+                          className="avid-glass-pop avid-glass-popover"
+                          style={{ padding: "12px 10px 10px" }}
                         >
                           <MiniCalendar
                             value={lastEventDate(history, s.key)}
@@ -1896,19 +1883,18 @@ function StageProgress({
                     )}
                   {onEditDate && i === idx && openIdx !== i && hoverIdx === i && (
                     <div
+                      className="avid-glass-popover"
                       style={{
                         position: "absolute",
                         bottom: "100%",
                         left: "50%",
                         transform: "translate(-50%, -8px)",
-                        background: STAGE_POPOVER_BG,
-                        color: STAGE_POPOVER_FG,
+                        color: GLASS_FG,
                         fontSize: 11.5,
                         fontWeight: 600,
-                        padding: "6px 10px",
-                        borderRadius: 7,
+                        padding: "6px 11px",
+                        borderRadius: 11,
                         whiteSpace: "nowrap",
-                        boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
                         zIndex: 5,
                         pointerEvents: "none",
                       }}
@@ -1989,42 +1975,36 @@ function StageProgress({
             createPortal(
               <div style={{ position: "fixed", top: declinePos.top, left: declinePos.left, transform: "translateY(-50%)", zIndex: 1000 }}>
                 <div
-                data-decline-popover
-                className="avid-pop-in"
-                style={{
-                  background: STAGE_POPOVER_BG,
-                  borderRadius: 9,
-                  padding: 4,
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
-                  display: "flex",
-                  flexDirection: "column",
-                  minWidth: 176,
-                }}
-              >
-                {DECLINE_REASONS.map((r) => (
-                  <button
-                    key={r.key}
-                    onClick={() => {
-                      onDecline?.(r.key);
-                      setDeclineMenuOpen(false);
-                    }}
-                    className="avid-decline-option"
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: STAGE_POPOVER_FG,
-                      textAlign: "left",
-                      padding: "8px 10px",
-                      fontSize: 12.5,
-                      fontWeight: 600,
-                      borderRadius: 6,
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {r.label}
-                  </button>
-                ))}
+                  data-decline-popover
+                  className="avid-glass-pop avid-glass-popover"
+                  style={{ display: "flex", flexDirection: "column", minWidth: 210 }}
+                >
+                  {DECLINE_REASONS.map((r, i) => (
+                    <Fragment key={r.key}>
+                      {i > 0 && <div className="avid-glass-sep" />}
+                      <button
+                        onClick={() => {
+                          onDecline?.(r.key);
+                          setDeclineMenuOpen(false);
+                        }}
+                        className="avid-glass-option"
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: GLASS_FG,
+                          textAlign: "left",
+                          padding: "11px 16px",
+                          fontSize: 14.5,
+                          fontWeight: 400,
+                          fontFamily: FONT,
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {r.label}
+                      </button>
+                    </Fragment>
+                  ))}
                 </div>
               </div>,
               document.body
