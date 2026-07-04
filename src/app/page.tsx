@@ -808,13 +808,15 @@ function EntryRow({
   onLogMeeting: (type: string, round: number, date: string) => void;
   onDeleteMeeting: (meetingId: string) => void;
 }) {
-  // Status and Edit are two buttons for the exact same expansion. While
-  // expanded, the row's OWN cells (Date, Candidate, Company, Role, Team)
-  // turn into editable fields in place -- not a duplicate set of fields
-  // added somewhere else. Below the row, the tracker/activity log/bottom
-  // bar are unchanged.
-  const [expanded, setExpanded] = useState(false);
-  const toggleExpanded = () => setExpanded((v) => !v);
+  // Status and Edit are two separate things: Status expands the pipeline
+  // tracker + activity log (view only, nothing editable). Edit turns the
+  // row's own cells into editable fields in place and shows a Save bar --
+  // it does not show the tracker. Only one can be open at a time.
+  const [mode, setMode] = useState<"status" | "edit" | null>(null);
+  const statusOpen = mode === "status";
+  const editOpen = mode === "edit";
+  const toggleStatus = () => setMode((m) => (m === "status" ? null : "status"));
+  const toggleEdit = () => setMode((m) => (m === "edit" ? null : "edit"));
 
   const makeDraft = () => ({
     date: entry.date,
@@ -825,20 +827,20 @@ function EntryRow({
     firstTime: entry.firstTime,
   });
   const [draft, setDraft] = useState(makeDraft);
-  // Every time the row expands, start from the entry's current values --
+  // Every time edit mode opens, start from the entry's current values --
   // adjusted during render (not an effect), same pattern StageProgress uses
   // for its pop animation below.
-  const [prevExpanded, setPrevExpanded] = useState(expanded);
-  if (expanded !== prevExpanded) {
-    setPrevExpanded(expanded);
-    if (expanded) setDraft(makeDraft());
+  const [prevEditOpen, setPrevEditOpen] = useState(editOpen);
+  if (editOpen !== prevEditOpen) {
+    setPrevEditOpen(editOpen);
+    if (editOpen) setDraft(makeDraft());
   }
   const toggleTeam = (name: string) =>
     setDraft((d) => ({ ...d, team: d.team.includes(name) ? d.team.filter((n) => n !== name) : [...d.team, name] }));
   const canSave = Boolean(draft.candidate.trim() && draft.company.trim() && draft.date);
   const handleSave = () => {
     onSaveEntry({ ...entry, ...draft, role: draft.role || null });
-    setExpanded(false);
+    setMode(null);
   };
 
   const dateField = (
@@ -903,13 +905,13 @@ function EntryRow({
           className="avid-row avid-row-enter"
           style={{
             padding: "16px 16px 14px",
-            borderBottom: expanded ? "none" : `1px solid ${t.border}`,
+            borderBottom: mode ? "none" : `1px solid ${t.border}`,
             display: "flex",
             flexDirection: "column",
             gap: 10,
           }}
         >
-          {expanded ? (
+          {editOpen ? (
             <>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 {candidateField}
@@ -931,9 +933,9 @@ function EntryRow({
             </>
           )}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <ProcessStatusControl t={t} entry={entry} expanded={expanded} onToggle={toggleExpanded} />
+            <ProcessStatusControl t={t} entry={entry} expanded={statusOpen} onToggle={toggleStatus} />
             <div style={{ display: "flex", gap: 2 }}>
-              <button className="avid-btn" style={S.iconGhost} onClick={toggleExpanded} title="Edit">
+              <button className="avid-btn" style={S.iconGhost} onClick={toggleEdit} title="Edit">
                 <Pencil size={14} />
               </button>
               <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
@@ -946,11 +948,13 @@ function EntryRow({
           S={S}
           t={t}
           entry={entry}
-          expanded={expanded}
+          statusOpen={statusOpen}
+          editOpen={editOpen}
           firstTime={draft.firstTime}
           onToggleFirstTime={(firstTime) => setDraft((d) => ({ ...d, firstTime }))}
           canSave={canSave}
           onSave={handleSave}
+          onCloseStatus={() => setMode(null)}
           onSetStage={onSetStage}
           onEditDate={onEditDate}
           onRestore={onRestore}
@@ -966,20 +970,20 @@ function EntryRow({
     <div>
       <div
         className="avid-row avid-row-enter"
-        style={expanded ? { ...S.cardRow, ...S.soGrid, borderBottom: "none" } : { ...S.cardRow, ...S.soGrid }}
+        style={mode ? { ...S.cardRow, ...S.soGrid, borderBottom: "none" } : { ...S.cardRow, ...S.soGrid }}
       >
-        <div style={S.soCol}>{expanded ? dateField : <div style={S.cardSub}>{fmtDate(entry.date)}</div>}</div>
-        <div style={S.soCol}>{expanded ? candidateField : <div style={S.cardPrimary}>{entry.candidate}</div>}</div>
-        <div style={S.soCol}>{expanded ? companyField : <div style={S.cardSub}>{entry.company}</div>}</div>
+        <div style={S.soCol}>{editOpen ? dateField : <div style={S.cardSub}>{fmtDate(entry.date)}</div>}</div>
+        <div style={S.soCol}>{editOpen ? candidateField : <div style={S.cardPrimary}>{entry.candidate}</div>}</div>
+        <div style={S.soCol}>{editOpen ? companyField : <div style={S.cardSub}>{entry.company}</div>}</div>
         <div style={S.soStatusCol}>
-          <ProcessStatusControl t={t} entry={entry} expanded={expanded} onToggle={toggleExpanded} />
+          <ProcessStatusControl t={t} entry={entry} expanded={statusOpen} onToggle={toggleStatus} />
         </div>
-        <div style={S.soCol}>{expanded ? roleField : <div style={S.cardSub}>{entry.role || "—"}</div>}</div>
+        <div style={S.soCol}>{editOpen ? roleField : <div style={S.cardSub}>{entry.role || "—"}</div>}</div>
         <div style={S.soCol}>
-          {expanded ? teamField : <div style={S.cardSub}>{(entry.team || []).join("/") || "—"}</div>}
+          {editOpen ? teamField : <div style={S.cardSub}>{(entry.team || []).join("/") || "—"}</div>}
         </div>
         <div style={S.soActionsCol}>
-          <button className="avid-btn" style={S.iconGhost} onClick={toggleExpanded} title="Edit">
+          <button className="avid-btn" style={S.iconGhost} onClick={toggleEdit} title="Edit">
             <Pencil size={14} />
           </button>
           <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
@@ -991,11 +995,13 @@ function EntryRow({
         S={S}
         t={t}
         entry={entry}
-        expanded={expanded}
+        statusOpen={statusOpen}
+        editOpen={editOpen}
         firstTime={draft.firstTime}
         onToggleFirstTime={(firstTime) => setDraft((d) => ({ ...d, firstTime }))}
         canSave={canSave}
         onSave={handleSave}
+        onCloseStatus={() => setMode(null)}
         onSetStage={onSetStage}
         onEditDate={onEditDate}
         onRestore={onRestore}
@@ -1072,11 +1078,11 @@ function ProcessStatusControl({
   );
 }
 
-// The row's one shared expansion -- opened by either Status or Edit. The
-// row's own fields (Date, Candidate, Company, Role, Team) become editable
-// right in their own columns above this, in place -- this panel is just the
-// unchanged Sent/Interview/Offer/Placed tracker and activity log, plus a
-// bottom bar (First-time/Repeat tab at the left, Save at the right). Always
+// Status and Edit each get their own content in this shared expand slot,
+// never both at once. Status: the unchanged Sent/Interview/Offer/Placed
+// tracker + activity log, with a Done button (view only, nothing saved).
+// Edit: just the bottom bar (First-time/Repeat tab + Save) -- the actual
+// editable fields live up in the row's own columns, not here. Always
 // mounted regardless of open/closed state — the 0fr/1fr grid-rows trick
 // (see .avid-expand) animates height smoothly both ways, and never resizes
 // the row above.
@@ -1084,11 +1090,13 @@ function RowExpandedPanel({
   S,
   t,
   entry,
-  expanded,
+  statusOpen,
+  editOpen,
   firstTime,
   onToggleFirstTime,
   canSave,
   onSave,
+  onCloseStatus,
   onSetStage,
   onEditDate,
   onRestore,
@@ -1099,11 +1107,13 @@ function RowExpandedPanel({
   S: Styles;
   t: Theme;
   entry: Entry;
-  expanded: boolean;
+  statusOpen: boolean;
+  editOpen: boolean;
   firstTime: boolean;
   onToggleFirstTime: (firstTime: boolean) => void;
   canSave: boolean;
   onSave: () => void;
+  onCloseStatus: () => void;
   onSetStage: (stage: Stage) => void;
   onEditDate: (stage: Stage, date: string) => void;
   onRestore: () => void;
@@ -1112,7 +1122,7 @@ function RowExpandedPanel({
   onDeleteMeeting: (meetingId: string) => void;
 }) {
   return (
-    <div className="avid-expand" style={{ gridTemplateRows: expanded ? "1fr" : "0fr" }}>
+    <div className="avid-expand" style={{ gridTemplateRows: statusOpen || editOpen ? "1fr" : "0fr" }}>
       <div>
         <div
           style={{
@@ -1124,60 +1134,67 @@ function RowExpandedPanel({
             gap: 18,
           }}
         >
-          <StageProgress
-            t={t}
-            stage={entry.stage}
-            declined={entry.declined}
-            declinedReason={entry.declinedReason}
-            history={entry.stageHistory}
-            onSetStage={onSetStage}
-            onEditDate={onEditDate}
-            onRestore={onRestore}
-            onDecline={onDecline}
-            large
-          />
-          {(entry.stage === "interview" || entry.meetingLog.length > 0) && (
-            <div style={{ width: "100%", maxWidth: 380 }}>
-              <ActivityLogPanel
-                S={S}
+          {editOpen ? (
+            <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={S.segWrap}>
+                <button
+                  type="button"
+                  className="avid-btn"
+                  style={firstTime ? S.segBtnActive : S.segBtn}
+                  onClick={() => onToggleFirstTime(true)}
+                >
+                  First-time
+                </button>
+                <button
+                  type="button"
+                  className="avid-btn"
+                  style={!firstTime ? S.segBtnActive : S.segBtn}
+                  onClick={() => onToggleFirstTime(false)}
+                >
+                  Repeat
+                </button>
+              </div>
+              <button
+                type="button"
+                className="avid-btn"
+                style={{ ...S.ghostBtn, opacity: canSave ? 1 : 0.5 }}
+                disabled={!canSave}
+                onClick={onSave}
+              >
+                Save
+              </button>
+            </div>
+          ) : (
+            <>
+              <StageProgress
                 t={t}
-                key={entry.meetingLog.length}
-                entry={entry}
-                onLog={onLogMeeting}
-                onDelete={onDeleteMeeting}
+                stage={entry.stage}
+                declined={entry.declined}
+                declinedReason={entry.declinedReason}
+                history={entry.stageHistory}
+                onSetStage={onSetStage}
+                onEditDate={onEditDate}
+                onRestore={onRestore}
+                onDecline={onDecline}
+                large
               />
-            </div>
+              {(entry.stage === "interview" || entry.meetingLog.length > 0) && (
+                <div style={{ width: "100%", maxWidth: 380 }}>
+                  <ActivityLogPanel
+                    S={S}
+                    t={t}
+                    key={entry.meetingLog.length}
+                    entry={entry}
+                    onLog={onLogMeeting}
+                    onDelete={onDeleteMeeting}
+                  />
+                </div>
+              )}
+              <button type="button" className="avid-btn" style={{ ...S.ghostBtn, alignSelf: "flex-end" }} onClick={onCloseStatus}>
+                Done
+              </button>
+            </>
           )}
-
-          <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={S.segWrap}>
-              <button
-                type="button"
-                className="avid-btn"
-                style={firstTime ? S.segBtnActive : S.segBtn}
-                onClick={() => onToggleFirstTime(true)}
-              >
-                First-time
-              </button>
-              <button
-                type="button"
-                className="avid-btn"
-                style={!firstTime ? S.segBtnActive : S.segBtn}
-                onClick={() => onToggleFirstTime(false)}
-              >
-                Repeat
-              </button>
-            </div>
-            <button
-              type="button"
-              className="avid-btn"
-              style={{ ...S.ghostBtn, opacity: canSave ? 1 : 0.5 }}
-              disabled={!canSave}
-              onClick={onSave}
-            >
-              Save
-            </button>
-          </div>
         </div>
       </div>
     </div>
