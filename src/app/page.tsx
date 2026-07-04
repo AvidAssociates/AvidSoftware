@@ -910,12 +910,22 @@ function EntryRow({
 }
 
 // Compact activity-log labels matching the office shorthand: T = Telephone,
-// F = Face-to-Face, V = Video, each with its round in parens. The Offer
-// marker (auto-logged when that stage is reached) just reads "Offer".
+// F = Face-to-Face, V = Video, each with its round in parens. The Offer and
+// Placed markers (auto-logged when those stages are reached) just read
+// "Offer" / "Placed", same as a meeting entry's round is irrelevant to them.
 const MEETING_TYPE_CODE: Record<string, string> = { Phone: "T", "Face-to-Face": "F", Video: "V" };
 function activityLabel(type: string, round: number) {
-  if (type === "Offer") return "Offer";
+  if (type === "Offer" || type === "Placed") return type;
   return `${MEETING_TYPE_CODE[type] ?? type[0]}(${round})`;
+}
+
+// The next round for a given meeting type, tracked independently per type --
+// Phone 1 then Phone 2 suggests Phone 3, but switching to Video or
+// Face-to-Face (which haven't happened yet, or stopped at a different
+// round) should suggest round 1 for that type, not continue Phone's count.
+function nextRoundForType(entry: Entry, type: string) {
+  const last = [...entry.meetingLog].reverse().find((m) => m.type === type);
+  return last ? last.round + 1 : 1;
 }
 
 // A compact status icon standing in for the whole process — click it to
@@ -1060,7 +1070,7 @@ function ActivityLogPanel({
 }) {
   const lastMeeting = [...entry.meetingLog].reverse().find((m) => m.type !== "Offer");
   const [draftType, setDraftType] = useState(lastMeeting?.type || "Phone");
-  const [draftRound, setDraftRound] = useState(lastMeeting ? lastMeeting.round + 1 : 1);
+  const [draftRound, setDraftRound] = useState(() => nextRoundForType(entry, draftType));
   const [draftDate, setDraftDate] = useState(todayISO());
   const canAdd = entry.stage === "interview" && !entry.declined;
 
@@ -1108,7 +1118,11 @@ function ActivityLogPanel({
           <div style={{ display: "flex", gap: 6 }}>
             <select
               value={draftType}
-              onChange={(e) => setDraftType(e.target.value)}
+              onChange={(e) => {
+                const type = e.target.value;
+                setDraftType(type);
+                setDraftRound(nextRoundForType(entry, type));
+              }}
               style={{ ...S.input, flex: 1, padding: "7px 9px", fontSize: 12.5 }}
             >
               {INTERVIEW_TYPES.map((tp) => (

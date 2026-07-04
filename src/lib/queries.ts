@@ -88,8 +88,11 @@ export async function createEntry(input: {
   // The Sent date defaults to the send-out's own date — no other default.
   const history: StageEvent[] = [{ stage: input.stage as Entry["stage"], date: input.date }];
   // No meeting is logged automatically -- the user picks when they've
-  // actually held one. Created straight into Offer (rare) still marks it.
-  const meetingLog = input.stage === "offer" ? [activityEntry("Offer", 0, input.date)] : [];
+  // actually held one. Created straight into Offer or Placed (rare) still
+  // marks it, same as reaching that stage normally would.
+  const meetingLog: MeetingLogEntry[] = [];
+  if (input.stage === "offer" || input.stage === "placed") meetingLog.push(activityEntry("Offer", 0, input.date));
+  if (input.stage === "placed") meetingLog.push(activityEntry("Placed", 0, input.date));
   const [row] = (await db.sql`
     INSERT INTO pipeline_entries (id, date, candidate, company, role, interview_type, round, team, stage, stage_history, meeting_log, declined, declined_reason, notes, added_by, first_time)
     VALUES (
@@ -143,12 +146,15 @@ export async function updateEntry(
     history = [...history, { stage: input.stage as Entry["stage"], date: todayISO() }];
   }
 
-  // Reaching Offer logs it as an activity, same as a logged meeting --
-  // Interview itself is never auto-logged, the user picks when they've
-  // actually held a meeting.
+  // Reaching Offer or Placed logs it as an activity, same as a logged
+  // meeting -- Interview itself is never auto-logged, the user picks when
+  // they've actually held a meeting.
   let meetingLog = existing.meeting_log ?? [];
   if (input.stage === "offer" && existing.stage !== "offer") {
     meetingLog = [...meetingLog, activityEntry("Offer", 0, lastEventDateOf(history, "offer") ?? todayISO())];
+  }
+  if (input.stage === "placed" && existing.stage !== "placed") {
+    meetingLog = [...meetingLog, activityEntry("Placed", 0, lastEventDateOf(history, "placed") ?? todayISO())];
   }
 
   const [row] = (await db.sql`
@@ -208,6 +214,9 @@ export async function setStageEventDate(
   let meetingLog = existing.meeting_log ?? [];
   if (newStage === "offer" && existing.stage !== "offer") {
     meetingLog = [...meetingLog, activityEntry("Offer", 0, lastEventDateOf(updatedHistory, "offer") ?? date)];
+  }
+  if (newStage === "placed" && existing.stage !== "placed") {
+    meetingLog = [...meetingLog, activityEntry("Placed", 0, lastEventDateOf(updatedHistory, "placed") ?? date)];
   }
 
   const [row] = (await db.sql`
