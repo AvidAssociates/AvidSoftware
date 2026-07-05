@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { setStageEventDate } from "@/lib/queries";
+import { logMeeting } from "@/lib/queries";
 
 export async function PATCH(
   request: Request,
@@ -7,13 +7,13 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const body = await request.json();
-  if (!body.stage || !body.date) {
+  if (!body.type || !body.round || !body.date) {
     return NextResponse.json(
-      { error: "stage and date are required" },
+      { error: "type, round, and date are required" },
       { status: 400 }
     );
   }
-  const entry = await setStageEventDate(id, body.stage, body.date);
+  const entry = await logMeeting(id, body.type, Number(body.round), body.date);
   if (!entry) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

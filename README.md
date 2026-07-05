@@ -6,16 +6,28 @@ Next.js and Postgres, deployed on Vercel.
 
 ## App
 
-Single page at `/`. From there:
+Single page at `/`, with four tabs:
 
-- Log a new send-out with candidate, company, role, interview type/round,
-  and the team members working it.
-- Advance an entry's stage by clicking a dot on its progress track, or mark
-  it declined (with a reason).
-- Filter by team member, stage, or search text; switch months with the
-  header arrows.
-- Toggle light/dark theme (persisted per device), or open TV mode for a
-  display-friendly leaderboard view.
+- **Send-Outs** — log a candidate with company, role, interview type/round,
+  and the team members working it. Advance its stage by clicking a dot on
+  its progress track, or mark it declined (with a reason).
+- **Billings** — log a fee against one or more team members. A solo deal
+  (one person) counts toward that person's Personal total; a team deal (two
+  or more) credits the *full, unsplit* amount to everyone listed, toward
+  Total only — never divided. The summary table shows Monthly/YTD Personal
+  and Total per recruiter, plus editable retainers and goal progress
+  (Monthly Avg Needed / Company YTD / % to Goal, from the yearly + monthly
+  goals set on the Report tab).
+- **Report** — a year's production: a firm-wide monthly bar chart (with an
+  optional monthly goal line, colored by over/under) and a per-recruiter
+  line chart. Exportable to PDF via the print button.
+- **Leaderboard** — ranks the team by number of send-outs this month, with a
+  First-Time-only variant. Like Billings' Total column, everyone listed on
+  a shared send-out gets full credit, not a split.
+
+Filter by team member, stage, or search text; switch months (or years, on
+Report) with the header arrows. Toggle light/dark theme (persisted per
+device), or open TV mode for a display-friendly leaderboard view.
 
 ## Data model
 

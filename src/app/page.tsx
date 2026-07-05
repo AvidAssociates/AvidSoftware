@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { Fragment, useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { ChangeEvent, ReactNode } from "react";
 import {
@@ -10,6 +10,7 @@ import {
   Trash2,
   X,
   Ban,
+  Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -18,11 +19,11 @@ import {
   Settings,
   Tv,
 } from "lucide-react";
-import { LOGO_ICON_SRC } from "@/lib/logos";
-import { Billing, DeclineReason, Entry, RosterMember, Stage, StageEvent } from "@/lib/types";
+import { Billing, DeclineReason, Entry, RosterMember, Stage } from "@/lib/types";
 import {
   ADMIN,
   DEFAULT_TEAM,
+  FONT,
   INTERVIEW_TYPES,
   PIPELINE,
   STAGE_COLOR,
@@ -36,6 +37,9 @@ import {
 } from "@/lib/ui";
 import TVMode from "@/components/TVMode";
 import ReportView from "@/components/ReportView";
+import { BillingsGoalStats, BillingsTable } from "@/components/BillingsSummary";
+import LeaderboardView from "@/components/LeaderboardView";
+import SettingsModal from "@/components/SettingsModal";
 
 type Styles = ReturnType<typeof makeStyles>;
 
@@ -54,6 +58,21 @@ function setLocal(key: string, value: string) {
   } catch {
     // ignore
   }
+}
+
+// Phone-sized screens get stacked card layouts instead of the wide
+// multi-column grids (which physically can't fit 390px). SSR renders the
+// desktop layout; the first client paint corrects it.
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return isMobile;
 }
 
 // ---------- API ----------
@@ -162,15 +181,15 @@ function Dashboard({
   onToggleTheme: () => void;
 }) {
   const S = makeStyles(t);
+  const isMobile = useIsMobile();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [billings, setBillings] = useState<Billing[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"sendouts" | "billings" | "report">("sendouts");
+  const [view, setView] = useState<"sendouts" | "billings" | "report" | "leaderboard">("sendouts");
   const [showEntryForm, setShowEntryForm] = useState(false);
-  const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   const [showBillingForm, setShowBillingForm] = useState(false);
   const [editingBilling, setEditingBilling] = useState<Billing | null>(null);
-  const [showUserMgr, setShowUserMgr] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [tvOpen, setTvOpen] = useState(false);
   const [filterTeam, setFilterTeam] = useState("All");
   const [filterStage, setFilterStage] = useState("All");
@@ -180,12 +199,58 @@ function Dashboard({
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [reportYear, setReportYear] = useState(() => new Date().getFullYear());
+  const [billingsGoals, setBillingsGoals] = useState<{ yearlyGoal: number | null; monthlyGoal: number | null }>({
+    yearlyGoal: null,
+    monthlyGoal: null,
+  });
+  const [reportGoals, setReportGoals] = useState<{ yearlyGoal: number | null; monthlyGoal: number | null }>({
+    yearlyGoal: null,
+    monthlyGoal: null,
+  });
 
   const isAdmin = user === ADMIN;
   const monthKey = `${monthCursor.getFullYear()}-${String(monthCursor.getMonth() + 1).padStart(2, "0")}`;
   const monthLabel = monthCursor.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const goPrevMonth = () => setMonthCursor((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   const goNextMonth = () => setMonthCursor((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+
+  const monthCursorYear = monthCursor.getFullYear();
+
+  // Fetched as soon as the app loads (not when the Report tab is opened) so
+  // the goal-line coloring is already correct the first time it's shown —
+  // no flash of the wrong bar color while the fetch is in flight.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/goals?year=${reportYear}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setReportGoals({ yearlyGoal: data.yearlyGoal ?? null, monthlyGoal: data.monthlyGoal ?? null });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [reportYear]);
+
+  // The same production_goals row the Report tab charts read — editing it
+  // here (next to Billings) carries straight over to Report.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/goals?year=${monthCursorYear}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setBillingsGoals({ yearlyGoal: data.yearlyGoal ?? null, monthlyGoal: data.monthlyGoal ?? null });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [monthCursorYear]);
+
+  const handleGoalsSaved = (goals: { yearlyGoal: number | null; monthlyGoal: number | null }) => {
+    setBillingsGoals(goals);
+    if (reportYear === monthCursorYear) setReportGoals(goals);
+  };
 
   // Loads in the background without ever blanking the current view — only
   // the very first mount shows the loading state.
@@ -241,24 +306,43 @@ function Dashboard({
   const advanceStage = async (entry: Entry, stage: Stage) => {
     const optimistic = { ...entry, stage, declined: false };
     applyEntry(optimistic);
-    const res = await send(`/api/entries/${entry.id}`, "PUT", optimistic);
-    if (res.ok) applyEntry(await res.json());
-  };
-  // Double-clicking a stage sets/corrects its date without changing which
-  // stage is current (that's what a single click does).
-  const setStageDate = async (entry: Entry, stage: Stage, date: string) => {
-    const idx = entry.stageHistory.map((h) => h.stage).lastIndexOf(stage);
-    const stageHistory =
-      idx === -1
-        ? [...entry.stageHistory, { stage, date }]
-        : entry.stageHistory.map((h, i) => (i === idx ? { ...h, date } : h));
-    applyEntry({ ...entry, stageHistory });
-    const res = await send(`/api/entries/${entry.id}/stage-date`, "PATCH", { stage, date });
+    // stageDate is the browser's own local calendar date -- the server has
+    // no idea what timezone the user is in, so it can't be trusted to stamp
+    // "today" on a newly-reached stage itself (it would use its own clock,
+    // which disagrees with the user's local date for part of the day).
+    const res = await send(`/api/entries/${entry.id}`, "PUT", { ...optimistic, stageDate: todayISO() });
     if (res.ok) applyEntry(await res.json());
   };
   const deleteEntry = async (id: string) => {
     setEntries((prev) => prev.filter((e) => e.id !== id));
     await send(`/api/entries/${id}`, "DELETE");
+  };
+  // Appends a meeting (Phone R1 -> Phone R2 -> Face-to-Face R1, ...) instead
+  // of writing a whole new send-out entry — the fixed 4-stage tracker never
+  // changes, only the log inside the Interview stage grows.
+  const logMeeting = async (entry: Entry, type: string, round: number, date: string) => {
+    const optimistic = {
+      ...entry,
+      interviewType: type,
+      round,
+      meetingLog: [...entry.meetingLog, { id: uid(), type, round, date }],
+    };
+    applyEntry(optimistic);
+    const res = await send(`/api/entries/${entry.id}/meeting-log`, "PATCH", { type, round, date });
+    if (res.ok) applyEntry(await res.json());
+  };
+  const deleteMeeting = async (entry: Entry, meetingId: string) => {
+    const meetingLog = entry.meetingLog.filter((m) => m.id !== meetingId);
+    const last = meetingLog[meetingLog.length - 1];
+    const optimistic = {
+      ...entry,
+      meetingLog,
+      interviewType: last?.type ?? entry.interviewType,
+      round: last?.round ?? entry.round,
+    };
+    applyEntry(optimistic);
+    const res = await send(`/api/entries/${entry.id}/meeting-log/${meetingId}`, "DELETE");
+    if (res.ok) applyEntry(await res.json());
   };
   const saveBilling = async (billing: Billing, isNew: boolean) => {
     applyBilling(billing);
@@ -292,12 +376,12 @@ function Dashboard({
 
   const filteredBillings = useMemo(() => {
     let list = [...monthBillings];
-    if (filterTeam !== "All") list = list.filter((b) => b.recruiter === filterTeam);
+    if (filterTeam !== "All") list = list.filter((b) => b.team.includes(filterTeam));
     if (query.trim()) {
       const q = query.toLowerCase();
       list = list.filter(
         (b) =>
-          b.recruiter?.toLowerCase().includes(q) ||
+          b.team.some((name) => name.toLowerCase().includes(q)) ||
           b.company?.toLowerCase().includes(q) ||
           b.candidate?.toLowerCase().includes(q)
       );
@@ -309,20 +393,12 @@ function Dashboard({
     const active = monthEntries.filter((e) => !e.declined && e.stage !== "placed");
     return {
       total: monthEntries.length,
+      firstTimeCount: monthEntries.filter((e) => e.firstTime).length,
       active: active.length,
       placed: monthEntries.filter((e) => e.stage === "placed" && !e.declined).length,
       declined: monthEntries.filter((e) => e.declined).length,
     };
   }, [monthEntries]);
-
-  const billingStats = useMemo(() => {
-    const total = monthBillings.reduce((s, b) => s + b.amount, 0);
-    return {
-      total,
-      deals: monthBillings.length,
-      avg: monthBillings.length ? Math.round(total / monthBillings.length) : 0,
-    };
-  }, [monthBillings]);
 
   const yearBillings = useMemo(
     () => billings.filter((b) => b.date?.startsWith(String(reportYear))),
@@ -331,7 +407,7 @@ function Dashboard({
   const reportStats = useMemo(() => {
     const total = yearBillings.reduce((s, b) => s + b.amount, 0);
     const byPerson: Record<string, number> = {};
-    for (const b of yearBillings) byPerson[b.recruiter] = (byPerson[b.recruiter] || 0) + b.amount;
+    for (const b of yearBillings) for (const name of b.team) byPerson[name] = (byPerson[name] || 0) + b.amount;
     let topName = "—";
     let topAmount = 0;
     for (const [name, amount] of Object.entries(byPerson)) {
@@ -343,19 +419,33 @@ function Dashboard({
     return { total, deals: yearBillings.length, topName };
   }, [yearBillings]);
 
+  const leaderboardStats = useMemo(() => {
+    const firstTimeCount = monthEntries.filter((e) => e.firstTime).length;
+    const tally: Record<string, number> = {};
+    for (const e of monthEntries) {
+      const credited = e.team.length ? e.team : ["Unassigned"];
+      for (const name of credited) tally[name] = (tally[name] || 0) + 1;
+    }
+    let topName = "—";
+    let topCount = 0;
+    for (const [name, count] of Object.entries(tally)) {
+      if (count > topCount) {
+        topName = name;
+        topCount = count;
+      }
+    }
+    return { total: monthEntries.length, firstTimeCount, topName };
+  }, [monthEntries]);
+
   if (tvOpen) {
     return <TVMode entries={entries} billings={billings} roster={teamNames} onExit={() => setTvOpen(false)} />;
   }
 
   return (
     <div style={S.page} className="app-shell">
-      <header style={S.header} className="no-print">
+      <header style={S.header} className="no-print avid-header">
         <div style={S.headerLeft}>
-          {LOGO_ICON_SRC ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={LOGO_ICON_SRC} alt="Avid Associates" style={S.headerLogo} />
-          ) : null}
-          <span style={S.wordmarkSmall}>Avid</span>
+          <span className="avid-brand" style={{ ...S.heroEyebrow, marginBottom: 0 }}>AVID ASSOCIATES</span>
         </div>
         <div style={S.monthSwitcher}>
           {view === "report" ? (
@@ -381,48 +471,64 @@ function Dashboard({
           )}
         </div>
         <div style={S.headerRight}>
-          <button className="avid-btn" style={S.iconGhost} onClick={() => setTvOpen(true)} title="TV mode">
+          <button className="avid-btn avid-tv-btn" style={S.iconGhost} onClick={() => setTvOpen(true)} title="TV mode">
             <Tv size={17} />
           </button>
           <button className="avid-btn" style={S.iconGhost} onClick={onToggleTheme} title={isDark ? "Light mode" : "Dark mode"}>
             {isDark ? <Sun size={16} /> : <Moon size={16} />}
           </button>
           {isAdmin && (
-            <button className="avid-btn" style={S.iconGhost} onClick={() => setShowUserMgr(true)} title="Manage users">
+            <button className="avid-btn" style={S.iconGhost} onClick={() => setShowSettings(true)} title="Settings">
               <Settings size={16} />
             </button>
           )}
         </div>
       </header>
 
-      <section style={S.hero} className="no-print">
-        <div style={S.heroEyebrow}>AVID ASSOCIATES</div>
-        <h1 style={S.heroTitle}>{view === "sendouts" ? "Send-Outs" : view === "billings" ? "Billings" : "Production Report"}</h1>
-        <div style={S.heroStatsRow}>
-          {view === "sendouts" ? (
-            <>
+      <section style={S.hero} className="no-print avid-hero">
+        {view === "billings" ? (
+          <>
+            <div className="avid-hero-inline" style={S.heroInlineRow}>
+              <h1 className="avid-hero-title" style={S.heroInlineTitle}>Billings</h1>
+              <BillingsGoalStats billings={billings} monthKey={monthKey} year={monthCursorYear} goals={billingsGoals} t={t} />
+              <div />
+            </div>
+          </>
+        ) : view === "sendouts" ? (
+          <div className="avid-hero-inline" style={S.heroInlineRow}>
+            <h1 className="avid-hero-title" style={S.heroInlineTitle}>Send-Outs</h1>
+            <div className="avid-hero-stats" style={S.heroStatsRow}>
               <HeroStat S={S} label="Total" value={String(sendoutStats.total)} />
-              <HeroStat S={S} label="Active" value={String(sendoutStats.active)} color={t.accent} />
+              <HeroStat S={S} label="First-Time" value={String(sendoutStats.firstTimeCount)} color={t.accent} />
+              <HeroStat S={S} label="Active" value={String(sendoutStats.active)} color={STAGE_COLOR.interview} />
               <HeroStat S={S} label="Placed" value={String(sendoutStats.placed)} color={STAGE_COLOR.placed} />
               <HeroStat S={S} label="Declined" value={String(sendoutStats.declined)} color={t.danger} />
-            </>
-          ) : view === "billings" ? (
-            <>
-              <HeroStat S={S} label="Billed" value={money(billingStats.total)} color={STAGE_COLOR.placed} />
-              <HeroStat S={S} label="Deals" value={String(billingStats.deals)} />
-              <HeroStat S={S} label="Avg Deal" value={money(billingStats.avg)} color={STAGE_COLOR.interview} />
-            </>
-          ) : (
-            <>
+            </div>
+            <div />
+          </div>
+        ) : view === "report" ? (
+          <div className="avid-hero-inline" style={S.heroInlineRow}>
+            <h1 className="avid-hero-title" style={S.heroInlineTitle}>Production Reports</h1>
+            <div className="avid-hero-stats" style={S.heroStatsRow}>
               <HeroStat S={S} label="Billed YTD" value={money(reportStats.total)} color={STAGE_COLOR.placed} />
               <HeroStat S={S} label="Deals" value={String(reportStats.deals)} />
               <HeroStat S={S} label="Top Producer" value={reportStats.topName} color={t.accent} />
-            </>
-          )}
-        </div>
+            </div>
+            <div />
+          </div>
+        ) : (
+          <>
+            <h1 className="avid-hero-title" style={S.heroTitle}>Leaderboard</h1>
+            <div className="avid-hero-stats" style={S.heroStatsRow}>
+              <HeroStat S={S} label="Send-Outs" value={String(leaderboardStats.total)} />
+              <HeroStat S={S} label="First-Time" value={String(leaderboardStats.firstTimeCount)} color={t.accent} />
+              <HeroStat S={S} label="Top This Month" value={leaderboardStats.topName} color={STAGE_COLOR.placed} />
+            </div>
+          </>
+        )}
       </section>
 
-      <div style={S.toolbar} className="no-print">
+      <div style={S.toolbar} className="no-print avid-toolbar">
         <div style={S.segWrap}>
           <button
             className="avid-btn"
@@ -443,10 +549,17 @@ function Dashboard({
             style={view === "report" ? S.segBtnActive : S.segBtn}
             onClick={() => setView("report")}
           >
-            Report
+            Reports
+          </button>
+          <button
+            className="avid-btn"
+            style={view === "leaderboard" ? S.segBtnActive : S.segBtn}
+            onClick={() => setView("leaderboard")}
+          >
+            Leaderboard
           </button>
         </div>
-        {view !== "report" && (
+        {view !== "report" && view !== "leaderboard" && (
           <>
             <div style={S.searchWrap}>
               <Search size={15} color={t.mutedSoft} />
@@ -471,8 +584,9 @@ function Dashboard({
               className="avid-btn" style={S.primaryBtn}
               onClick={() => {
                 if (view === "sendouts") {
-                  setEditingEntry(null);
-                  setShowEntryForm(true);
+                  // Toggles the inline new-send-out row at the top of the
+                  // table -- clicking again slides it back away (cancel).
+                  setShowEntryForm((v) => !v);
                 } else {
                   setEditingBilling(null);
                   setShowBillingForm(true);
@@ -490,90 +604,115 @@ function Dashboard({
           <div style={S.empty}>Loading…</div>
         ) : view === "report" ? (
           <div style={S.reportPad}>
-            <ReportView billings={billings} teamNames={teamNames} year={reportYear} t={t} isDark={isDark} />
+            <ReportView billings={billings} teamNames={teamNames} year={reportYear} goals={reportGoals} t={t} isDark={isDark} />
           </div>
         ) : view === "sendouts" ? (
-          filteredEntries.length === 0 ? (
-            <div style={S.empty}>
-              {entries.length === 0 ? "No send-outs yet — add the first one." : "Nothing matches these filters."}
-            </div>
-          ) : (
-            <div>
-              <div style={S.cardHeaderRow}>
-                <div style={S.colCandidate}>Candidate</div>
-                <div style={S.colRole}>Role</div>
-                <div style={S.colProgress}>Progress</div>
-                <div style={S.colTeam}>Team</div>
-                <div style={S.colDate}>Date</div>
-                <div style={S.colActions} />
+          <div>
+            {!isMobile && (filteredEntries.length > 0 || showEntryForm) && (
+              <div style={{ ...S.cardHeaderRow, ...S.soGrid }}>
+                <div style={S.soCol}>Date</div>
+                <div style={S.soCol}>Candidate</div>
+                <div style={S.soCol}>Company</div>
+                <div style={S.soStatusCol}>Status</div>
+                <div style={S.soCol}>Role</div>
+                <div style={S.soCol}>Team</div>
+                <div style={S.soActionsCol}>Actions</div>
               </div>
-              {filteredEntries.map((e) => (
+            )}
+            <NewEntryRow
+              S={S}
+              t={t}
+              mobile={isMobile}
+              teamNames={teamNames}
+              user={user}
+              open={showEntryForm}
+              onSave={async (entry) => {
+                await saveEntry(entry, true);
+                setShowEntryForm(false);
+              }}
+              onCancel={() => setShowEntryForm(false)}
+            />
+            {filteredEntries.length === 0 && !showEntryForm ? (
+              <div style={S.empty}>
+                {entries.length === 0 ? "No send-outs yet — add the first one." : "Nothing matches these filters."}
+              </div>
+            ) : (
+              filteredEntries.map((e) => (
                 <EntryRow
                   key={e.id}
                   S={S}
                   t={t}
                   entry={e}
-                  onEdit={() => {
-                    setEditingEntry(e);
-                    setShowEntryForm(true);
-                  }}
+                  mobile={isMobile}
+                  teamNames={teamNames}
+                  onSaveEntry={(updated) => saveEntry(updated, false)}
                   onDelete={() => deleteEntry(e.id)}
                   onSetStage={(stage) => advanceStage(e, stage)}
-                  onEditDate={(stage, date) => setStageDate(e, stage, date)}
                   onRestore={() => setDeclined(e, false)}
                   onDecline={(reason) => setDeclined(e, true, reason)}
+                  onLogMeeting={(type, round, date) => logMeeting(e, type, round, date)}
+                  onDeleteMeeting={(meetingId) => deleteMeeting(e, meetingId)}
                 />
-              ))}
+              ))
+            )}
+          </div>
+        ) : view === "leaderboard" ? (
+          <div style={S.reportPad}>
+            <LeaderboardView entries={monthEntries} teamNames={teamNames} t={t} />
+            <div style={S.reportSection}>
+              <h3 style={S.chartTitle}>Billings — MTD &amp; YTD</h3>
+              <p style={S.chartSubtitle}>Per-recruiter billings for {monthLabel}, personal and shared searches.</p>
+              <div className="avid-billings-scroll">
+                <BillingsTable billings={billings} teamNames={teamNames} monthKey={monthKey} year={monthCursorYear} t={t} />
+              </div>
             </div>
-          )
-        ) : filteredBillings.length === 0 ? (
-          <div style={S.empty}>
-            {billings.length === 0 ? "No billings yet — log the first one." : "Nothing matches these filters."}
           </div>
         ) : (
           <div>
-            <div style={S.cardHeaderRow}>
-              <div style={S.colRecruiter}>Recruiter</div>
-              <div style={S.colClient}>Client</div>
-              <div style={S.colAmount}>Amount</div>
-              <div style={S.colDate}>Date</div>
-              <div style={S.colActions} />
-            </div>
-            {filteredBillings.map((b) => (
-              <BillingRow
-                key={b.id}
-                S={S}
-                t={t}
-                billing={b}
-                onEdit={() => {
-                  setEditingBilling(b);
-                  setShowBillingForm(true);
-                }}
-                onDelete={() => deleteBilling(b.id)}
-              />
-            ))}
+            {filteredBillings.length === 0 ? (
+              <div style={S.empty}>
+                {billings.length === 0 ? "No billings yet — log the first one." : "Nothing matches these filters."}
+              </div>
+            ) : (
+              <div>
+                {!isMobile && (
+                  // Same 7-column grid as Send-Outs (soGrid), for the same
+                  // spacing/sizing -- Billings has no Status or Role data, so
+                  // those two slots stay blank rather than relabeled.
+                  <div style={{ ...S.cardHeaderRow, ...S.soGrid }}>
+                    <div style={S.soCol}>Date</div>
+                    <div style={S.soCol}>Candidate</div>
+                    <div style={S.soCol}>Company</div>
+                    <div style={S.soStatusCol} />
+                    <div style={S.soCol} />
+                    <div style={S.soCol}>Team</div>
+                    <div style={S.soCol}>Amount</div>
+                  </div>
+                )}
+                {filteredBillings.map((b) => (
+                  <BillingRow
+                    key={b.id}
+                    S={S}
+                    t={t}
+                    billing={b}
+                    mobile={isMobile}
+                    onEdit={() => {
+                      setEditingBilling(b);
+                      setShowBillingForm(true);
+                    }}
+                    onDelete={() => deleteBilling(b.id)}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {showEntryForm && (
-        <EntryForm
-          S={S}
-          t={t}
-          initial={editingEntry}
-          user={user}
-          teamNames={teamNames}
-          onClose={() => setShowEntryForm(false)}
-          onSave={async (entry, isNew) => {
-            await saveEntry(entry, isNew);
-            setShowEntryForm(false);
-          }}
-        />
-      )}
-
       {showBillingForm && (
         <BillingForm
           S={S}
+          t={t}
           initial={editingBilling}
           user={user}
           teamNames={teamNames}
@@ -585,13 +724,17 @@ function Dashboard({
         />
       )}
 
-      {showUserMgr && (
-        <UserManager
+      {showSettings && (
+        <SettingsModal
           S={S}
           t={t}
           roster={roster}
           reloadRoster={reloadRoster}
-          onClose={() => setShowUserMgr(false)}
+          year={monthCursorYear}
+          initialYearly={billingsGoals.yearlyGoal}
+          initialMonthly={billingsGoals.monthlyGoal}
+          onSavedGoals={handleGoalsSaved}
+          onClose={() => setShowSettings(false)}
         />
       )}
     </div>
@@ -601,8 +744,8 @@ function Dashboard({
 function HeroStat({ S, label, value, color }: { S: Styles; label: string; value: string; color?: string }) {
   return (
     <div style={S.heroStat}>
-      <div style={{ ...S.heroStatValue, color: color || S._t.ink }}>{value}</div>
-      <div style={S.heroStatLabel}>{label}</div>
+      <div className="avid-hero-stat-value" style={{ ...S.heroStatValue, color: color || S._t.ink }}>{value}</div>
+      <div className="avid-hero-stat-label" style={S.heroStatLabel}>{label}</div>
     </div>
   );
 }
@@ -621,15 +764,48 @@ function SelectPill({
   labels?: Record<string, string>;
 }) {
   return (
-    <div style={S.selectPillWrap}>
-      <select style={S.selectPill} value={value} onChange={(e) => onChange(e.target.value)}>
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {labels?.[o] || o}
-          </option>
-        ))}
-      </select>
-      <ChevronDown size={13} color={S._t.mutedSoft} style={S.selectPillChevron} />
+    <GlassSelect
+      value={value}
+      options={options}
+      labels={labels}
+      onChange={onChange}
+      triggerStyle={S.selectPill}
+    />
+  );
+}
+
+// A blocking confirmation before any destructive delete -- same modal
+// material as the Billing form, reused by every trash-icon Delete button.
+function ConfirmDeleteDialog({
+  S,
+  open,
+  itemLabel,
+  onConfirm,
+  onCancel,
+}: {
+  S: Styles;
+  open: boolean;
+  itemLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="avid-overlay" style={S.modalOverlay} onClick={onCancel}>
+      <div className="avid-modal" style={{ ...S.modal, maxWidth: 380 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ padding: "22px 22px 4px" }}>
+          <div style={S.modalTitle}>Delete {itemLabel}?</div>
+          <p style={{ fontSize: 13, color: S._t.muted, marginTop: 8, lineHeight: 1.5 }}>This cannot be undone.</p>
+        </div>
+        <div style={S.modalFooter}>
+          <button type="button" className="avid-btn" style={S.ghostBtn} onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="button" className="avid-btn" style={S.primaryBtn} onClick={onConfirm}>
+            Delete
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -638,65 +814,1059 @@ function EntryRow({
   S,
   t,
   entry,
-  onEdit,
+  mobile,
+  teamNames,
+  onSaveEntry,
   onDelete,
   onSetStage,
-  onEditDate,
   onRestore,
   onDecline,
+  onLogMeeting,
+  onDeleteMeeting,
+}: {
+  S: Styles;
+  t: Theme;
+  mobile?: boolean;
+  entry: Entry;
+  teamNames: string[];
+  onSaveEntry: (entry: Entry) => void;
+  onDelete: () => void;
+  onSetStage: (stage: Stage) => void;
+  onRestore: () => void;
+  onDecline: (reason: DeclineReason) => void;
+  onLogMeeting: (type: string, round: number, date: string) => void;
+  onDeleteMeeting: (meetingId: string) => void;
+}) {
+  // Status and Edit are two separate things: Status expands the pipeline
+  // tracker + activity log (view only, nothing editable). Edit turns the
+  // row's own cells into editable fields in place and shows a Save bar --
+  // it does not show the tracker. Only one can be open at a time.
+  const [mode, setMode] = useState<"status" | "edit" | null>(null);
+  const statusOpen = mode === "status";
+  const editOpen = mode === "edit";
+  const toggleStatus = () => setMode((m) => (m === "status" ? null : "status"));
+  const toggleEdit = () => setMode((m) => (m === "edit" ? null : "edit"));
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const makeDraft = () => ({
+    date: entry.date,
+    candidate: entry.candidate,
+    company: entry.company,
+    role: entry.role || "",
+    team: entry.team,
+    firstTime: entry.firstTime,
+  });
+  const [draft, setDraft] = useState(makeDraft);
+  // Every time edit mode opens, start from the entry's current values --
+  // adjusted during render (not an effect), same pattern StageProgress uses
+  // for its pop animation below.
+  const [prevEditOpen, setPrevEditOpen] = useState(editOpen);
+  if (editOpen !== prevEditOpen) {
+    setPrevEditOpen(editOpen);
+    if (editOpen) setDraft(makeDraft());
+  }
+  const toggleTeam = (name: string) =>
+    setDraft((d) => ({ ...d, team: d.team.includes(name) ? d.team.filter((n) => n !== name) : [...d.team, name] }));
+  const canSave = Boolean(draft.candidate.trim() && draft.company.trim() && draft.date);
+  const handleSave = () => {
+    onSaveEntry({ ...entry, ...draft, role: draft.role || null });
+    setMode(null);
+  };
+
+  const dateField = (
+    <GlassDatePicker
+      value={draft.date}
+      onChange={(iso) => setDraft((d) => ({ ...d, date: iso }))}
+      triggerStyle={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5, textAlign: "center" }}
+    />
+  );
+  const candidateField = (
+    <input
+      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 13.5, fontWeight: 600, textAlign: "center" }}
+      value={draft.candidate}
+      placeholder="Full name"
+      onChange={(e) => setDraft((d) => ({ ...d, candidate: e.target.value }))}
+    />
+  );
+  const companyField = (
+    <input
+      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5, textAlign: "center" }}
+      value={draft.company}
+      placeholder="Client company"
+      onChange={(e) => setDraft((d) => ({ ...d, company: e.target.value }))}
+    />
+  );
+  const roleField = (
+    <input
+      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5, textAlign: "center" }}
+      value={draft.role}
+      placeholder="e.g. Account Manager"
+      onChange={(e) => setDraft((d) => ({ ...d, role: e.target.value }))}
+    />
+  );
+  const teamField = (
+    <TeamMultiSelect S={S} teamNames={teamNames} selected={draft.team} onToggle={toggleTeam} />
+  );
+
+  if (mobile) {
+    // Phone layout: a stacked card — the 7-column grid can't fit a phone.
+    return (
+      <div>
+        <div
+          className="avid-row avid-row-enter"
+          style={{
+            padding: "16px 16px 14px",
+            borderBottom: mode ? "none" : `1px solid ${t.border}`,
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
+          {editOpen ? (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {candidateField}
+                {dateField}
+              </div>
+              {companyField}
+              {roleField}
+              {teamField}
+            </>
+          ) : (
+            <>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+                <div style={S.cardPrimary}>{entry.candidate}</div>
+                <div style={{ ...S.cardSub, marginTop: 0, whiteSpace: "nowrap" }}>{fmtDate(entry.date)}</div>
+              </div>
+              <div style={{ ...S.cardSub, marginTop: 0 }}>
+                {[entry.company, entry.role, (entry.team || []).join("/")].filter(Boolean).join(" · ")}
+              </div>
+            </>
+          )}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <ProcessStatusControl t={t} entry={entry} expanded={statusOpen} onToggle={toggleStatus} />
+            <div style={{ display: "flex", gap: 2 }}>
+              <button className="avid-btn" style={S.iconGhost} onClick={toggleEdit} title="Edit">
+                <Pencil size={14} />
+              </button>
+              <button
+                className="avid-btn"
+                style={{ ...S.iconGhost, color: t.danger }}
+                onClick={() => setConfirmDelete(true)}
+                title="Delete"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+        <RowExpandedPanel
+          S={S}
+          t={t}
+          mobile={mobile}
+          entry={entry}
+          statusOpen={statusOpen}
+          editOpen={editOpen}
+          firstTime={draft.firstTime}
+          onToggleFirstTime={(firstTime) => setDraft((d) => ({ ...d, firstTime }))}
+          canSave={canSave}
+          onSave={handleSave}
+          onCloseStatus={() => setMode(null)}
+          onSetStage={onSetStage}
+          onRestore={onRestore}
+          onDecline={onDecline}
+          onLogMeeting={onLogMeeting}
+          onDeleteMeeting={onDeleteMeeting}
+        />
+        <ConfirmDeleteDialog
+          S={S}
+          open={confirmDelete}
+          itemLabel={`the send-out for ${entry.candidate}`}
+          onConfirm={() => {
+            setConfirmDelete(false);
+            onDelete();
+          }}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div
+        className="avid-row avid-row-enter"
+        style={mode ? { ...S.cardRow, ...S.soGrid, borderBottom: "none" } : { ...S.cardRow, ...S.soGrid }}
+      >
+        <div style={S.soCol}>{editOpen ? dateField : <div style={S.cardSub}>{fmtDate(entry.date)}</div>}</div>
+        <div style={S.soCol}>{editOpen ? candidateField : <div style={S.cardPrimary}>{entry.candidate}</div>}</div>
+        <div style={S.soCol}>{editOpen ? companyField : <div style={S.cardSub}>{entry.company}</div>}</div>
+        <div style={S.soStatusCol}>
+          <ProcessStatusControl t={t} entry={entry} expanded={statusOpen} onToggle={toggleStatus} />
+        </div>
+        <div style={S.soCol}>{editOpen ? roleField : <div style={S.cardSub}>{entry.role || "—"}</div>}</div>
+        <div style={S.soCol}>
+          {editOpen ? teamField : <div style={S.cardSub}>{(entry.team || []).join("/") || "—"}</div>}
+        </div>
+        <div style={S.soActionsCol}>
+          <button className="avid-btn" style={S.iconGhost} onClick={toggleEdit} title="Edit">
+            <Pencil size={14} />
+          </button>
+          <button
+            className="avid-btn"
+            style={{ ...S.iconGhost, color: t.danger }}
+            onClick={() => setConfirmDelete(true)}
+            title="Delete"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+      <RowExpandedPanel
+        S={S}
+        t={t}
+        mobile={mobile}
+        entry={entry}
+        statusOpen={statusOpen}
+        editOpen={editOpen}
+        firstTime={draft.firstTime}
+        onToggleFirstTime={(firstTime) => setDraft((d) => ({ ...d, firstTime }))}
+        canSave={canSave}
+        onSave={handleSave}
+        onCloseStatus={() => setMode(null)}
+        onSetStage={onSetStage}
+        onRestore={onRestore}
+        onDecline={onDecline}
+        onLogMeeting={onLogMeeting}
+        onDeleteMeeting={onDeleteMeeting}
+      />
+      <ConfirmDeleteDialog
+        S={S}
+        open={confirmDelete}
+        itemLabel={`the send-out for ${entry.candidate}`}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          onDelete();
+        }}
+        onCancel={() => setConfirmDelete(false)}
+      />
+    </div>
+  );
+}
+
+// The inline replacement for the old New Send-Out dialog: "+ New" slides
+// this row in at the top of the table (pushing the current top send-out
+// down), looking exactly like an existing row in edit mode -- the same
+// per-column fields with prompt placeholders, Status pre-set to Sent, and
+// the same bottom bar (First-time/Repeat tab, Save). Always mounted; the
+// 0fr/1fr grid-rows trick animates the slide both ways.
+function NewEntryRow({
+  S,
+  t,
+  mobile,
+  teamNames,
+  user,
+  open,
+  onSave,
+  onCancel,
+}: {
+  S: Styles;
+  t: Theme;
+  mobile?: boolean;
+  teamNames: string[];
+  user: string;
+  open: boolean;
+  onSave: (entry: Entry) => void;
+  onCancel: () => void;
+}) {
+  const emptyDraft = { date: "", candidate: "", company: "", role: "", team: [] as string[], firstTime: true };
+  const [draft, setDraft] = useState(emptyDraft);
+  // Fresh blank fields every time the row slides open -- adjusted during
+  // render (not an effect), same pattern as EntryRow's edit draft.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) setDraft(emptyDraft);
+  }
+  const toggleTeam = (name: string) =>
+    setDraft((d) => ({ ...d, team: d.team.includes(name) ? d.team.filter((n) => n !== name) : [...d.team, name] }));
+  const canSave = Boolean(draft.candidate.trim() && draft.company.trim() && draft.date);
+  const handleSave = () =>
+    onSave({
+      id: uid(),
+      date: draft.date,
+      candidate: draft.candidate.trim(),
+      company: draft.company.trim(),
+      role: draft.role.trim() || null,
+      interviewType: "Phone",
+      round: 1,
+      team: draft.team,
+      stage: "sent",
+      stageHistory: [],
+      meetingLog: [],
+      declined: false,
+      declinedReason: null,
+      notes: "",
+      addedBy: user,
+      createdAt: "",
+      firstTime: draft.firstTime,
+    });
+
+  const dateField = (
+    <GlassDatePicker
+      value={draft.date}
+      onChange={(iso) => setDraft((d) => ({ ...d, date: iso }))}
+      placeholder="Select Date"
+      triggerStyle={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5, textAlign: "center" }}
+    />
+  );
+  const candidateField = (
+    <input
+      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 13.5, fontWeight: 600, textAlign: "center" }}
+      value={draft.candidate}
+      placeholder="Candidate Name"
+      onChange={(e) => setDraft((d) => ({ ...d, candidate: e.target.value }))}
+    />
+  );
+  const companyField = (
+    <input
+      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5, textAlign: "center" }}
+      value={draft.company}
+      placeholder="Company Name"
+      onChange={(e) => setDraft((d) => ({ ...d, company: e.target.value }))}
+    />
+  );
+  const roleField = (
+    <input
+      style={{ ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5, textAlign: "center" }}
+      value={draft.role}
+      placeholder="Role Name"
+      onChange={(e) => setDraft((d) => ({ ...d, role: e.target.value }))}
+    />
+  );
+  const teamField = <TeamMultiSelect S={S} teamNames={teamNames} selected={draft.team} onToggle={toggleTeam} />;
+  // Every new send-out starts at Sent, same as the pipeline itself.
+  const sentStatus = (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+      <span style={{ width: 10, height: 10, borderRadius: "50%", background: STAGE_COLOR.sent, flexShrink: 0 }} />
+      <span style={{ fontSize: 12.5, fontWeight: 700, color: STAGE_COLOR.sent }}>Sent</span>
+    </span>
+  );
+  const firstTimeTabs = (
+    <div style={S.segWrap}>
+      <button
+        type="button"
+        className="avid-btn"
+        style={draft.firstTime ? S.segBtnActive : S.segBtn}
+        onClick={() => setDraft((d) => ({ ...d, firstTime: true }))}
+      >
+        First-time
+      </button>
+      <button
+        type="button"
+        className="avid-btn"
+        style={!draft.firstTime ? S.segBtnActive : S.segBtn}
+        onClick={() => setDraft((d) => ({ ...d, firstTime: false }))}
+      >
+        Repeat
+      </button>
+    </div>
+  );
+  // Cancel/Save grouped in the same segmented-tab look as the First-time/
+  // Repeat toggle -- Save wears the active tab style, Cancel the muted one.
+  const cancelSaveTabs = (
+    <div style={S.segWrap}>
+      <button type="button" className="avid-btn" style={S.segBtn} onClick={onCancel}>
+        Cancel
+      </button>
+      <button
+        type="button"
+        className="avid-btn"
+        style={{ ...S.segBtnActive, opacity: canSave ? 1 : 0.5 }}
+        disabled={!canSave}
+        onClick={handleSave}
+      >
+        Save
+      </button>
+    </div>
+  );
+  const bottomBar = mobile ? (
+    <div
+      style={{
+        padding: "0 16px 14px",
+        borderBottom: `1px solid ${t.border}`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+      }}
+    >
+      {firstTimeTabs}
+      {cancelSaveTabs}
+    </div>
+  ) : (
+    // Mirrors the row's own 7-column soGrid above so Cancel/Save lands
+    // centered under the Actions column, same as a normal row's icons.
+    <div
+      style={{
+        padding: "0 22px 20px",
+        borderBottom: `1px solid ${t.border}`,
+        display: "grid",
+        gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+        columnGap: 20,
+        alignItems: "center",
+      }}
+    >
+      <div style={{ gridColumn: "1 / 7", display: "flex" }}>{firstTimeTabs}</div>
+      <div style={{ gridColumn: "7 / 8", display: "flex", justifyContent: "center" }}>{cancelSaveTabs}</div>
+    </div>
+  );
+
+  return (
+    <div className="avid-expand" style={{ gridTemplateRows: open ? "1fr" : "0fr" }}>
+      <div>
+        {mobile ? (
+          <div
+            style={{
+              padding: "16px 16px 14px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}
+          >
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              {candidateField}
+              {dateField}
+            </div>
+            {companyField}
+            {roleField}
+            {teamField}
+            {sentStatus}
+          </div>
+        ) : (
+          <div style={{ ...S.cardRow, ...S.soGrid, borderBottom: "none" }}>
+            <div style={S.soCol}>{dateField}</div>
+            <div style={S.soCol}>{candidateField}</div>
+            <div style={S.soCol}>{companyField}</div>
+            <div style={S.soStatusCol}>{sentStatus}</div>
+            <div style={S.soCol}>{roleField}</div>
+            <div style={S.soCol}>{teamField}</div>
+            <div style={S.soActionsCol} />
+          </div>
+        )}
+        {bottomBar}
+      </div>
+    </div>
+  );
+}
+
+// Compact activity-log labels matching the office shorthand: T = Telephone,
+// F = Face-to-Face, V = Video, each with its round in parens. The Offer and
+// Placed markers (auto-logged when those stages are reached) just read
+// "Offer" / "Placed", same as a meeting entry's round is irrelevant to them.
+const MEETING_TYPE_CODE: Record<string, string> = { Phone: "T", "Face-to-Face": "F", Video: "V" };
+function activityLabel(type: string, round: number) {
+  if (type === "Offer" || type === "Placed") return type;
+  return `${MEETING_TYPE_CODE[type] ?? type[0]}(${round})`;
+}
+
+// The next round for a given meeting type, tracked independently per type --
+// Phone 1 then Phone 2 suggests Phone 3, but switching to Video or
+// Face-to-Face (which haven't happened yet, or stopped at a different
+// round) should suggest round 1 for that type, not continue Phone's count.
+function nextRoundForType(entry: Entry, type: string) {
+  const last = [...entry.meetingLog].reverse().find((m) => m.type === type);
+  return last ? last.round + 1 : 1;
+}
+
+// A compact status icon standing in for the whole process — click it to
+// expand the row into the full timeline (Sent date, Interview's activity
+// log, Offer, Placed) instead of opening a floating popover. While in
+// Interview, it also shows the latest logged meeting (e.g. "Interview
+// T(2)") so the most recent update is visible without expanding.
+function ProcessStatusControl({
+  t,
+  entry,
+  expanded,
+  onToggle,
+}: {
+  t: Theme;
+  entry: Entry;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const idx = Math.max(0, PIPELINE.findIndex((s) => s.key === entry.stage));
+  const color = entry.declined ? t.danger : STAGE_COLOR[entry.stage];
+  const last = entry.meetingLog[entry.meetingLog.length - 1];
+  const label = entry.declined ? "Declined" : PIPELINE[idx].label;
+  const suffix = !entry.declined && entry.stage === "interview" && last ? ` ${activityLabel(last.type, last.round)}` : "";
+  return (
+    <button
+      type="button"
+      className="avid-btn"
+      onClick={onToggle}
+      title={expanded ? "Hide process" : "View process"}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        border: "none",
+        background: "none",
+        padding: 0,
+        cursor: "pointer",
+        font: "inherit",
+      }}
+    >
+      <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, flexShrink: 0 }} />
+      <span style={{ fontSize: 12.5, fontWeight: 700, color }}>
+        {label}
+        {suffix}
+      </span>
+    </button>
+  );
+}
+
+// Status and Edit each get their own content in this shared expand slot,
+// never both at once. Status: the unchanged Sent/Interview/Offer/Placed
+// tracker + activity log, with a Done button (view only, nothing saved).
+// Edit: just the bottom bar (First-time/Repeat tab + Save) -- the actual
+// editable fields live up in the row's own columns, not here. Always
+// mounted regardless of open/closed state — the 0fr/1fr grid-rows trick
+// (see .avid-expand) animates height smoothly both ways, and never resizes
+// the row above.
+function RowExpandedPanel({
+  S,
+  t,
+  mobile,
+  entry,
+  statusOpen,
+  editOpen,
+  firstTime,
+  onToggleFirstTime,
+  canSave,
+  onSave,
+  onCloseStatus,
+  onSetStage,
+  onRestore,
+  onDecline,
+  onLogMeeting,
+  onDeleteMeeting,
+}: {
+  S: Styles;
+  t: Theme;
+  mobile?: boolean;
+  entry: Entry;
+  statusOpen: boolean;
+  editOpen: boolean;
+  firstTime: boolean;
+  onToggleFirstTime: (firstTime: boolean) => void;
+  canSave: boolean;
+  onSave: () => void;
+  onCloseStatus: () => void;
+  onSetStage: (stage: Stage) => void;
+  onRestore: () => void;
+  onDecline: (reason: DeclineReason) => void;
+  onLogMeeting: (type: string, round: number, date: string) => void;
+  onDeleteMeeting: (meetingId: string) => void;
+}) {
+  return (
+    <div className="avid-expand" style={{ gridTemplateRows: statusOpen || editOpen ? "1fr" : "0fr" }}>
+      <div>
+        <div
+          style={{
+            // Enough top headroom that a hover-grown stage dot never reaches
+            // the .avid-expand overflow boundary and gets clipped.
+            padding: "12px 22px 20px",
+            borderBottom: `1px solid ${t.border}`,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 18,
+          }}
+        >
+          {editOpen ? (
+            mobile ? (
+              <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={S.segWrap}>
+                  <button
+                    type="button"
+                    className="avid-btn"
+                    style={firstTime ? S.segBtnActive : S.segBtn}
+                    onClick={() => onToggleFirstTime(true)}
+                  >
+                    First-time
+                  </button>
+                  <button
+                    type="button"
+                    className="avid-btn"
+                    style={!firstTime ? S.segBtnActive : S.segBtn}
+                    onClick={() => onToggleFirstTime(false)}
+                  >
+                    Repeat
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  className="avid-btn"
+                  style={{ ...S.ghostBtn, opacity: canSave ? 1 : 0.5 }}
+                  disabled={!canSave}
+                  onClick={onSave}
+                >
+                  Save
+                </button>
+              </div>
+            ) : (
+              // Mirrors the row's own 7-column soGrid above so Save lands
+              // centered under the Actions column, same as the Edit/Delete
+              // icons on the collapsed row.
+              <div style={{ width: "100%", display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", columnGap: 20, alignItems: "center" }}>
+                <div style={{ gridColumn: "1 / 7", display: "flex" }}>
+                  <div style={S.segWrap}>
+                    <button
+                      type="button"
+                      className="avid-btn"
+                      style={firstTime ? S.segBtnActive : S.segBtn}
+                      onClick={() => onToggleFirstTime(true)}
+                    >
+                      First-time
+                    </button>
+                    <button
+                      type="button"
+                      className="avid-btn"
+                      style={!firstTime ? S.segBtnActive : S.segBtn}
+                      onClick={() => onToggleFirstTime(false)}
+                    >
+                      Repeat
+                    </button>
+                  </div>
+                </div>
+                <div style={{ gridColumn: "7 / 8", display: "flex", justifyContent: "center" }}>
+                  <button
+                    type="button"
+                    className="avid-btn"
+                    style={{ ...S.ghostBtn, opacity: canSave ? 1 : 0.5 }}
+                    disabled={!canSave}
+                    onClick={onSave}
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            )
+          ) : (
+            <>
+              <StageProgress
+                t={t}
+                stage={entry.stage}
+                declined={entry.declined}
+                declinedReason={entry.declinedReason}
+                onSetStage={onSetStage}
+                onRestore={onRestore}
+                onDecline={onDecline}
+                large
+              />
+              {(entry.stage === "interview" || entry.meetingLog.length > 0) && (
+                <div style={{ width: "100%", maxWidth: 380 }}>
+                  <ActivityLogPanel
+                    S={S}
+                    t={t}
+                    key={entry.meetingLog.length}
+                    entry={entry}
+                    onLog={onLogMeeting}
+                    onDelete={onDeleteMeeting}
+                  />
+                </div>
+              )}
+              <button type="button" className="avid-btn" style={{ ...S.ghostBtn, alignSelf: "flex-end" }} onClick={onCloseStatus}>
+                Done
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// The activity log: every logged meeting (T(1), then T(2), then F(1), ...)
+// plus the Offer marker once that stage is reached, and a way to log the
+// next meeting while still in Interview. Each entry can be deleted (logged
+// by mistake); the date defaults to today and only opens a picker if
+// clicked.
+function ActivityLogPanel({
+  S,
+  t,
+  entry,
+  onLog,
+  onDelete,
 }: {
   S: Styles;
   t: Theme;
   entry: Entry;
-  onEdit: () => void;
-  onDelete: () => void;
-  onSetStage: (stage: Stage) => void;
-  onEditDate: (stage: Stage, date: string) => void;
-  onRestore: () => void;
-  onDecline: (reason: DeclineReason) => void;
+  onLog: (type: string, round: number, date: string) => void;
+  onDelete: (meetingId: string) => void;
 }) {
+  const lastMeeting = [...entry.meetingLog].reverse().find((m) => m.type !== "Offer");
+  const [draftType, setDraftType] = useState(lastMeeting?.type || "Phone");
+  const [draftRound, setDraftRound] = useState(() => nextRoundForType(entry, draftType));
+  const [draftDate, setDraftDate] = useState(todayISO());
+  const canAdd = entry.stage === "interview" && !entry.declined;
+
   return (
-    <div className="avid-row avid-row-enter" style={S.cardRow}>
-      <div style={S.colCandidate}>
-        <div style={S.cardPrimary}>{entry.candidate}</div>
-        <div style={S.cardSub}>{entry.company}</div>
+    <div>
+      <div
+        style={{
+          fontSize: 10.5,
+          fontWeight: 700,
+          letterSpacing: 0.4,
+          textTransform: "uppercase",
+          color: t.mutedSoft,
+          marginBottom: 8,
+        }}
+      >
+        Activity log
       </div>
-      <div style={S.colRole}>
-        <div style={S.cardPrimary}>{entry.role || "—"}</div>
-        <div style={S.cardSub}>
-          {entry.interviewType}
-          {entry.round ? ` · R${entry.round}` : ""}
+      {entry.meetingLog.length === 0 ? (
+        <div style={{ fontSize: 12, color: t.mutedSoft, marginBottom: 10 }}>Nothing logged yet.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 10 }}>
+          {entry.meetingLog.map((m) => (
+            <div
+              key={m.id}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0" }}
+            >
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: t.ink }}>{activityLabel(m.type, m.round)}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 12, color: t.muted, fontVariantNumeric: "tabular-nums" }}>{fmtDate(m.date)}</span>
+                <button
+                  type="button"
+                  className="avid-btn"
+                  onClick={() => onDelete(m.id)}
+                  title="Remove this entry"
+                  style={{ border: "none", background: "none", padding: 2, cursor: "pointer", color: t.mutedSoft, display: "flex" }}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
-      <div style={S.colProgress}>
-        <StageProgress
-          t={t}
-          stage={entry.stage}
-          declined={entry.declined}
-          declinedReason={entry.declinedReason}
-          history={entry.stageHistory}
-          onSetStage={onSetStage}
-          onEditDate={onEditDate}
-          onRestore={onRestore}
-          onDecline={onDecline}
-          large
-        />
-      </div>
-      <div style={S.colTeam}>
-        <div style={S.cardSub}>{(entry.team || []).join(", ") || "—"}</div>
-      </div>
-      <div style={S.colDate}>
-        <div style={S.cardSub}>{fmtDate(entry.date)}</div>
-      </div>
-      <div style={S.colActions}>
-        <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
-          <Pencil size={14} />
-        </button>
-        <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
-          <Trash2 size={14} />
-        </button>
-      </div>
+      )}
+      {canAdd && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 10, borderTop: `1px solid ${t.border}` }}>
+          {/* Type and date share the row's width equally with centered
+              text; the round number sits between them in a roomier box. */}
+          <div style={{ display: "flex", gap: 10 }}>
+            <GlassSelect
+              value={draftType}
+              options={INTERVIEW_TYPES}
+              onChange={(type) => {
+                setDraftType(type);
+                setDraftRound(nextRoundForType(entry, type));
+              }}
+              triggerStyle={{ ...S.input, flex: "1 1 0", minWidth: 0, padding: "7px 9px", fontSize: 12.5, textAlign: "center" }}
+            />
+            <input
+              type="number"
+              min="1"
+              value={draftRound}
+              onChange={(e) => setDraftRound(Number(e.target.value))}
+              style={{ ...S.input, width: 64, padding: "7px 9px", fontSize: 12.5, textAlign: "center" }}
+            />
+            <GlassDatePicker
+              value={draftDate}
+              onChange={setDraftDate}
+              triggerStyle={{ ...S.input, flex: "1 1 0", minWidth: 0, padding: "7px 9px", fontSize: 12.5, textAlign: "center" }}
+            />
+          </div>
+          <button
+            type="button"
+            className="avid-btn"
+            style={{ ...S.ghostBtn, textAlign: "center" as const, padding: "8px 10px", fontSize: 12.5 }}
+            onClick={() => onLog(draftType, draftRound, draftDate)}
+          >
+            + Log meeting
+          </button>
+        </div>
+      )}
     </div>
+  );
+}
+
+// ---------- Liquid Glass pickers ----------
+// One shared anchor-and-dismiss brain for every glass popover: outside
+// click (scoped by data attribute) and Escape close it; placement keeps it
+// centered under its trigger and inside the viewport, re-measured on
+// scroll/resize.
+function useGlassPopover(attr: string, width: number, estHeight: number) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (!(e.target instanceof Element) || !e.target.closest(`[${attr}]`)) setOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open, attr]);
+
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect -- measures real DOM
+       layout (getBoundingClientRect), which is only available in an effect */
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    const place = () => {
+      const el = btnRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const left = Math.min(Math.max(rect.left + rect.width / 2, width / 2 + 8), window.innerWidth - width / 2 - 8);
+      const top = Math.min(rect.bottom + 6, Math.max(8, window.innerHeight - estHeight - 8));
+      setPos({ top, left });
+    };
+    place();
+    /* eslint-enable react-hooks/set-state-in-effect */
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, width, estHeight]);
+
+  return { open, setOpen, pos, btnRef };
+}
+
+// One shared row treatment for every glass menu: full-bleed (the pane's
+// big radius does the clipping), regular weight, with a leading checkmark
+// slot reserved so labels never shift as selection changes -- iOS menus.
+function glassMenuRow(withCheckSlot: boolean): React.CSSProperties {
+  return {
+    border: "none",
+    color: GLASS_FG,
+    textAlign: "left",
+    padding: withCheckSlot ? "11px 16px 11px 11px" : "11px 16px",
+    fontSize: 14.5,
+    fontWeight: 400,
+    fontFamily: FONT,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+  };
+}
+
+function GlassCheckSlot({ checked }: { checked: boolean }) {
+  return (
+    <span style={{ width: 20, display: "flex", justifyContent: "center", flexShrink: 0 }}>
+      {checked && <Check size={15} color={GLASS_FG} strokeWidth={2.5} />}
+    </span>
+  );
+}
+
+// Single-select dropdown on the glass menu system -- the app-wide
+// replacement for native <select>, so every dropdown matches (native
+// selects render the OS's own menu, which isn't glass on any platform).
+function GlassSelect({
+  value,
+  options,
+  labels,
+  onChange,
+  triggerStyle,
+}: {
+  value: string;
+  options: string[];
+  labels?: Record<string, string>;
+  onChange: (v: string) => void;
+  triggerStyle: React.CSSProperties;
+}) {
+  const { open, setOpen, pos, btnRef } = useGlassPopover("data-glass-select", 210, options.length * 42 + 16);
+  const display = labels?.[value] || value;
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        data-glass-select
+        className="avid-btn"
+        onClick={() => setOpen((v) => !v)}
+        style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontFamily: FONT, ...triggerStyle }}
+      >
+        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "inherit" }}>
+          {display}
+        </span>
+        <ChevronDown size={12} style={{ flexShrink: 0, opacity: 0.6 }} />
+      </button>
+      {open &&
+        pos &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            data-glass-select
+            style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 1000 }}
+          >
+            <div
+              className="avid-glass-pop avid-glass-popover"
+              style={{ display: "flex", flexDirection: "column", minWidth: 210, maxHeight: 336, overflowY: "auto" }}
+            >
+              {options.map((opt, i) => (
+                <Fragment key={opt}>
+                  {i > 0 && <div className="avid-glass-sep" />}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange(opt);
+                      setOpen(false);
+                    }}
+                    className="avid-glass-option"
+                    style={glassMenuRow(true)}
+                  >
+                    <GlassCheckSlot checked={opt === value} />
+                    {labels?.[opt] || opt}
+                  </button>
+                </Fragment>
+              ))}
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
+
+// Date field on the glass system: shows just the value until clicked, then
+// opens the same glass calendar the stage tracker uses -- the app-wide
+// replacement for native <input type="date">, so every calendar matches.
+function GlassDatePicker({
+  value,
+  onChange,
+  triggerStyle,
+  placeholder = "Set date",
+}: {
+  value: string;
+  onChange: (iso: string) => void;
+  triggerStyle: React.CSSProperties;
+  placeholder?: string;
+}) {
+  const { open, setOpen, pos, btnRef } = useGlassPopover("data-glass-date", 262, 330);
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        data-glass-date
+        className="avid-btn"
+        title="Click to change date"
+        onClick={() => setOpen((v) => !v)}
+        style={{ cursor: "pointer", whiteSpace: "nowrap", fontFamily: FONT, ...triggerStyle }}
+      >
+        {value ? fmtDate(value) : placeholder}
+      </button>
+      {open &&
+        pos &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            data-glass-date
+            style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 1000 }}
+          >
+            <div className="avid-glass-pop avid-glass-popover" style={{ padding: "12px 10px 10px" }}>
+              <MiniCalendar
+                value={value || null}
+                onSelect={(iso) => {
+                  onChange(iso);
+                  setOpen(false);
+                }}
+              />
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
+
+// A closed-by-default dropdown for picking any number of team members --
+// same glass menu as GlassSelect, but toggling doesn't dismiss, so several
+// names can be checked in one visit.
+function TeamMultiSelect({
+  S,
+  teamNames,
+  selected,
+  onToggle,
+}: {
+  S: Styles;
+  teamNames: string[];
+  selected: string[];
+  onToggle: (name: string) => void;
+}) {
+  const { open, setOpen, pos, btnRef } = useGlassPopover("data-team-popover", 210, teamNames.length * 42 + 16);
+  const label = selected.length ? selected.join("/") : "Select Team";
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        data-team-popover
+        className="avid-btn"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          ...S.input,
+          width: "100%",
+          padding: "5px 7px",
+          fontSize: 12.5,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 5,
+          cursor: "pointer",
+        }}
+      >
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+        <ChevronDown size={12} style={{ flexShrink: 0, opacity: 0.6 }} />
+      </button>
+      {open &&
+        pos &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            data-team-popover
+            style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 1000 }}
+          >
+            <div
+              className="avid-glass-pop avid-glass-popover"
+              style={{ display: "flex", flexDirection: "column", minWidth: 210 }}
+            >
+              {teamNames.map((name, i) => (
+                <Fragment key={name}>
+                  {i > 0 && <div className="avid-glass-sep" />}
+                  <button
+                    type="button"
+                    onClick={() => onToggle(name)}
+                    className="avid-glass-option"
+                    style={glassMenuRow(true)}
+                  >
+                    <GlassCheckSlot checked={selected.includes(name)} />
+                    {name}
+                  </button>
+                </Fragment>
+              ))}
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
   );
 }
 
@@ -704,52 +1874,120 @@ function BillingRow({
   S,
   t,
   billing,
+  mobile,
   onEdit,
   onDelete,
 }: {
   S: Styles;
   t: Theme;
   billing: Billing;
+  mobile?: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const confirmDialog = (
+    <ConfirmDeleteDialog
+      S={S}
+      open={confirmDelete}
+      itemLabel={`the ${money(billing.amount)} billing${billing.company ? ` for ${billing.company}` : ""}`}
+      onConfirm={() => {
+        setConfirmDelete(false);
+        onDelete();
+      }}
+      onCancel={() => setConfirmDelete(false)}
+    />
+  );
+  // Edit/Delete are off for now -- no Actions column in the new Send-Outs-
+  // matched layout. Left wired (onEdit/onDelete, confirmDialog) so flipping
+  // this back on is a one-line change instead of rebuilding the row.
+  const showActions = false;
+
+  if (mobile) {
+    return (
+      <div
+        className="avid-row avid-row-enter"
+        style={{ padding: "14px 16px", borderBottom: `1px solid ${S._t.border}`, display: "flex", flexDirection: "column", gap: 6 }}
+      >
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+          <div style={S.cardPrimary}>{billing.candidate || "—"}</div>
+          <span style={S.amountText}>{money(billing.amount)}</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ ...S.cardSub, marginTop: 0 }}>
+            {[billing.company, billing.team.join("/"), fmtDate(billing.date)].filter(Boolean).join(" · ")}
+          </div>
+          {showActions && (
+            <div style={{ display: "flex", gap: 2 }}>
+              <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
+                <Pencil size={14} />
+              </button>
+              <button
+                className="avid-btn"
+                style={{ ...S.iconGhost, color: t.danger }}
+                onClick={() => setConfirmDelete(true)}
+                title="Delete"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          )}
+        </div>
+        {showActions && confirmDialog}
+      </div>
+    );
+  }
+
+  // Same 7-column soGrid as Send-Outs, for matching spacing/sizing: Date,
+  // Candidate, Company, blank (no Status data), blank (no Role data), Team,
+  // Amount in place of Actions.
   return (
-    <div className="avid-row avid-row-enter" style={S.billingRow}>
-      <div style={S.colRecruiter}>
-        <div style={S.cardPrimary}>{billing.recruiter}</div>
-      </div>
-      <div style={S.colClient}>
-        <div style={S.cardPrimary}>{billing.company || "—"}</div>
-        {billing.candidate ? <div style={S.cardSub}>{billing.candidate}</div> : null}
-      </div>
-      <div style={S.colAmount}>
-        <span style={S.amountText}>{money(billing.amount)}</span>
-      </div>
-      <div style={S.colDate}>
+    <div className="avid-row avid-row-enter" style={{ ...S.cardRow, ...S.soGrid }}>
+      <div style={S.soCol}>
         <div style={S.cardSub}>{fmtDate(billing.date)}</div>
       </div>
-      <div style={S.colActions}>
-        <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
-          <Pencil size={14} />
-        </button>
-        <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
-          <Trash2 size={14} />
-        </button>
+      <div style={S.soCol}>
+        <div style={S.cardPrimary}>{billing.candidate || "—"}</div>
       </div>
+      <div style={S.soCol}>
+        <div style={S.cardSub}>{billing.company || "—"}</div>
+      </div>
+      <div style={S.soStatusCol} />
+      <div style={S.soCol} />
+      <div style={S.soCol}>
+        <div style={S.cardSub}>{billing.team.join("/") || "—"}</div>
+      </div>
+      <div style={S.soCol}>
+        <span style={S.amountText}>{money(billing.amount)}</span>
+      </div>
+      {showActions && (
+        <div style={S.soActionsCol}>
+          <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
+            <Pencil size={14} />
+          </button>
+          <button
+            className="avid-btn"
+            style={{ ...S.iconGhost, color: t.danger }}
+            onClick={() => setConfirmDelete(true)}
+            title="Delete"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      )}
+      {showActions && confirmDialog}
     </div>
   );
 }
 
 // ---------- stage progress indicator ----------
-function lastEventDate(history: StageEvent[], stage: Stage): string | null {
-  const event = [...history].reverse().find((h) => h.stage === stage);
-  return event?.date ?? null;
-}
 
-// Fixed dark-gray pill for the stage tooltip/decline-reason popover — same
-// look in both light and dark theme, not tied to the app's theme colors.
-const STAGE_POPOVER_BG = "#2A2A28";
-const STAGE_POPOVER_FG = "#F0EDE7";
+// Liquid Glass popover text colors -- Apple's dark-mode label colors
+// (label / secondaryLabel / tertiaryLabel on a dark pane), fixed regardless
+// of the app's own light/dark theme, same as iOS dark menus.
+const GLASS_FG = "#F5F5F7";
+const GLASS_FG_SECONDARY = "rgba(235,235,245,0.6)";
+const GLASS_FG_TERTIARY = "rgba(235,235,245,0.3)";
 
 const DECLINE_REASONS: { key: DeclineReason; label: string }[] = [
   { key: "candidate", label: "Rejected by candidate" },
@@ -758,6 +1996,10 @@ const DECLINE_REASONS: { key: DeclineReason; label: string }[] = [
 
 const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 
+// Styled after iOS's inline date picker (dark): month + year bold at the
+// left of the header with the paging chevrons grouped at the right, a row
+// of dim single-letter weekday caps, and circular day cells -- the selected
+// day gets a translucent filled circle, today reads bold with a faint ring.
 function MiniCalendar({ value, onSelect }: { value: string | null; onSelect: (iso: string) => void }) {
   const initial = value ? new Date(`${value}T00:00:00`) : new Date();
   const [viewYear, setViewYear] = useState(initial.getFullYear());
@@ -793,19 +2035,21 @@ function MiniCalendar({ value, onSelect }: { value: string | null; onSelect: (is
   ];
 
   return (
-    <div style={{ width: 208 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-        <button onClick={goPrev} className="avid-cal-nav" style={{ border: "none", background: "none", color: STAGE_POPOVER_FG, cursor: "pointer", display: "flex", padding: 3, borderRadius: 5 }}>
-          <ChevronLeft size={13} />
-        </button>
-        <span style={{ fontSize: 11.5, fontWeight: 700 }}>{monthLabel}</span>
-        <button onClick={goNext} className="avid-cal-nav" style={{ border: "none", background: "none", color: STAGE_POPOVER_FG, cursor: "pointer", display: "flex", padding: 3, borderRadius: 5 }}>
-          <ChevronRight size={13} />
-        </button>
+    <div style={{ width: 238, color: GLASS_FG }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 4px 10px 8px" }}>
+        <span style={{ fontSize: 14.5, fontWeight: 600, letterSpacing: -0.2 }}>{monthLabel}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <button onClick={goPrev} className="avid-cal-nav" style={{ border: "none", color: GLASS_FG, cursor: "pointer", display: "flex", padding: 5, borderRadius: 7 }}>
+            <ChevronLeft size={16} strokeWidth={2.5} />
+          </button>
+          <button onClick={goNext} className="avid-cal-nav" style={{ border: "none", color: GLASS_FG, cursor: "pointer", display: "flex", padding: 5, borderRadius: 7 }}>
+            <ChevronRight size={16} strokeWidth={2.5} />
+          </button>
+        </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 3 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 4 }}>
         {WEEKDAY_LABELS.map((d, i) => (
-          <div key={i} style={{ fontSize: 9.5, fontWeight: 700, textAlign: "center", opacity: 0.5 }}>
+          <div key={i} style={{ fontSize: 10.5, fontWeight: 600, textAlign: "center", color: GLASS_FG_TERTIARY }}>
             {d}
           </div>
         ))}
@@ -822,16 +2066,17 @@ function MiniCalendar({ value, onSelect }: { value: string | null; onSelect: (is
               onClick={() => onSelect(iso)}
               className="avid-cal-day"
               style={{
-                width: 26,
-                height: 26,
-                borderRadius: 7,
+                width: 31,
+                height: 31,
+                borderRadius: "50%",
                 border: "none",
-                background: isSelected ? STAGE_POPOVER_FG : "transparent",
-                color: isSelected ? STAGE_POPOVER_BG : STAGE_POPOVER_FG,
-                fontSize: 11,
-                fontWeight: isToday ? 800 : 500,
+                background: isSelected ? "rgba(255,255,255,0.27)" : undefined,
+                color: isSelected || isToday ? GLASS_FG : GLASS_FG_SECONDARY,
+                fontSize: 13,
+                fontWeight: isSelected || isToday ? 700 : 500,
                 cursor: "pointer",
-                boxShadow: isToday && !isSelected ? `inset 0 0 0 1px ${STAGE_POPOVER_FG}66` : "none",
+                fontVariantNumeric: "tabular-nums",
+                boxShadow: isToday && !isSelected ? "inset 0 0 0 1.5px rgba(245,245,247,0.4)" : "none",
               }}
             >
               {day}
@@ -848,10 +2093,8 @@ function StageProgress({
   stage,
   declined,
   declinedReason,
-  history = [],
   onSetStage,
   onToggleDeclined,
-  onEditDate,
   onRestore,
   onDecline,
   large,
@@ -860,25 +2103,23 @@ function StageProgress({
   stage: Stage;
   declined: boolean;
   declinedReason?: DeclineReason | null;
-  history?: StageEvent[];
   onSetStage?: (stage: Stage) => void;
   onToggleDeclined?: () => void;
-  onEditDate?: (stage: Stage, date: string) => void;
   onRestore?: () => void;
   onDecline?: (reason: DeclineReason) => void;
   large?: boolean;
 }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-  const [openIdx, setOpenIdx] = useState<number | null>(null);
   const [declineMenuOpen, setDeclineMenuOpen] = useState(false);
-  const dotRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const declineBtnRef = useRef<HTMLButtonElement | null>(null);
-  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
   const [declinePos, setDeclinePos] = useState<{ top: number; left: number } | null>(null);
   const idx = Math.max(0, PIPELINE.findIndex((s) => s.key === stage));
   const color = declined ? t.danger : STAGE_COLOR[stage];
   const fillPct = (idx / (PIPELINE.length - 1)) * 100;
-  const trackWidth = large ? 340 : 220;
+  const isMobile = useIsMobile();
+  // 340px + the absolutely-positioned decline button would overflow a
+  // 390px phone; 240px leaves room for it inside the panel padding.
+  const trackWidth = large ? (isMobile ? 240 : 340) : 220;
   const dotSize = large ? 22 : 13;
   const lineH = large ? 5 : 3;
   const inset = dotSize / 2;
@@ -897,57 +2138,6 @@ function StageProgress({
     const timer = setTimeout(() => setPoppedIdx(null), 400);
     return () => clearTimeout(timer);
   }, [poppedIdx]);
-
-  // The date popover closes on an outside click or Escape — not on mouse
-  // movement, so it stays put while you pick a date.
-  useEffect(() => {
-    if (openIdx === null) return;
-    const onPointerDown = (e: MouseEvent) => {
-      if (!(e.target instanceof Element) || !e.target.closest("[data-stage-popover]")) {
-        setOpenIdx(null);
-      }
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpenIdx(null);
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [openIdx]);
-
-  // The popover is portaled to <body> (so it's never clipped by the table's
-  // rounded-corner overflow:hidden) and positioned from the anchor dot's
-  // real screen position, clamped to stay fully on-screen.
-  useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect -- measures real DOM
-       layout (getBoundingClientRect), which is only available in an effect */
-    if (openIdx === null) {
-      setPopoverPos(null);
-      return;
-    }
-    const place = () => {
-      const el = dotRefs.current[openIdx];
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      const width = 228;
-      const height = 260;
-      const left = Math.min(Math.max(rect.left + rect.width / 2, width / 2 + 8), window.innerWidth - width / 2 - 8);
-      const top =
-        rect.bottom + height + 10 <= window.innerHeight ? rect.bottom + 10 : Math.max(8, rect.top - height - 10);
-      setPopoverPos({ top, left });
-    };
-    place();
-    /* eslint-enable react-hooks/set-state-in-effect */
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
-    return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
-    };
-  }, [openIdx]);
 
   // Decline-reason menu: opens to the right of the button, portaled to
   // <body> so it isn't clipped, and stays open until an outside click,
@@ -996,8 +2186,18 @@ function StageProgress({
     };
   }, [declineMenuOpen]);
 
+  // In large mode the decline control is pulled out of normal flow (absolute,
+  // anchored off the track's own box) so it never adds width the outer
+  // centering has to account for — the dots stay dead center regardless of
+  // whether "Declined" is showing.
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: large ? 22 : 14 }}>
+    <div
+      style={
+        large
+          ? { position: "relative", width: trackWidth }
+          : { display: "flex", alignItems: "flex-start", gap: 14 }
+      }
+    >
       <div style={{ width: trackWidth }}>
         <div style={{ position: "relative", height: dotSize + 4 }}>
           <div
@@ -1028,7 +2228,6 @@ function StageProgress({
           />
           <div style={{ position: "relative", display: "flex", justifyContent: "space-between" }}>
             {PIPELINE.map((s, i) => {
-              const isActive = i === idx && !declined;
               return (
                 <div
                   key={`dot-${i}`}
@@ -1036,86 +2235,23 @@ function StageProgress({
                   onMouseEnter={() => setHoverIdx(i)}
                   onMouseLeave={() => setHoverIdx((cur) => (cur === i ? null : cur))}
                 >
-                  {onEditDate &&
-                    i === idx &&
-                    openIdx === i &&
-                    popoverPos &&
-                    typeof document !== "undefined" &&
-                    createPortal(
-                      <div
-                        data-stage-popover
-                        style={{
-                          position: "fixed",
-                          top: popoverPos.top,
-                          left: popoverPos.left,
-                          transform: "translateX(-50%)",
-                          background: STAGE_POPOVER_BG,
-                          color: STAGE_POPOVER_FG,
-                          padding: "10px",
-                          borderRadius: 12,
-                          boxShadow: "0 12px 32px rgba(0,0,0,0.4)",
-                          zIndex: 1000,
-                        }}
-                      >
-                        <MiniCalendar
-                          value={lastEventDate(history, s.key)}
-                          onSelect={(iso) => {
-                            onEditDate(s.key, iso);
-                            setOpenIdx(null);
-                          }}
-                        />
-                      </div>,
-                      document.body
-                    )}
-                  {onEditDate && i === idx && openIdx !== i && hoverIdx === i && (
-                    <div
-                      style={{
-                        position: "absolute",
-                        bottom: "100%",
-                        left: "50%",
-                        transform: "translate(-50%, -8px)",
-                        background: STAGE_POPOVER_BG,
-                        color: STAGE_POPOVER_FG,
-                        fontSize: 11.5,
-                        fontWeight: 600,
-                        padding: "6px 10px",
-                        borderRadius: 7,
-                        whiteSpace: "nowrap",
-                        boxShadow: "0 4px 14px rgba(0,0,0,0.25)",
-                        zIndex: 5,
-                        pointerEvents: "none",
-                      }}
-                    >
-                      {lastEventDate(history, s.key) ? fmtDate(lastEventDate(history, s.key)!) : "Click to set date"}
-                    </div>
-                  )}
                   <button
-                    ref={(el) => {
-                      dotRefs.current[i] = el;
-                    }}
                     onClick={() => {
-                      if (i === idx) {
-                        if (onEditDate) setOpenIdx(i);
-                        return;
-                      }
+                      if (i === idx) return;
                       onSetStage?.(s.key);
                     }}
                     title={s.label}
-                    className={`avid-stage-dot${poppedIdx === i ? " avid-stage-pop" : ""}${large && isActive ? " avid-stage-active" : ""}`}
-                    style={
-                      {
-                        width: dotSize,
-                        height: dotSize,
-                        borderRadius: "50%",
-                        border: `2px solid ${declined ? t.trackBg : i <= idx ? color : t.trackBg}`,
-                        background: declined ? t.surface : i <= idx ? color : t.surface,
-                        cursor: "pointer",
-                        padding: 0,
-                        boxShadow: large && isActive ? `0 0 0 5px ${color}22` : "none",
-                        transform: hoverIdx === i ? "scale(1.15)" : "scale(1)",
-                        "--pulse-color": `${color}40`,
-                      } as React.CSSProperties
-                    }
+                    className={`avid-stage-dot${poppedIdx === i ? " avid-stage-pop" : ""}`}
+                    style={{
+                      width: dotSize,
+                      height: dotSize,
+                      borderRadius: "50%",
+                      border: `2px solid ${declined ? t.trackBg : i <= idx ? color : t.trackBg}`,
+                      background: declined ? t.surface : i <= idx ? color : t.surface,
+                      cursor: "pointer",
+                      padding: 0,
+                      transform: hoverIdx === i ? "scale(1.25)" : "scale(1)",
+                    }}
                   />
                 </div>
               );
@@ -1143,7 +2279,13 @@ function StageProgress({
           </div>
         )}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: large ? 10 : 8, height: dotSize + 4 }}>
+      <div
+        style={
+          large
+            ? { position: "absolute", left: "100%", top: 0, marginLeft: 22, display: "flex", alignItems: "center", gap: 10, height: dotSize + 4, whiteSpace: "nowrap" }
+            : { display: "flex", alignItems: "center", gap: 8, height: dotSize + 4 }
+        }
+      >
         {!large && (
           <span style={{ fontSize: 12.5, fontWeight: 600, color, minWidth: 64 }}>
             {declined ? "Declined" : PIPELINE[idx].label}
@@ -1154,52 +2296,44 @@ function StageProgress({
             declinePos &&
             typeof document !== "undefined" &&
             createPortal(
-              <div
-                data-decline-popover
-                style={{
-                  position: "fixed",
-                  top: declinePos.top,
-                  left: declinePos.left,
-                  transform: "translateY(-50%)",
-                  background: STAGE_POPOVER_BG,
-                  borderRadius: 9,
-                  padding: 4,
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
-                  zIndex: 1000,
-                  display: "flex",
-                  flexDirection: "column",
-                  minWidth: 176,
-                }}
-              >
-                {DECLINE_REASONS.map((r) => (
-                  <button
-                    key={r.key}
-                    onClick={() => {
-                      onDecline?.(r.key);
-                      setDeclineMenuOpen(false);
-                    }}
-                    className="avid-decline-option"
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: STAGE_POPOVER_FG,
-                      textAlign: "left",
-                      padding: "8px 10px",
-                      fontSize: 12.5,
-                      fontWeight: 600,
-                      borderRadius: 6,
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {r.label}
-                  </button>
-                ))}
+              <div style={{ position: "fixed", top: declinePos.top, left: declinePos.left, transform: "translateY(-50%)", zIndex: 1000 }}>
+                <div
+                  data-decline-popover
+                  className="avid-glass-pop avid-glass-popover"
+                  style={{ display: "flex", flexDirection: "column", minWidth: 210 }}
+                >
+                  {DECLINE_REASONS.map((r, i) => (
+                    <Fragment key={r.key}>
+                      {i > 0 && <div className="avid-glass-sep" />}
+                      <button
+                        onClick={() => {
+                          onDecline?.(r.key);
+                          setDeclineMenuOpen(false);
+                        }}
+                        className="avid-glass-option"
+                        style={{
+                          border: "none",
+                          color: GLASS_FG,
+                          textAlign: "left",
+                          padding: "11px 16px",
+                          fontSize: 14.5,
+                          fontWeight: 400,
+                          fontFamily: FONT,
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {r.label}
+                      </button>
+                    </Fragment>
+                  ))}
+                </div>
               </div>,
               document.body
             )}
           <button
             ref={declineBtnRef}
+            className="avid-btn"
             onClick={() => {
               if (declined) {
                 if (onRestore) onRestore();
@@ -1222,17 +2356,8 @@ function StageProgress({
             <Ban size={large ? 18 : 14} />
           </button>
         </div>
-        {large && (
-          <span
-            style={{
-              fontSize: 13.5,
-              fontWeight: 700,
-              color: t.danger,
-              width: 62,
-              flexShrink: 0,
-              opacity: declined ? 1 : 0,
-            }}
-          >
+        {large && declined && (
+          <span style={{ fontSize: 13.5, fontWeight: 700, color: t.danger, flexShrink: 0, whiteSpace: "nowrap" }}>
             Declined
           </span>
         )}
@@ -1242,7 +2367,7 @@ function StageProgress({
 }
 
 // ============================================================
-function EntryForm({
+function BillingForm({
   S,
   t,
   initial,
@@ -1253,147 +2378,6 @@ function EntryForm({
 }: {
   S: Styles;
   t: Theme;
-  initial: Entry | null;
-  user: string;
-  teamNames: string[];
-  onClose: () => void;
-  onSave: (entry: Entry, isNew: boolean) => void;
-}) {
-  const [form, setForm] = useState<Entry>(
-    initial || {
-      id: uid(),
-      date: todayISO(),
-      candidate: "",
-      company: "",
-      role: "",
-      interviewType: "Phone",
-      round: 1,
-      team: [user],
-      stage: "sent",
-      stageHistory: [],
-      declined: false,
-      declinedReason: null,
-      notes: "",
-      addedBy: user,
-      createdAt: "",
-    }
-  );
-
-  const toggleTeam = (name: string) => {
-    setForm((f) => {
-      const has = f.team.includes(name);
-      return { ...f, team: has ? f.team.filter((n) => n !== name) : [...f.team, name] };
-    });
-  };
-  const set =
-    (k: "date" | "candidate" | "company" | "role" | "interviewType" | "notes") =>
-    (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
-      setForm((f) => ({ ...f, [k]: e.target.value }));
-  const valid = form.candidate.trim() && form.company.trim() && form.date;
-
-  return (
-    <div className="avid-overlay" style={S.modalOverlay} onClick={onClose}>
-      <div className="avid-modal" style={S.modal} onClick={(e) => e.stopPropagation()}>
-        <div style={S.modalHeader}>
-          <div style={S.modalTitle}>{initial ? "Edit send-out" : "New send-out"}</div>
-          <button className="avid-btn" style={S.iconGhost} onClick={onClose}>
-            <X size={18} />
-          </button>
-        </div>
-
-        <div style={S.formGrid}>
-          <Field S={S} label="Date">
-            <input type="date" style={S.input} value={form.date} onChange={set("date")} />
-          </Field>
-          <Field S={S} label="Candidate">
-            <input style={S.input} placeholder="Full name" value={form.candidate} onChange={set("candidate")} />
-          </Field>
-          <Field S={S} label="Company">
-            <input style={S.input} placeholder="Client company" value={form.company} onChange={set("company")} />
-          </Field>
-          <Field S={S} label="Role">
-            <input style={S.input} placeholder="e.g. Account Manager" value={form.role || ""} onChange={set("role")} />
-          </Field>
-          <Field S={S} label="Interview type">
-            <select style={S.input} value={form.interviewType} onChange={set("interviewType")}>
-              {INTERVIEW_TYPES.map((tp) => (
-                <option key={tp}>{tp}</option>
-              ))}
-            </select>
-          </Field>
-          <Field S={S} label="Round">
-            <input
-              type="number"
-              min="1"
-              style={S.input}
-              value={form.round}
-              onChange={(e) => setForm((f) => ({ ...f, round: Number(e.target.value) }))}
-            />
-          </Field>
-          <Field S={S} label="Team" full>
-            <div style={S.chipRow}>
-              {teamNames.map((name) => (
-                <button
-                  type="button"
-                  key={name}
-                  className="avid-chip"
-                  onClick={() => toggleTeam(name)}
-                  style={{
-                    ...S.chip,
-                    borderColor: t.accent,
-                    color: form.team.includes(name) ? "#fff" : t.accent,
-                    background: form.team.includes(name) ? t.accent : "transparent",
-                  }}
-                >
-                  {name}
-                </button>
-              ))}
-            </div>
-          </Field>
-          <Field S={S} label="Progress" full>
-            <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "4px 0" }}>
-              <StageProgress
-                t={t}
-                stage={form.stage}
-                declined={form.declined}
-                onSetStage={(stage) => setForm((f) => ({ ...f, stage, declined: false }))}
-                onToggleDeclined={() => setForm((f) => ({ ...f, declined: !f.declined }))}
-              />
-            </div>
-          </Field>
-          <Field S={S} label="Notes" full>
-            <textarea
-              style={{ ...S.input, minHeight: 60, fontFamily: "inherit", resize: "vertical" }}
-              placeholder="Optional context…"
-              value={form.notes || ""}
-              onChange={set("notes")}
-            />
-          </Field>
-        </div>
-
-        <div style={S.modalFooter}>
-          <button className="avid-btn" style={S.ghostBtn} onClick={onClose}>
-            Cancel
-          </button>
-          <button className="avid-btn" style={{ ...S.primaryBtn, opacity: valid ? 1 : 0.5 }} disabled={!valid} onClick={() => onSave(form, !initial)}>
-            {initial ? "Save changes" : "Log send-out"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
-function BillingForm({
-  S,
-  initial,
-  user,
-  teamNames,
-  onClose,
-  onSave,
-}: {
-  S: Styles;
   initial: Billing | null;
   user: string;
   teamNames: string[];
@@ -1404,7 +2388,7 @@ function BillingForm({
     initial || {
       id: uid(),
       date: todayISO(),
-      recruiter: teamNames.includes(user) ? user : teamNames[0] || user,
+      team: teamNames.includes(user) ? [user] : teamNames.slice(0, 1),
       amount: 0,
       company: "",
       candidate: "",
@@ -1413,11 +2397,17 @@ function BillingForm({
       createdAt: "",
     }
   );
+  const toggleTeam = (name: string) => {
+    setForm((f) => {
+      const has = f.team.includes(name);
+      return { ...f, team: has ? f.team.filter((n) => n !== name) : [...f.team, name] };
+    });
+  };
   const set =
-    (k: "date" | "recruiter" | "company" | "candidate" | "notes") =>
+    (k: "date" | "company" | "candidate" | "notes") =>
     (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       setForm((f) => ({ ...f, [k]: e.target.value }));
-  const valid = form.recruiter && form.amount > 0 && form.date;
+  const valid = form.team.length > 0 && form.amount > 0 && form.date;
 
   return (
     <div className="avid-overlay" style={S.modalOverlay} onClick={onClose}>
@@ -1429,16 +2419,13 @@ function BillingForm({
           </button>
         </div>
 
-        <div style={S.formGrid}>
+        <div className="avid-form-grid" style={S.formGrid}>
           <Field S={S} label="Date">
-            <input type="date" style={S.input} value={form.date} onChange={set("date")} />
-          </Field>
-          <Field S={S} label="Recruiter">
-            <select style={S.input} value={form.recruiter} onChange={set("recruiter")}>
-              {teamNames.map((n) => (
-                <option key={n}>{n}</option>
-              ))}
-            </select>
+            <GlassDatePicker
+              value={form.date}
+              onChange={(iso) => setForm((f) => ({ ...f, date: iso }))}
+              triggerStyle={{ ...S.input, textAlign: "left" }}
+            />
           </Field>
           <Field S={S} label="Amount ($)">
             <input
@@ -1450,6 +2437,13 @@ function BillingForm({
               value={form.amount || ""}
               onChange={(e) => setForm((f) => ({ ...f, amount: Number(e.target.value) }))}
             />
+          </Field>
+          <Field S={S} label="Team" full>
+            <TeamMultiSelect S={S} teamNames={teamNames} selected={form.team} onToggle={toggleTeam} />
+            <div style={{ fontSize: 11.5, color: t.mutedSoft, marginTop: 8 }}>
+              One person = solo deal (counts toward their Personal total). Two or more = team deal — the full amount
+              credits everyone listed, toward Total only.
+            </div>
           </Field>
           <Field S={S} label="Company">
             <input style={S.input} placeholder="Client company" value={form.company || ""} onChange={set("company")} />
@@ -1474,104 +2468,6 @@ function BillingForm({
           <button className="avid-btn" style={{ ...S.primaryBtn, opacity: valid ? 1 : 0.5 }} disabled={!valid} onClick={() => onSave(form, !initial)}>
             {initial ? "Save changes" : "Log billing"}
           </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================
-function UserManager({
-  S,
-  t,
-  roster,
-  reloadRoster,
-  onClose,
-}: {
-  S: Styles;
-  t: Theme;
-  roster: RosterMember[];
-  reloadRoster: () => Promise<void>;
-  onClose: () => void;
-}) {
-  const [drafts, setDrafts] = useState<Record<number, string>>({});
-  const [newName, setNewName] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  const nameOf = (m: RosterMember) => (drafts[m.id] ?? m.name);
-
-  const rename = async (m: RosterMember) => {
-    const name = (drafts[m.id] ?? m.name).trim();
-    if (!name || name === m.name) return;
-    setBusy(true);
-    await send(`/api/roster/${m.id}`, "PUT", { name });
-    await reloadRoster();
-    setBusy(false);
-  };
-  const remove = async (m: RosterMember) => {
-    setBusy(true);
-    await send(`/api/roster/${m.id}`, "DELETE");
-    await reloadRoster();
-    setBusy(false);
-  };
-  const add = async () => {
-    const name = newName.trim();
-    if (!name) return;
-    setBusy(true);
-    await send("/api/roster", "POST", { name });
-    setNewName("");
-    await reloadRoster();
-    setBusy(false);
-  };
-
-  return (
-    <div className="avid-overlay" style={S.modalOverlay} onClick={onClose}>
-      <div className="avid-modal" style={{ ...S.modal, maxWidth: 460 }} onClick={(e) => e.stopPropagation()}>
-        <div style={S.modalHeader}>
-          <div style={S.modalTitle}>Manage users</div>
-          <button className="avid-btn" style={S.iconGhost} onClick={onClose}>
-            <X size={18} />
-          </button>
-        </div>
-
-        <div style={{ padding: 22 }}>
-          {roster.map((m) => (
-            <div key={m.id} style={S.rosterRow}>
-              <input
-                style={{ ...S.input, flex: 1 }}
-                value={nameOf(m)}
-                onChange={(e) => setDrafts((d) => ({ ...d, [m.id]: e.target.value }))}
-              />
-              <button
-                className="avid-btn" style={{ ...S.ghostBtn, opacity: nameOf(m).trim() && nameOf(m) !== m.name ? 1 : 0.4, padding: "8px 12px" }}
-                disabled={busy || !(nameOf(m).trim() && nameOf(m) !== m.name)}
-                onClick={() => rename(m)}
-              >
-                Save
-              </button>
-              <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} disabled={busy} onClick={() => remove(m)} title="Remove">
-                <Trash2 size={15} />
-              </button>
-            </div>
-          ))}
-
-          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-            <input
-              style={{ ...S.input, flex: 1 }}
-              placeholder="Add a person…"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") add();
-              }}
-            />
-            <button className="avid-btn" style={{ ...S.primaryBtn, opacity: newName.trim() ? 1 : 0.5 }} disabled={busy || !newName.trim()} onClick={add}>
-              <Plus size={15} /> Add
-            </button>
-          </div>
-          <div style={{ fontSize: 11.5, color: t.mutedSoft, marginTop: 14 }}>
-            Renaming updates that person across all existing send-outs and billings.
-          </div>
         </div>
       </div>
     </div>

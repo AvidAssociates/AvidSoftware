@@ -36,8 +36,17 @@ export function seriesColor(index: number, isDark: boolean) {
 export function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
+// The user's own local calendar date -- NOT toISOString(), which reports
+// the UTC date. Those two disagree for roughly a third of the day in any
+// timezone west of UTC (e.g. anyone in the US after ~4-8pm local), which
+// was stamping stage transitions (Offer, Placed, ...) a day ahead of the
+// business day the user actually acted in.
 export function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 export function fmtDate(iso: string) {
   if (!iso) return "—";
@@ -119,8 +128,6 @@ export function makeStyles(t: Theme) {
       background: t.surface,
     },
     headerLeft: { display: "flex", alignItems: "center", gap: 9, justifySelf: "start" as const },
-    headerLogo: { width: 20, height: "auto" },
-    wordmarkSmall: { fontWeight: 800, fontSize: 15, color: t.ink, letterSpacing: -0.3 },
     headerRight: { display: "flex", alignItems: "center", gap: 6, justifySelf: "end" as const },
     monthSwitcher: { display: "flex", alignItems: "center", gap: 4, justifySelf: "center" as const },
     monthLabel: { fontSize: 13.5, fontWeight: 700, color: t.ink, minWidth: 112, textAlign: "center" as const },
@@ -128,6 +135,10 @@ export function makeStyles(t: Theme) {
     hero: { padding: "36px 24px 28px", borderBottom: `1px solid ${t.border}` },
     heroEyebrow: { fontSize: 11, fontWeight: 700, letterSpacing: 1.5, color: t.mutedSoft, marginBottom: 8 },
     heroTitle: { fontSize: 34, fontWeight: 800, letterSpacing: -1, color: t.ink, margin: "0 0 24px" },
+    // Heading on the left, stats truly centered on the row (not just
+    // centered in the leftover space) via a mirrored 1fr/auto/1fr grid.
+    heroInlineRow: { display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center" as const, columnGap: 24 },
+    heroInlineTitle: { fontSize: 34, fontWeight: 800, letterSpacing: -1, color: t.ink, margin: 0 },
     heroStatsRow: { display: "flex", gap: 0, flexWrap: "wrap" as const },
     heroStat: { paddingRight: 36, marginRight: 36, borderRight: `1px solid ${t.border}` },
     heroStatValue: {
@@ -190,10 +201,10 @@ export function makeStyles(t: Theme) {
       background: "transparent",
       color: t.ink,
     },
-    selectPillWrap: { position: "relative" as const, display: "flex", alignItems: "center" },
+    // Trigger for the glass dropdowns in the toolbar (GlassSelect renders
+    // its own inline chevron, so no absolute-positioned chevron overlay).
     selectPill: {
-      appearance: "none" as const,
-      padding: "8px 28px 8px 12px",
+      padding: "8px 12px",
       border: `1px solid ${t.border}`,
       borderRadius: 9,
       fontSize: 13,
@@ -202,7 +213,6 @@ export function makeStyles(t: Theme) {
       color: t.ink,
       cursor: "pointer",
     },
-    selectPillChevron: { position: "absolute" as const, right: 10, pointerEvents: "none" as const },
     primaryBtn: {
       display: "flex",
       alignItems: "center",
@@ -264,25 +274,33 @@ export function makeStyles(t: Theme) {
       padding: "26px 22px",
       borderBottom: `1px solid ${t.border}`,
     },
-    billingRow: {
-      display: "flex",
-      alignItems: "center",
-      gap: 20,
-      padding: "18px 22px",
-      borderBottom: `1px solid ${t.border}`,
+    // Send-Outs row -- ONE flat 7-column grid, every column an equal 1fr:
+    //   Date | Candidate | Company | Status | Role | Team | Actions
+    // Equal fractions => the 7 columns are evenly spaced by construction,
+    // and Status, being the exact middle column (#4 of 7), always sits on
+    // the row's true center. The table has symmetric horizontal margins,
+    // so that center lines up under the month picker (also page-centered).
+    // No auto tracks, no nested half-grids, no per-content tuning -- the
+    // even spacing and the centered Status are pure grid math that can't
+    // drift with content. minWidth:0 on every cell keeps a long value from
+    // stretching its own column wider than the others.
+    soGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+      alignItems: "center" as const,
+      columnGap: 20,
     },
-    colCandidate: { width: 200, flexShrink: 0 },
-    colRole: { width: 170, flexShrink: 0 },
-    colProgress: { flex: 1, display: "flex", justifyContent: "center", minWidth: 420 },
-    colTeam: { width: 150, flexShrink: 0 },
-    colActions: { width: 56, flexShrink: 0, display: "flex", justifyContent: "flex-end" },
-    colRecruiter: { width: 140, flexShrink: 0 },
-    colClient: { flex: 1, minWidth: 160 },
-    colAmount: { width: 120, flexShrink: 0, textAlign: "right" as const },
-    colDate: { width: 90, flexShrink: 0 },
+    // Every column -- header and data alike -- is center-aligned within its
+    // track, so each value is centered under its (also centered) header,
+    // and the whole row reads symmetrically. Since all 7 tracks are equal
+    // and the middle one is Status, centering keeps Status dead-center
+    // under the month picker, and each column's content is centered on its
+    // own even slot.
+    soCol: { minWidth: 0, textAlign: "center" as const },
+    soStatusCol: { minWidth: 0, textAlign: "center" as const },
+    soActionsCol: { minWidth: 0, display: "flex", justifyContent: "center" as const },
     cardPrimary: { fontSize: 14.5, fontWeight: 600, color: t.ink },
     cardSub: { fontSize: 12.5, color: t.muted, marginTop: 3, fontWeight: 500 },
-    cardSubDim: { color: t.mutedSoft },
     amountText: { fontSize: 15, fontWeight: 700, color: t.ink, fontVariantNumeric: "tabular-nums" as const },
 
     empty: { padding: "48px 20px", textAlign: "center" as const, color: t.mutedSoft, fontSize: 14 },
@@ -367,10 +385,9 @@ export function makeStyles(t: Theme) {
     reportTitleGroup: { display: "flex", alignItems: "center", gap: 6 },
     chartTitle: { fontSize: 14.5, fontWeight: 700, color: t.ink, margin: 0 },
     chartSubtitle: { fontSize: 12.5, color: t.muted, marginTop: 3, marginBottom: 18, fontWeight: 500 },
-    legendRow: { display: "flex", flexWrap: "wrap" as const, gap: "8px 18px", marginTop: 14 },
+    legendRow: { display: "flex", flexWrap: "wrap" as const, justifyContent: "center" as const, gap: "8px 18px", marginTop: 14 },
     legendItem: { display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: t.muted, fontWeight: 600 },
     legendSwatch: { width: 14, height: 3, borderRadius: 2, flexShrink: 0 },
-    legendDot: { width: 9, height: 9, borderRadius: "50%", flexShrink: 0 },
     chartTooltip: {
       position: "absolute" as const,
       pointerEvents: "none" as const,
@@ -403,5 +420,25 @@ export function makeStyles(t: Theme) {
     },
     reportTableCell: { fontVariantNumeric: "tabular-nums" as const, color: t.ink, fontWeight: 500 },
     reportTableTotalRow: { fontWeight: 800, borderTop: `1px solid ${t.border}`, background: t.surfaceAlt },
+
+    // leaderboard tab
+    leaderboardRow: { display: "flex", alignItems: "center", gap: 14, padding: "10px 0" },
+    leaderboardRank: {
+      width: 26,
+      height: 26,
+      borderRadius: "50%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 12,
+      fontWeight: 800,
+      flexShrink: 0,
+      background: t.surfaceAlt,
+      color: t.muted,
+    },
+    leaderboardName: { width: 96, flexShrink: 0, fontSize: 13.5, fontWeight: 700, color: t.ink },
+    leaderboardBarTrack: { flex: 1, height: 20, borderRadius: 20, background: t.surfaceAlt, overflow: "hidden" },
+    leaderboardBarFill: { height: "100%", borderRadius: 20, transition: "width 0.4s cubic-bezier(0.16,1,0.3,1)" },
+    leaderboardCount: { width: 70, textAlign: "right" as const, flexShrink: 0, fontSize: 13.5, fontWeight: 700, color: t.ink, fontVariantNumeric: "tabular-nums" as const },
   };
 }

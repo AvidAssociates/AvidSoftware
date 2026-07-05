@@ -1,5 +1,6 @@
 import { getDb } from "./db";
-import { Billing, Entry, ProductionGoals, RosterMember, StageEvent } from "./types";
+import { uid } from "./ui";
+import { Billing, Entry, MeetingLogEntry, ProductionGoals, Retainer, RosterMember, StageEvent } from "./types";
 
 type EntryRow = {
   id: string;
@@ -12,11 +13,13 @@ type EntryRow = {
   team: string[];
   stage: string;
   stage_history: StageEvent[];
+  meeting_log: MeetingLogEntry[];
   declined: boolean;
   declined_reason: string | null;
   notes: string | null;
   added_by: string | null;
   created_at: string;
+  first_time: boolean;
 };
 
 function toEntry(row: EntryRow): Entry {
@@ -31,12 +34,21 @@ function toEntry(row: EntryRow): Entry {
     team: row.team ?? [],
     stage: row.stage as Entry["stage"],
     stageHistory: row.stage_history ?? [],
+    meetingLog: row.meeting_log ?? [],
     declined: row.declined,
     declinedReason: row.declined_reason as Entry["declinedReason"],
     notes: row.notes,
     addedBy: row.added_by,
     createdAt: row.created_at,
+    firstTime: row.first_time,
   };
+}
+
+// The activity log's entries are either a logged meeting (Phone/Video/
+// Face-to-Face + round) or a stage marker like "Offer" (round unused) —
+// same shape, so both render in one chronological list.
+function activityEntry(type: string, round: number, date: string): MeetingLogEntry {
+  return { id: uid(), type, round, date };
 }
 
 function todayISO() {
@@ -65,12 +77,19 @@ export async function createEntry(input: {
   declinedReason?: string | null;
   notes?: string | null;
   addedBy?: string | null;
+  firstTime: boolean;
 }): Promise<Entry> {
   const db = getDb();
   // The Sent date defaults to the send-out's own date — no other default.
   const history: StageEvent[] = [{ stage: input.stage as Entry["stage"], date: input.date }];
+  // No meeting is logged automatically -- the user picks when they've
+  // actually held one. Created straight into Offer or Placed (rare) still
+  // marks it, same as reaching that stage normally would.
+  const meetingLog: MeetingLogEntry[] = [];
+  if (input.stage === "offer" || input.stage === "placed") meetingLog.push(activityEntry("Offer", 0, input.date));
+  if (input.stage === "placed") meetingLog.push(activityEntry("Placed", 0, input.date));
   const [row] = (await db.sql`
-    INSERT INTO pipeline_entries (id, date, candidate, company, role, interview_type, round, team, stage, stage_history, declined, declined_reason, notes, added_by)
+    INSERT INTO pipeline_entries (id, date, candidate, company, role, interview_type, round, team, stage, stage_history, meeting_log, declined, declined_reason, notes, added_by, first_time)
     VALUES (
       ${input.id},
       ${input.date},
@@ -82,10 +101,12 @@ export async function createEntry(input: {
       ${input.team},
       ${input.stage},
       ${JSON.stringify(history)},
+      ${JSON.stringify(meetingLog)},
       ${input.declined},
       ${input.declinedReason ?? null},
       ${input.notes ?? null},
-      ${input.addedBy ?? null}
+      ${input.addedBy ?? null},
+      ${input.firstTime}
     )
     RETURNING *
   `) as EntryRow[];
@@ -106,17 +127,48 @@ export async function updateEntry(
     declined: boolean;
     declinedReason?: string | null;
     notes?: string | null;
+    firstTime: boolean;
+    // The browser's own local calendar date for a newly-reached stage. The
+    // server's clock can't be trusted for this -- it has no idea what
+    // timezone the user is in, so falling back to its own "today" can stamp
+    // a stage a day off from the business day the user actually acted in
+    // (e.g. Vercel's server clock is UTC, which is already "tomorrow" for
+    // anyone in the US once it's evening locally).
+    stageDate?: string;
   }
 ): Promise<Entry | null> {
   const db = getDb();
   const [existing] = (await db.sql`
-    SELECT stage, stage_history FROM pipeline_entries WHERE id = ${id}
-  `) as { stage: string; stage_history: StageEvent[] }[];
+    SELECT stage, stage_history, meeting_log FROM pipeline_entries WHERE id = ${id}
+  `) as { stage: string; stage_history: StageEvent[]; meeting_log: MeetingLogEntry[] }[];
   if (!existing) return null;
 
+  const newStageDate = input.stageDate || todayISO();
   let history = existing.stage_history ?? [];
-  if (input.stage !== existing.stage && !history.some((h) => h.stage === input.stage)) {
-    history = [...history, { stage: input.stage as Entry["stage"], date: todayISO() }];
+  // Insert-or-update: if this send-out had already reached this stage before
+  // (e.g. it was advanced to Offer, moved back to Interview, and is now being
+  // advanced to Offer again), re-arriving at it just now should re-stamp
+  // today's date, not silently keep whatever date was recorded the first
+  // time. The old "only append if missing" guard left stale dates in place
+  // on a re-arrival, which then leaked into the activity log below.
+  if (input.stage !== existing.stage) {
+    const idx = history.map((h) => h.stage).lastIndexOf(input.stage as Entry["stage"]);
+    history =
+      idx === -1
+        ? [...history, { stage: input.stage as Entry["stage"], date: newStageDate }]
+        : history.map((h, i) => (i === idx ? { ...h, date: newStageDate } : h));
+  }
+
+  // Reaching Offer or Placed logs it as an activity, same as a logged
+  // meeting -- Interview itself is never auto-logged, the user picks when
+  // they've actually held a meeting. Uses newStageDate directly (not a
+  // history lookup) so it can't inherit a stale date from a prior visit.
+  let meetingLog = existing.meeting_log ?? [];
+  if (input.stage === "offer" && existing.stage !== "offer") {
+    meetingLog = [...meetingLog, activityEntry("Offer", 0, newStageDate)];
+  }
+  if (input.stage === "placed" && existing.stage !== "placed") {
+    meetingLog = [...meetingLog, activityEntry("Placed", 0, newStageDate)];
   }
 
   const [row] = (await db.sql`
@@ -130,9 +182,11 @@ export async function updateEntry(
       team = ${input.team},
       stage = ${input.stage},
       stage_history = ${JSON.stringify(history)},
+      meeting_log = ${JSON.stringify(meetingLog)},
       declined = ${input.declined},
       declined_reason = ${input.declined ? input.declinedReason ?? null : null},
-      notes = ${input.notes ?? null}
+      notes = ${input.notes ?? null},
+      first_time = ${input.firstTime}
     WHERE id = ${id}
     RETURNING *
   `) as EntryRow[];
@@ -143,36 +197,47 @@ export async function deleteEntry(id: string) {
   await getDb().sql`DELETE FROM pipeline_entries WHERE id = ${id}`;
 }
 
-const PIPELINE_ORDER: Entry["stage"][] = ["sent", "interview", "offer", "placed"];
-
-// The single entry point for setting a stage's date, whether that's
-// correcting an already-recorded date or moving the pipeline forward to a
-// stage it hasn't reached yet (which requires a date — there's no default).
-export async function setStageEventDate(
+// Appends a meeting to the log (Phone R1 -> Phone R2 -> Face-to-Face R1,
+// etc.) and updates the entry's current type/round to match — the fixed
+// 4-stage tracker never changes, only what's logged inside Interview does.
+export async function logMeeting(
   id: string,
-  stage: string,
+  type: string,
+  round: number,
   date: string
 ): Promise<Entry | null> {
   const db = getDb();
   const [existing] = (await db.sql`
-    SELECT stage, stage_history FROM pipeline_entries WHERE id = ${id}
-  `) as { stage: string; stage_history: StageEvent[] }[];
+    SELECT meeting_log FROM pipeline_entries WHERE id = ${id}
+  `) as { meeting_log: MeetingLogEntry[] }[];
   if (!existing) return null;
 
-  const history = existing.stage_history ?? [];
-  const idx = history.map((h) => h.stage).lastIndexOf(stage as Entry["stage"]);
-  const updatedHistory =
-    idx === -1
-      ? [...history, { stage: stage as Entry["stage"], date }]
-      : history.map((h, i) => (i === idx ? { ...h, date } : h));
+  const meetingLog = [...(existing.meeting_log ?? []), { id: uid(), type, round, date }];
+  const [row] = (await db.sql`
+    UPDATE pipeline_entries SET meeting_log = ${JSON.stringify(meetingLog)}, interview_type = ${type}, round = ${round}
+    WHERE id = ${id}
+    RETURNING *
+  `) as EntryRow[];
+  return toEntry(row);
+}
 
-  const newStage =
-    PIPELINE_ORDER.indexOf(stage as Entry["stage"]) > PIPELINE_ORDER.indexOf(existing.stage as Entry["stage"])
-      ? stage
-      : existing.stage;
+// Removes a single mistakenly-logged meeting. The entry's current
+// type/round follows whatever is now the last remaining meeting (or stays
+// put if the log is now empty).
+export async function deleteMeetingLogEntry(id: string, meetingId: string): Promise<Entry | null> {
+  const db = getDb();
+  const [existing] = (await db.sql`
+    SELECT meeting_log, interview_type, round FROM pipeline_entries WHERE id = ${id}
+  `) as { meeting_log: MeetingLogEntry[]; interview_type: string; round: number }[];
+  if (!existing) return null;
+
+  const meetingLog = (existing.meeting_log ?? []).filter((m) => m.id !== meetingId);
+  const last = meetingLog[meetingLog.length - 1];
+  const interviewType = last?.type ?? existing.interview_type;
+  const round = last?.round ?? existing.round;
 
   const [row] = (await db.sql`
-    UPDATE pipeline_entries SET stage_history = ${JSON.stringify(updatedHistory)}, stage = ${newStage}
+    UPDATE pipeline_entries SET meeting_log = ${JSON.stringify(meetingLog)}, interview_type = ${interviewType}, round = ${round}
     WHERE id = ${id}
     RETURNING *
   `) as EntryRow[];
@@ -233,10 +298,15 @@ export async function renameRosterMember(
     UPDATE pipeline_entries SET added_by = ${newName} WHERE added_by = ${oldName}
   `;
   await db.sql`
-    UPDATE billings SET recruiter = ${newName} WHERE recruiter = ${oldName}
+    UPDATE billings SET team = array_replace(team, ${oldName}, ${newName})
+    WHERE ${oldName} = ANY(team)
   `;
   await db.sql`
     UPDATE billings SET added_by = ${newName} WHERE added_by = ${oldName}
+  `;
+  await db.sql`
+    UPDATE retainers SET recruiter = ${newName} WHERE recruiter = ${oldName}
+    AND NOT EXISTS (SELECT 1 FROM retainers WHERE recruiter = ${newName})
   `;
 
   return toRoster(row);
@@ -251,7 +321,7 @@ export async function deleteRosterMember(id: number) {
 type BillingRow = {
   id: string;
   date: string;
-  recruiter: string;
+  team: string[] | null;
   amount: number;
   company: string | null;
   candidate: string | null;
@@ -264,7 +334,7 @@ function toBilling(row: BillingRow): Billing {
   return {
     id: row.id,
     date: row.date,
-    recruiter: row.recruiter,
+    team: row.team ?? [],
     amount: Number(row.amount),
     company: row.company,
     candidate: row.candidate,
@@ -285,7 +355,7 @@ export async function listBillings(): Promise<Billing[]> {
 export async function createBilling(input: {
   id: string;
   date: string;
-  recruiter: string;
+  team: string[];
   amount: number;
   company?: string | null;
   candidate?: string | null;
@@ -294,11 +364,11 @@ export async function createBilling(input: {
 }): Promise<Billing> {
   const db = getDb();
   const [row] = (await db.sql`
-    INSERT INTO billings (id, date, recruiter, amount, company, candidate, notes, added_by)
+    INSERT INTO billings (id, date, team, amount, company, candidate, notes, added_by)
     VALUES (
       ${input.id},
       ${input.date},
-      ${input.recruiter},
+      ${input.team},
       ${input.amount},
       ${input.company ?? null},
       ${input.candidate ?? null},
@@ -314,7 +384,7 @@ export async function updateBilling(
   id: string,
   input: {
     date: string;
-    recruiter: string;
+    team: string[];
     amount: number;
     company?: string | null;
     candidate?: string | null;
@@ -325,7 +395,7 @@ export async function updateBilling(
   const [row] = (await db.sql`
     UPDATE billings SET
       date = ${input.date},
-      recruiter = ${input.recruiter},
+      team = ${input.team},
       amount = ${input.amount},
       company = ${input.company ?? null},
       candidate = ${input.candidate ?? null},
@@ -338,6 +408,34 @@ export async function updateBilling(
 
 export async function deleteBilling(id: string) {
   await getDb().sql`DELETE FROM billings WHERE id = ${id}`;
+}
+
+// ---------------- Retainers ----------------
+
+type RetainerRow = { recruiter: string; client: string | null; amount: number | null };
+
+function toRetainer(row: RetainerRow): Retainer {
+  return { recruiter: row.recruiter, client: row.client, amount: row.amount === null ? null : Number(row.amount) };
+}
+
+export async function listRetainers(): Promise<Retainer[]> {
+  const db = getDb();
+  const rows = (await db.sql`SELECT * FROM retainers`) as RetainerRow[];
+  return rows.map(toRetainer);
+}
+
+export async function setRetainer(
+  recruiter: string,
+  client: string | null,
+  amount: number | null
+): Promise<Retainer> {
+  const db = getDb();
+  await db.sql`
+    INSERT INTO retainers (recruiter, client, amount)
+    VALUES (${recruiter}, ${client}, ${amount})
+    ON CONFLICT (recruiter) DO UPDATE SET client = EXCLUDED.client, amount = EXCLUDED.amount
+  `;
+  return { recruiter, client, amount };
 }
 
 // ---------------- Production goals ----------------

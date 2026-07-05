@@ -81,16 +81,19 @@ select::-ms-expand {
   background-color: rgba(140, 146, 240, 0.05);
 }
 
+/* The app-wide "you can click me" cue: anything interactive grows a touch
+   and brightens on hover -- bold enough to notice, small enough to stay
+   serious -- then compresses slightly on press. */
 .avid-btn {
-  transition: filter 0.15s ease, transform 0.12s ease, opacity 0.15s ease,
-    background-color 0.15s ease, color 0.15s ease;
+  transition: filter 0.15s ease, transform 0.15s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease;
 }
 .avid-btn:hover:not(:disabled) {
   filter: brightness(1.15);
-  transform: translateY(-1px);
+  transform: translateY(-1px) scale(1.04);
 }
 .avid-btn:active:not(:disabled) {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.98);
   filter: brightness(0.96);
 }
 
@@ -102,20 +105,21 @@ select::-ms-expand {
   transform: translateY(-1px);
 }
 
-.avid-decline-option {
-  transition: background-color 0.12s ease;
-}
-.avid-decline-option:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
+/* The calendar is the one exception to the glass system's grey hover tint --
+   day cells get a genuine white circle on hover (like Apple's own calendar
+   pickers), with only minimal movement, not the bold grow used elsewhere. */
 .avid-cal-day,
 .avid-cal-nav {
-  transition: background-color 0.12s ease;
+  transition: background-color 0.12s ease, transform 0.15s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .avid-cal-day:hover,
 .avid-cal-nav:hover {
-  background-color: rgba(255, 255, 255, 0.12);
+  background-color: rgba(255, 255, 255, 0.22);
+  transform: scale(1.06);
+}
+.avid-cal-day:active,
+.avid-cal-nav:active {
+  transform: scale(1);
 }
 
 @keyframes overlayIn {
@@ -162,22 +166,12 @@ select::-ms-expand {
   transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1),
     background-color 0.35s ease;
 }
+/* No halo/pulse shadows on the dots -- the click affordance is the
+   pronounced hover growth (driven inline via hoverIdx), not a glow. */
 .avid-stage-dot {
   transition: background-color 0.32s cubic-bezier(0.16, 1, 0.3, 1),
-    border-color 0.32s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s ease,
-    box-shadow 0.25s ease;
-}
-@keyframes stagePulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 var(--pulse-color, transparent);
-  }
-  50% {
-    box-shadow: 0 0 0 9px transparent;
-  }
-}
-.avid-stage-active {
-  animation: stagePulse 2.2s ease-in-out infinite;
+    border-color 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.18s cubic-bezier(0.32, 0.72, 0, 1);
 }
 @keyframes stagePop {
   0% {
@@ -194,12 +188,141 @@ select::-ms-expand {
   animation: stagePop 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* A hero stats row's last item shouldn't reserve its divider's width —
+   otherwise the visible stats sit slightly left of true-center when the
+   row is centered as a block (the divider is invisible dead space). */
+.avid-hero-stats > *:last-child {
+  border-right: none !important;
+  margin-right: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* ---- row expand/collapse (Send-Outs process panel) ---- */
+/* The 0fr/1fr grid-rows trick animates height without measuring it in
+   JS, and keeps the panel mounted through the closing transition too. */
+.avid-expand {
+  display: grid;
+  transition: grid-template-rows 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.avid-expand > * {
+  overflow: hidden;
+}
+
+/* ---- small popovers that open from a click (calendar, etc.) ---- */
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.avid-pop-in {
+  animation: popIn 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  transform-origin: top center;
+}
+
+/* ---- Liquid Glass (iOS 27 beta-style) popover material ---- */
+/* iOS 27's dark-mode tuning dialed back the glowy white iOS 26 look: darker
+   edges overall, blur pushed harder so content behind the pane diffuses
+   rather than shows through brightly, and highlights kept dim/greyish
+   instead of a bright white glow (dark-mode iOS 26 caused a distracting
+   glow some users found dizzying). Fixed dark "black glass" regardless of
+   app theme, like iOS dark-mode menus. */
+.avid-glass-popover {
+  position: relative;
+  border-radius: 22px;
+  overflow: hidden;
+  background: rgba(12, 12, 14, 0.62);
+  -webkit-backdrop-filter: blur(72px) saturate(150%);
+  backdrop-filter: blur(72px) saturate(150%);
+  /* outermost half-px dark ring = separation from content, then the
+     layered lift shadows, then a faint inner glow filling the pane */
+  box-shadow:
+    0 0 0 0.5px rgba(0, 0, 0, 0.65),
+    0 34px 80px rgba(0, 0, 0, 0.55),
+    0 8px 22px rgba(0, 0, 0, 0.35),
+    inset 0 0 24px rgba(255, 255, 255, 0.02);
+}
+/* The "lensing" edge: a 1px rim, mostly dark all the way around with just a
+   dim, greyish glint where the light notionally hits (top-left) -- no
+   bright white glow, per iOS 27's darkened-edges tuning. */
+.avid-glass-popover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    155deg,
+    rgba(210, 210, 218, 0.22),
+    rgba(210, 210, 218, 0.06) 30%,
+    rgba(0, 0, 0, 0.25) 55%,
+    rgba(210, 210, 218, 0.09) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+/* A much-dimmed interior sheen -- present for depth, but grey/dark rather
+   than a bright wash down from the top edge. */
+.avid-glass-popover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(210, 210, 218, 0.04), rgba(210, 210, 218, 0.01) 30%, transparent 55%);
+  pointer-events: none;
+}
+/* Menu rows are full-bleed (the container's big radius clips them), with
+   iOS's edge-to-edge hairline separators between rows. Hover/active reads
+   as a neutral grey wash, not a white highlight. */
+.avid-glass-option {
+  transition: background-color 0.12s ease;
+}
+.avid-glass-option:hover {
+  background-color: rgba(150, 150, 158, 0.14);
+}
+.avid-glass-option:active {
+  background-color: rgba(150, 150, 158, 0.22);
+}
+.avid-glass-sep {
+  height: 1px;
+  flex-shrink: 0;
+  background: rgba(210, 210, 218, 0.09);
+}
+/* iOS menus "pop" open from the control that summoned them -- a quick
+   overshooting scale rather than the softer slide-in other popovers use. */
+@keyframes glassPop {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+  55% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.avid-glass-pop {
+  animation: glassPop 0.3s cubic-bezier(0.34, 1.32, 0.5, 1);
+  transform-origin: top center;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .avid-stage-active,
   .avid-stage-pop,
   .avid-row-enter,
   .avid-modal,
   .avid-overlay,
+  .avid-pop-in,
+  .avid-glass-pop,
   .tv-rise,
   .tv-bar,
   .tv-progress {
@@ -209,8 +332,78 @@ select::-ms-expand {
   .avid-chip,
   .avid-row,
   .avid-stage-fill,
-  .avid-stage-dot {
+  .avid-stage-dot,
+  .avid-expand {
     transition: none !important;
+  }
+}
+
+/* ---- mobile (phone-width screens) ---- */
+/* The app's layout styles are inline (theme-driven), so phone-size
+   adjustments override them here by class, with !important. Structural
+   changes (card rows instead of grids) are handled in JSX via
+   useIsMobile — this block only tightens spacing and type. */
+@media (max-width: 640px) {
+  .avid-brand {
+    display: none;
+  }
+  .avid-tv-btn {
+    display: none !important;
+  }
+  .avid-header {
+    padding: 10px 12px !important;
+  }
+  .avid-hero {
+    padding: 22px 16px 20px !important;
+  }
+  /* Title stacks centered above the stats instead of sharing one row */
+  .avid-hero-inline {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  .avid-hero-title {
+    font-size: 26px !important;
+    letter-spacing: -0.5px !important;
+    margin: 0 0 14px !important;
+  }
+  .avid-hero-inline .avid-hero-title {
+    margin: 0 !important;
+  }
+  .avid-hero-stats {
+    row-gap: 14px !important;
+  }
+  .avid-hero-stats > * {
+    padding-right: 18px !important;
+    margin-right: 18px !important;
+  }
+  .avid-hero-stat-value {
+    font-size: 26px !important;
+    letter-spacing: -0.5px !important;
+  }
+  .avid-hero-stat-label {
+    font-size: 10.5px !important;
+    margin-top: 4px !important;
+  }
+  .avid-toolbar {
+    padding: 14px 16px 12px !important;
+  }
+  .report-card {
+    margin: 0 12px !important;
+  }
+  /* The 5-column recruiter table keeps its readable width and scrolls
+     sideways instead of crushing the numbers. */
+  .avid-billings-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .avid-billings-scroll > div {
+    min-width: 560px;
+  }
+  /* Modal forms: one field per line */
+  .avid-form-grid {
+    grid-template-columns: 1fr !important;
   }
 }
 
