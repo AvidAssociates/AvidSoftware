@@ -3,7 +3,7 @@
 import { FormEvent, useState, Suspense } from "react";
 import type { CSSProperties } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { BRAND_RED, FONT } from "@/lib/ui";
+import { FONT } from "@/lib/ui";
 
 function LoginForm() {
   const router = useRouter();
@@ -40,47 +40,50 @@ function LoginForm() {
 
   return (
     <div className="login-page">
-      <div className="login-dialog-shell">
-        <div className="login-dialog login-dialog-enter">
-          <div style={{ marginBottom: 28 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.4, color: "rgba(235, 235, 245, 0.45)", marginBottom: 8 }}>AVID ASSOCIATES</div>
-            <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, letterSpacing: -0.8, color: "#F2F2F7", fontFamily: FONT }}>Sign in</h1>
+      <div className="login-stack">
+        <div className="login-logo-slot" aria-hidden="true" />
+        <div className="login-dialog-shell">
+          <div className="login-dialog login-dialog-enter">
+            <div className="login-dialog-header">
+              <h1 className="login-title">Sign in</h1>
+              <p className="login-subtitle">Access your dashboard</p>
+            </div>
+
+            <form onSubmit={onSubmit} className="login-form">
+              <label style={labelStyle}>
+                Email
+                <input
+                  className="login-input"
+                  type="text"
+                  name="email"
+                  autoComplete="username"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="test"
+                  required
+                />
+              </label>
+              <label style={labelStyle}>
+                Password
+                <input
+                  className="login-input"
+                  type="password"
+                  name="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••"
+                  required
+                />
+              </label>
+
+              {error ? <div className="login-error">{error}</div> : null}
+
+              <button className="login-submit" type="submit" disabled={loading}>
+                {loading ? "Signing in…" : "Sign in"}
+              </button>
+            </form>
           </div>
-
-          <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <label style={labelStyle}>
-              Email
-              <input
-                className="login-input"
-                type="text"
-                name="email"
-                autoComplete="username"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="test"
-                required
-              />
-            </label>
-            <label style={labelStyle}>
-              Password
-              <input
-                className="login-input"
-                type="password"
-                name="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••"
-                required
-              />
-            </label>
-
-            {error ? <div style={{ fontSize: 13, color: BRAND_RED, fontWeight: 600 }}>{error}</div> : null}
-
-            <button className="login-submit" type="submit" disabled={loading}>
-              {loading ? "Signing in…" : "Sign in"}
-            </button>
-          </form>
         </div>
       </div>
     </div>
@@ -102,8 +105,11 @@ export default function LoginPage() {
     <Suspense
       fallback={
         <div className="login-page">
-          <div className="login-dialog-shell">
-            <div className="login-dialog login-dialog-enter" />
+          <div className="login-stack">
+            <div className="login-logo-slot" aria-hidden="true" />
+            <div className="login-dialog-shell">
+              <div className="login-dialog login-dialog-enter" />
+            </div>
           </div>
         </div>
       }
