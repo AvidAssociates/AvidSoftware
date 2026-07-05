@@ -223,23 +223,23 @@ select::-ms-expand {
 }
 
 /* ---- Liquid Glass (iOS 27 beta) popover material ---- */
-/* True transparency: almost no opaque fill — page content refracts through a
-   heavy backdrop blur, then brightness() pulls it dark. iOS 27's black glass
-   is see-through, not frosted-over. No page dimming. */
+/* See-through first: no real fill — content behind stays visible, refracted
+   through blur + saturate. brightness() tints it dark without frosting over.
+   Edge ring carries legibility; interior stays open. No page dimming. */
 .avid-glass-popover {
   position: relative;
   border-radius: 22px;
   overflow: hidden;
   isolation: isolate;
   -webkit-font-smoothing: antialiased;
-  /* Tint is intentionally thin; darkness comes from the filtered backdrop. */
-  background: rgba(0, 0, 0, 0.12);
-  -webkit-backdrop-filter: blur(112px) saturate(190%) brightness(0.64) contrast(1.07);
-  backdrop-filter: blur(112px) saturate(190%) brightness(0.64) contrast(1.07);
+  background: rgba(0, 0, 0, 0.04);
+  /* Lighter blur so shapes read through; brightness keeps the pane black. */
+  -webkit-backdrop-filter: blur(72px) saturate(195%) brightness(0.72) contrast(1.04);
+  backdrop-filter: blur(72px) saturate(195%) brightness(0.72) contrast(1.04);
   box-shadow:
-    0 0 0 0.5px rgba(0, 0, 0, 0.82),
-    0 28px 68px rgba(0, 0, 0, 0.5),
-    0 8px 20px rgba(0, 0, 0, 0.34);
+    0 0 0 0.5px rgba(0, 0, 0, 0.78),
+    0 24px 56px rgba(0, 0, 0, 0.42),
+    0 6px 16px rgba(0, 0, 0, 0.28);
 }
 .avid-glass-popover > * {
   position: relative;
@@ -250,7 +250,7 @@ select::-ms-expand {
     background: rgba(12, 12, 14, 0.96);
   }
 }
-/* Darkened edge ring + faint chromatic glint (refraction at the lens rim). */
+/* Darkened edge ring only — no interior wash blocking the refracted backdrop. */
 .avid-glass-popover::before {
   content: "";
   position: absolute;
@@ -259,10 +259,10 @@ select::-ms-expand {
   padding: 1px;
   background: linear-gradient(
     148deg,
-    rgba(205, 215, 235, 0.14),
-    rgba(0, 0, 0, 0.28) 30%,
-    rgba(0, 0, 0, 0.55) 62%,
-    rgba(195, 188, 210, 0.08) 100%
+    rgba(210, 220, 240, 0.12),
+    rgba(0, 0, 0, 0.22) 32%,
+    rgba(0, 0, 0, 0.48) 68%,
+    rgba(190, 185, 205, 0.07) 100%
   );
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
@@ -271,15 +271,13 @@ select::-ms-expand {
   pointer-events: none;
   z-index: 1;
 }
-/* Thin interior veil — adds depth without blocking the refracted backdrop. */
+/* Faint top specular only — center stays clear for see-through. */
 .avid-glass-popover::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background:
-    linear-gradient(180deg, rgba(220, 225, 235, 0.04) 0%, transparent 22%),
-    linear-gradient(0deg, rgba(0, 0, 0, 0.14) 0%, transparent 38%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, transparent 16%);
   pointer-events: none;
 }
 /* Menu rows: full-bleed, hairline separators, iOS dark-table hover tint. */
