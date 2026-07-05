@@ -432,17 +432,11 @@ select::-ms-expand {
   gap: 28px;
 }
 
-.login-logo-slot {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
 .login-logo {
   display: block;
   width: min(220px, 72vw);
   height: auto;
+  margin: 0 auto;
 }
 
 .login-dialog-shell {
@@ -470,7 +464,7 @@ select::-ms-expand {
   position: relative;
   z-index: 1;
   width: 100%;
-  padding: 40px 36px 36px;
+  padding: 36px 36px 32px;
   border-radius: 22px;
   background: rgba(22, 22, 24, 0.82);
   backdrop-filter: blur(24px) saturate(140%);
@@ -480,28 +474,6 @@ select::-ms-expand {
     inset 0 1px 0 rgba(255, 255, 255, 0.05),
     0 24px 64px rgba(0, 0, 0, 0.55),
     0 8px 24px rgba(0, 0, 0, 0.35);
-}
-
-.login-dialog-header {
-  margin-bottom: 32px;
-}
-
-.login-title {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  color: #f2f2f7;
-  font-family: inherit;
-}
-
-.login-subtitle {
-  margin: 8px 0 0;
-  font-size: 14px;
-  font-weight: 500;
-  color: rgba(235, 235, 245, 0.48);
-  font-family: inherit;
 }
 
 .login-form {
