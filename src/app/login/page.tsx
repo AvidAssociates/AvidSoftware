@@ -43,8 +43,8 @@ function LoginForm() {
       <div className="login-dialog-shell">
         <div className="login-dialog login-dialog-enter">
           <div style={{ marginBottom: 28 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.4, color: "#8E8E93", marginBottom: 8 }}>AVID ASSOCIATES</div>
-            <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, letterSpacing: -0.8, color: "#1C1C1E", fontFamily: FONT }}>Sign in</h1>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.4, color: "rgba(235, 235, 245, 0.45)", marginBottom: 8 }}>AVID ASSOCIATES</div>
+            <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, letterSpacing: -0.8, color: "#F2F2F7", fontFamily: FONT }}>Sign in</h1>
           </div>
 
           <form onSubmit={onSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -93,7 +93,7 @@ const labelStyle: CSSProperties = {
   gap: 6,
   fontSize: 12.5,
   fontWeight: 600,
-  color: "#636366",
+  color: "rgba(235, 235, 245, 0.62)",
   fontFamily: FONT,
 };
 
