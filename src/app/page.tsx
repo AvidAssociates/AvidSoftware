@@ -769,6 +769,42 @@ function SelectPill({
   );
 }
 
+// A blocking confirmation before any destructive delete -- same modal
+// material as the Billing form, reused by every trash-icon Delete button.
+function ConfirmDeleteDialog({
+  S,
+  open,
+  itemLabel,
+  onConfirm,
+  onCancel,
+}: {
+  S: Styles;
+  open: boolean;
+  itemLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="avid-overlay" style={S.modalOverlay} onClick={onCancel}>
+      <div className="avid-modal" style={{ ...S.modal, maxWidth: 380 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ padding: "22px 22px 4px" }}>
+          <div style={S.modalTitle}>Delete {itemLabel}?</div>
+          <p style={{ fontSize: 13, color: S._t.muted, marginTop: 8, lineHeight: 1.5 }}>This cannot be undone.</p>
+        </div>
+        <div style={S.modalFooter}>
+          <button type="button" className="avid-btn" style={S.ghostBtn} onClick={onCancel}>
+            Cancel
+          </button>
+          <button type="button" className="avid-btn" style={S.primaryBtn} onClick={onConfirm}>
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function EntryRow({
   S,
   t,
@@ -805,6 +841,7 @@ function EntryRow({
   const editOpen = mode === "edit";
   const toggleStatus = () => setMode((m) => (m === "status" ? null : "status"));
   const toggleEdit = () => setMode((m) => (m === "edit" ? null : "edit"));
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const makeDraft = () => ({
     date: entry.date,
@@ -907,7 +944,12 @@ function EntryRow({
               <button className="avid-btn" style={S.iconGhost} onClick={toggleEdit} title="Edit">
                 <Pencil size={14} />
               </button>
-              <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
+              <button
+                className="avid-btn"
+                style={{ ...S.iconGhost, color: t.danger }}
+                onClick={() => setConfirmDelete(true)}
+                title="Delete"
+              >
                 <Trash2 size={14} />
               </button>
             </div>
@@ -916,6 +958,7 @@ function EntryRow({
         <RowExpandedPanel
           S={S}
           t={t}
+          mobile={mobile}
           entry={entry}
           statusOpen={statusOpen}
           editOpen={editOpen}
@@ -929,6 +972,16 @@ function EntryRow({
           onDecline={onDecline}
           onLogMeeting={onLogMeeting}
           onDeleteMeeting={onDeleteMeeting}
+        />
+        <ConfirmDeleteDialog
+          S={S}
+          open={confirmDelete}
+          itemLabel={`the send-out for ${entry.candidate}`}
+          onConfirm={() => {
+            setConfirmDelete(false);
+            onDelete();
+          }}
+          onCancel={() => setConfirmDelete(false)}
         />
       </div>
     );
@@ -954,7 +1007,12 @@ function EntryRow({
           <button className="avid-btn" style={S.iconGhost} onClick={toggleEdit} title="Edit">
             <Pencil size={14} />
           </button>
-          <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
+          <button
+            className="avid-btn"
+            style={{ ...S.iconGhost, color: t.danger }}
+            onClick={() => setConfirmDelete(true)}
+            title="Delete"
+          >
             <Trash2 size={14} />
           </button>
         </div>
@@ -962,6 +1020,7 @@ function EntryRow({
       <RowExpandedPanel
         S={S}
         t={t}
+        mobile={mobile}
         entry={entry}
         statusOpen={statusOpen}
         editOpen={editOpen}
@@ -975,6 +1034,16 @@ function EntryRow({
         onDecline={onDecline}
         onLogMeeting={onLogMeeting}
         onDeleteMeeting={onDeleteMeeting}
+      />
+      <ConfirmDeleteDialog
+        S={S}
+        open={confirmDelete}
+        itemLabel={`the send-out for ${entry.candidate}`}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          onDelete();
+        }}
+        onCancel={() => setConfirmDelete(false)}
       />
     </div>
   );
@@ -1078,51 +1147,72 @@ function NewEntryRow({
       <span style={{ fontSize: 12.5, fontWeight: 700, color: STAGE_COLOR.sent }}>Sent</span>
     </span>
   );
-  const bottomBar = (
+  const firstTimeTabs = (
+    <div style={S.segWrap}>
+      <button
+        type="button"
+        className="avid-btn"
+        style={draft.firstTime ? S.segBtnActive : S.segBtn}
+        onClick={() => setDraft((d) => ({ ...d, firstTime: true }))}
+      >
+        First-time
+      </button>
+      <button
+        type="button"
+        className="avid-btn"
+        style={!draft.firstTime ? S.segBtnActive : S.segBtn}
+        onClick={() => setDraft((d) => ({ ...d, firstTime: false }))}
+      >
+        Repeat
+      </button>
+    </div>
+  );
+  // Cancel/Save grouped in the same segmented-tab look as the First-time/
+  // Repeat toggle -- Save wears the active tab style, Cancel the muted one.
+  const cancelSaveTabs = (
+    <div style={S.segWrap}>
+      <button type="button" className="avid-btn" style={S.segBtn} onClick={onCancel}>
+        Cancel
+      </button>
+      <button
+        type="button"
+        className="avid-btn"
+        style={{ ...S.segBtnActive, opacity: canSave ? 1 : 0.5 }}
+        disabled={!canSave}
+        onClick={handleSave}
+      >
+        Save
+      </button>
+    </div>
+  );
+  const bottomBar = mobile ? (
     <div
       style={{
-        padding: mobile ? "0 16px 14px" : "0 22px 20px",
+        padding: "0 16px 14px",
         borderBottom: `1px solid ${t.border}`,
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
       }}
     >
-      <div style={S.segWrap}>
-        <button
-          type="button"
-          className="avid-btn"
-          style={draft.firstTime ? S.segBtnActive : S.segBtn}
-          onClick={() => setDraft((d) => ({ ...d, firstTime: true }))}
-        >
-          First-time
-        </button>
-        <button
-          type="button"
-          className="avid-btn"
-          style={!draft.firstTime ? S.segBtnActive : S.segBtn}
-          onClick={() => setDraft((d) => ({ ...d, firstTime: false }))}
-        >
-          Repeat
-        </button>
-      </div>
-      {/* Cancel/Save grouped in the same segmented-tab look as the
-          First-time/Repeat toggle on the left -- Save wears the active
-          tab style, Cancel the muted one. */}
-      <div style={S.segWrap}>
-        <button type="button" className="avid-btn" style={S.segBtn} onClick={onCancel}>
-          Cancel
-        </button>
-        <button
-          type="button"
-          className="avid-btn"
-          style={{ ...S.segBtnActive, opacity: canSave ? 1 : 0.5 }}
-          disabled={!canSave}
-          onClick={handleSave}
-        >
-          Save
-        </button>
-      </div>
+      {firstTimeTabs}
+      {cancelSaveTabs}
+    </div>
+  ) : (
+    // Mirrors the row's own 7-column soGrid above so Cancel/Save lands
+    // centered under the Actions column, same as a normal row's icons.
+    <div
+      style={{
+        padding: "0 22px 20px",
+        borderBottom: `1px solid ${t.border}`,
+        display: "grid",
+        gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+        columnGap: 20,
+        alignItems: "center",
+      }}
+    >
+      <div style={{ gridColumn: "1 / 7", display: "flex" }}>{firstTimeTabs}</div>
+      <div style={{ gridColumn: "7 / 8", display: "flex", justifyContent: "center" }}>{cancelSaveTabs}</div>
     </div>
   );
 
@@ -1241,6 +1331,7 @@ function ProcessStatusControl({
 function RowExpandedPanel({
   S,
   t,
+  mobile,
   entry,
   statusOpen,
   editOpen,
@@ -1257,6 +1348,7 @@ function RowExpandedPanel({
 }: {
   S: Styles;
   t: Theme;
+  mobile?: boolean;
   entry: Entry;
   statusOpen: boolean;
   editOpen: boolean;
@@ -1287,35 +1379,74 @@ function RowExpandedPanel({
           }}
         >
           {editOpen ? (
-            <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={S.segWrap}>
+            mobile ? (
+              <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={S.segWrap}>
+                  <button
+                    type="button"
+                    className="avid-btn"
+                    style={firstTime ? S.segBtnActive : S.segBtn}
+                    onClick={() => onToggleFirstTime(true)}
+                  >
+                    First-time
+                  </button>
+                  <button
+                    type="button"
+                    className="avid-btn"
+                    style={!firstTime ? S.segBtnActive : S.segBtn}
+                    onClick={() => onToggleFirstTime(false)}
+                  >
+                    Repeat
+                  </button>
+                </div>
                 <button
                   type="button"
                   className="avid-btn"
-                  style={firstTime ? S.segBtnActive : S.segBtn}
-                  onClick={() => onToggleFirstTime(true)}
+                  style={{ ...S.ghostBtn, opacity: canSave ? 1 : 0.5 }}
+                  disabled={!canSave}
+                  onClick={onSave}
                 >
-                  First-time
-                </button>
-                <button
-                  type="button"
-                  className="avid-btn"
-                  style={!firstTime ? S.segBtnActive : S.segBtn}
-                  onClick={() => onToggleFirstTime(false)}
-                >
-                  Repeat
+                  Save
                 </button>
               </div>
-              <button
-                type="button"
-                className="avid-btn"
-                style={{ ...S.ghostBtn, opacity: canSave ? 1 : 0.5 }}
-                disabled={!canSave}
-                onClick={onSave}
-              >
-                Save
-              </button>
-            </div>
+            ) : (
+              // Mirrors the row's own 7-column soGrid above so Save lands
+              // centered under the Actions column, same as the Edit/Delete
+              // icons on the collapsed row.
+              <div style={{ width: "100%", display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", columnGap: 20, alignItems: "center" }}>
+                <div style={{ gridColumn: "1 / 7", display: "flex" }}>
+                  <div style={S.segWrap}>
+                    <button
+                      type="button"
+                      className="avid-btn"
+                      style={firstTime ? S.segBtnActive : S.segBtn}
+                      onClick={() => onToggleFirstTime(true)}
+                    >
+                      First-time
+                    </button>
+                    <button
+                      type="button"
+                      className="avid-btn"
+                      style={!firstTime ? S.segBtnActive : S.segBtn}
+                      onClick={() => onToggleFirstTime(false)}
+                    >
+                      Repeat
+                    </button>
+                  </div>
+                </div>
+                <div style={{ gridColumn: "7 / 8", display: "flex", justifyContent: "center" }}>
+                  <button
+                    type="button"
+                    className="avid-btn"
+                    style={{ ...S.ghostBtn, opacity: canSave ? 1 : 0.5 }}
+                    disabled={!canSave}
+                    onClick={onSave}
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            )
           ) : (
             <>
               <StageProgress
@@ -1749,6 +1880,20 @@ function BillingRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const confirmDialog = (
+    <ConfirmDeleteDialog
+      S={S}
+      open={confirmDelete}
+      itemLabel={`the ${money(billing.amount)} billing${billing.company ? ` for ${billing.company}` : ""}`}
+      onConfirm={() => {
+        setConfirmDelete(false);
+        onDelete();
+      }}
+      onCancel={() => setConfirmDelete(false)}
+    />
+  );
+
   if (mobile) {
     return (
       <div
@@ -1767,11 +1912,17 @@ function BillingRow({
             <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
               <Pencil size={14} />
             </button>
-            <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
+            <button
+              className="avid-btn"
+              style={{ ...S.iconGhost, color: t.danger }}
+              onClick={() => setConfirmDelete(true)}
+              title="Delete"
+            >
               <Trash2 size={14} />
             </button>
           </div>
         </div>
+        {confirmDialog}
       </div>
     );
   }
@@ -1795,10 +1946,16 @@ function BillingRow({
         <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
           <Pencil size={14} />
         </button>
-        <button className="avid-btn" style={{ ...S.iconGhost, color: t.danger }} onClick={onDelete} title="Delete">
+        <button
+          className="avid-btn"
+          style={{ ...S.iconGhost, color: t.danger }}
+          onClick={() => setConfirmDelete(true)}
+          title="Delete"
+        >
           <Trash2 size={14} />
         </button>
       </div>
+      {confirmDialog}
     </div>
   );
 }
