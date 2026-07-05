@@ -1607,7 +1607,7 @@ function ActivityLogPanel({
   );
 }
 
-// ---------- Liquid Glass pickers ----------
+// ---------- Liquid Glass pickers (iOS 27 beta) ----------
 // One shared anchor-and-dismiss brain for every glass popover: outside
 // click (scoped by data attribute) and Escape close it; placement keeps it
 // centered under its trigger and inside the viewport, re-measured on
@@ -1661,8 +1661,7 @@ function useGlassPopover(attr: string, width: number, estHeight: number) {
   return { open, setOpen, pos, btnRef };
 }
 
-// Portals the localized dimming scrim + popover shell so every glass menu
-// shares the same z-index stack and iOS-style backdrop treatment.
+// Portals the glass popover shell so every menu/calendar shares one z-index stack.
 function GlassPopoverPortal({
   attr,
   pos,
@@ -1677,12 +1676,9 @@ function GlassPopoverPortal({
   if (typeof document === "undefined") return null;
   const attrMark = { [attr]: "" } as Record<string, string>;
   return createPortal(
-    <>
-      <div className="avid-glass-scrim" aria-hidden />
-      <div {...attrMark} style={{ position: "fixed", top: pos.top, left: pos.left, transform, zIndex: 1000 }}>
-        {children}
-      </div>
-    </>,
+    <div {...attrMark} style={{ position: "fixed", top: pos.top, left: pos.left, transform, zIndex: 1000 }}>
+      {children}
+    </div>,
     document.body
   );
 }
@@ -1997,12 +1993,11 @@ function BillingRow({
 
 // ---------- stage progress indicator ----------
 
-// Liquid Glass popover text colors -- Apple's dark-mode label colors on menus
-// (label / secondaryLabel / tertiaryLabel). Fixed regardless of app theme,
-// matching iOS 26/27 beta dark glass where menus don't flip light/dark.
+// Liquid Glass popover text — iOS 27 beta dark-menu label colors (fixed
+// regardless of app theme; menus don't flip light/dark).
 const GLASS_FG = "#F5F5F7";
-const GLASS_FG_SECONDARY = "rgba(235,235,245,0.6)";
-const GLASS_FG_TERTIARY = "rgba(235,235,245,0.3)";
+const GLASS_FG_SECONDARY = "rgba(235, 235, 245, 0.55)";
+const GLASS_FG_TERTIARY = "rgba(235, 235, 245, 0.28)";
 
 const DECLINE_REASONS: { key: DeclineReason; label: string }[] = [
   { key: "candidate", label: "Rejected by candidate" },
@@ -2011,10 +2006,7 @@ const DECLINE_REASONS: { key: DeclineReason; label: string }[] = [
 
 const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 
-// Styled after iOS's inline date picker (dark): month + year bold at the
-// left of the header with the paging chevrons grouped at the right, a row
-// of dim single-letter weekday caps, and circular day cells -- the selected
-// day gets a translucent filled circle, today reads bold with a faint ring.
+// iOS 27 beta inline date picker: month header, weekday caps, circular cells.
 function MiniCalendar({ value, onSelect }: { value: string | null; onSelect: (iso: string) => void }) {
   const initial = value ? new Date(`${value}T00:00:00`) : new Date();
   const [viewYear, setViewYear] = useState(initial.getFullYear());
@@ -2085,13 +2077,13 @@ function MiniCalendar({ value, onSelect }: { value: string | null; onSelect: (is
                 height: 31,
                 borderRadius: "50%",
                 border: "none",
-                background: isSelected ? "rgba(255,255,255,0.24)" : undefined,
+                background: isSelected ? "rgba(255, 255, 255, 0.2)" : undefined,
                 color: isSelected || isToday ? GLASS_FG : GLASS_FG_SECONDARY,
                 fontSize: 13,
-                fontWeight: isSelected || isToday ? 700 : 500,
+                fontWeight: isSelected || isToday ? 600 : 400,
                 cursor: "pointer",
                 fontVariantNumeric: "tabular-nums",
-                boxShadow: isToday && !isSelected ? "inset 0 0 0 1.5px rgba(245,245,247,0.4)" : "none",
+                boxShadow: isToday && !isSelected ? "inset 0 0 0 1.5px rgba(245, 245, 247, 0.32)" : "none",
               }}
             >
               {day}
