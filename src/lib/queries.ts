@@ -113,7 +113,7 @@ export async function createEntry(input: {
   const entry = toEntry(row);
   if (isEffectivelyPlaced(input)) {
     const billing = await syncBillingForPlacedEntry(input.id, {
-      date: input.date,
+      date: todayISO(),
       team: input.team,
       company: input.company,
       candidate: input.candidate,
@@ -204,16 +204,23 @@ export async function updateEntry(
   `) as EntryRow[];
   const entry = toEntry(row);
   const wasPlaced = existing.stage === "placed";
-  const placedDate = history.find((h) => h.stage === "placed")?.date ?? newStageDate;
+  const justMarkedPlaced = !wasPlaced && isEffectivelyPlaced(input);
+  const billingDate = justMarkedPlaced
+    ? newStageDate
+    : placedDateFromHistory(history, newStageDate);
 
   if (isEffectivelyPlaced(input)) {
-    const billing = await syncBillingForPlacedEntry(id, {
-      date: placedDate,
-      team: input.team,
-      company: input.company,
-      candidate: input.candidate,
-      role: input.role,
-    });
+    const billing = await syncBillingForPlacedEntry(
+      id,
+      {
+        date: billingDate,
+        team: input.team,
+        company: input.company,
+        candidate: input.candidate,
+        role: input.role,
+      },
+      { updateDate: justMarkedPlaced }
+    );
     return { entry, billing };
   }
 
@@ -388,6 +395,13 @@ function isEffectivelyPlaced(input: { stage: string; declined: boolean }) {
   return input.stage === "placed" && !input.declined;
 }
 
+function placedDateFromHistory(history: StageEvent[], fallback: string) {
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].stage === "placed") return history[i].date;
+  }
+  return fallback;
+}
+
 type BillingSyncInput = {
   date: string;
   team: string[];
@@ -399,23 +413,37 @@ type BillingSyncInput = {
 
 // A placed send-out always has a matching billing row (amount starts at $0
 // until the fee is entered). Manual billings skip this and leave entry_id NULL.
-async function syncBillingForPlacedEntry(entryId: string, input: BillingSyncInput): Promise<Billing> {
+async function syncBillingForPlacedEntry(
+  entryId: string,
+  input: BillingSyncInput,
+  options?: { updateDate?: boolean }
+): Promise<Billing> {
   const db = getDb();
   const [existing] = (await db.sql`
     SELECT * FROM billings WHERE entry_id = ${entryId}
   `) as BillingRow[];
 
   if (existing) {
-    const [row] = (await db.sql`
-      UPDATE billings SET
-        date = ${input.date},
-        team = ${input.team},
-        company = ${input.company},
-        candidate = ${input.candidate},
-        role = ${input.role ?? null}
-      WHERE id = ${existing.id}
-      RETURNING *
-    `) as BillingRow[];
+    const [row] = options?.updateDate
+      ? ((await db.sql`
+          UPDATE billings SET
+            date = ${input.date},
+            team = ${input.team},
+            company = ${input.company},
+            candidate = ${input.candidate},
+            role = ${input.role ?? null}
+          WHERE id = ${existing.id}
+          RETURNING *
+        `) as BillingRow[])
+      : ((await db.sql`
+          UPDATE billings SET
+            team = ${input.team},
+            company = ${input.company},
+            candidate = ${input.candidate},
+            role = ${input.role ?? null}
+          WHERE id = ${existing.id}
+          RETURNING *
+        `) as BillingRow[]);
     return toBilling(row);
   }
 
