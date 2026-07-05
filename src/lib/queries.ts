@@ -339,7 +339,7 @@ function toBilling(row: BillingRow): Billing {
     amount: Number(row.amount),
     company: row.company,
     candidate: row.candidate,
-    role: row.role,
+    role: row.role ?? null,
     notes: row.notes,
     addedBy: row.added_by,
     createdAt: row.created_at,
