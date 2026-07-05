@@ -1661,6 +1661,32 @@ function useGlassPopover(attr: string, width: number, estHeight: number) {
   return { open, setOpen, pos, btnRef };
 }
 
+// Portals the localized dimming scrim + popover shell so every glass menu
+// shares the same z-index stack and iOS-style backdrop treatment.
+function GlassPopoverPortal({
+  attr,
+  pos,
+  children,
+  transform = "translateX(-50%)",
+}: {
+  attr: string;
+  pos: { top: number; left: number };
+  children: ReactNode;
+  transform?: string;
+}) {
+  if (typeof document === "undefined") return null;
+  const attrMark = { [attr]: "" } as Record<string, string>;
+  return createPortal(
+    <>
+      <div className="avid-glass-scrim" aria-hidden />
+      <div {...attrMark} style={{ position: "fixed", top: pos.top, left: pos.left, transform, zIndex: 1000 }}>
+        {children}
+      </div>
+    </>,
+    document.body
+  );
+}
+
 // One shared row treatment for every glass menu: full-bleed (the pane's
 // big radius does the clipping), regular weight, with a leading checkmark
 // slot reserved so labels never shift as selection changes -- iOS menus.
@@ -1722,39 +1748,32 @@ function GlassSelect({
         </span>
         <ChevronDown size={12} style={{ flexShrink: 0, opacity: 0.6 }} />
       </button>
-      {open &&
-        pos &&
-        typeof document !== "undefined" &&
-        createPortal(
+      {open && pos && (
+        <GlassPopoverPortal attr="data-glass-select" pos={pos}>
           <div
-            data-glass-select
-            style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 1000 }}
+            className="avid-glass-pop avid-glass-popover"
+            style={{ display: "flex", flexDirection: "column", minWidth: 210, maxHeight: 336, overflowY: "auto" }}
           >
-            <div
-              className="avid-glass-pop avid-glass-popover"
-              style={{ display: "flex", flexDirection: "column", minWidth: 210, maxHeight: 336, overflowY: "auto" }}
-            >
-              {options.map((opt, i) => (
-                <Fragment key={opt}>
-                  {i > 0 && <div className="avid-glass-sep" />}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onChange(opt);
-                      setOpen(false);
-                    }}
-                    className="avid-glass-option"
-                    style={glassMenuRow(true)}
-                  >
-                    <GlassCheckSlot checked={opt === value} />
-                    {labels?.[opt] || opt}
-                  </button>
-                </Fragment>
-              ))}
-            </div>
-          </div>,
-          document.body
-        )}
+            {options.map((opt, i) => (
+              <Fragment key={opt}>
+                {i > 0 && <div className="avid-glass-sep" />}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(opt);
+                    setOpen(false);
+                  }}
+                  className="avid-glass-option"
+                  style={glassMenuRow(true)}
+                >
+                  <GlassCheckSlot checked={opt === value} />
+                  {labels?.[opt] || opt}
+                </button>
+              </Fragment>
+            ))}
+          </div>
+        </GlassPopoverPortal>
+      )}
     </>
   );
 }
@@ -1787,26 +1806,19 @@ function GlassDatePicker({
       >
         {value ? fmtDate(value) : placeholder}
       </button>
-      {open &&
-        pos &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            data-glass-date
-            style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 1000 }}
-          >
-            <div className="avid-glass-pop avid-glass-popover" style={{ padding: "12px 10px 10px" }}>
-              <MiniCalendar
-                value={value || null}
-                onSelect={(iso) => {
-                  onChange(iso);
-                  setOpen(false);
-                }}
-              />
-            </div>
-          </div>,
-          document.body
-        )}
+      {open && pos && (
+        <GlassPopoverPortal attr="data-glass-date" pos={pos}>
+          <div className="avid-glass-pop avid-glass-popover" style={{ padding: "12px 10px 10px" }}>
+            <MiniCalendar
+              value={value || null}
+              onSelect={(iso) => {
+                onChange(iso);
+                setOpen(false);
+              }}
+            />
+          </div>
+        </GlassPopoverPortal>
+      )}
     </>
   );
 }
@@ -1851,36 +1863,29 @@ function TeamMultiSelect({
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
         <ChevronDown size={12} style={{ flexShrink: 0, opacity: 0.6 }} />
       </button>
-      {open &&
-        pos &&
-        typeof document !== "undefined" &&
-        createPortal(
+      {open && pos && (
+        <GlassPopoverPortal attr="data-team-popover" pos={pos}>
           <div
-            data-team-popover
-            style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 1000 }}
+            className="avid-glass-pop avid-glass-popover"
+            style={{ display: "flex", flexDirection: "column", minWidth: 210 }}
           >
-            <div
-              className="avid-glass-pop avid-glass-popover"
-              style={{ display: "flex", flexDirection: "column", minWidth: 210 }}
-            >
-              {teamNames.map((name, i) => (
-                <Fragment key={name}>
-                  {i > 0 && <div className="avid-glass-sep" />}
-                  <button
-                    type="button"
-                    onClick={() => onToggle(name)}
-                    className="avid-glass-option"
-                    style={glassMenuRow(true)}
-                  >
-                    <GlassCheckSlot checked={selected.includes(name)} />
-                    {name}
-                  </button>
-                </Fragment>
-              ))}
-            </div>
-          </div>,
-          document.body
-        )}
+            {teamNames.map((name, i) => (
+              <Fragment key={name}>
+                {i > 0 && <div className="avid-glass-sep" />}
+                <button
+                  type="button"
+                  onClick={() => onToggle(name)}
+                  className="avid-glass-option"
+                  style={glassMenuRow(true)}
+                >
+                  <GlassCheckSlot checked={selected.includes(name)} />
+                  {name}
+                </button>
+              </Fragment>
+            ))}
+          </div>
+        </GlassPopoverPortal>
+      )}
     </>
   );
 }
@@ -1992,9 +1997,9 @@ function BillingRow({
 
 // ---------- stage progress indicator ----------
 
-// Liquid Glass popover text colors -- Apple's dark-mode label colors
-// (label / secondaryLabel / tertiaryLabel on a dark pane), fixed regardless
-// of the app's own light/dark theme, same as iOS dark menus.
+// Liquid Glass popover text colors -- Apple's dark-mode label colors on menus
+// (label / secondaryLabel / tertiaryLabel). Fixed regardless of app theme,
+// matching iOS 26/27 beta dark glass where menus don't flip light/dark.
 const GLASS_FG = "#F5F5F7";
 const GLASS_FG_SECONDARY = "rgba(235,235,245,0.6)";
 const GLASS_FG_TERTIARY = "rgba(235,235,245,0.3)";
@@ -2080,7 +2085,7 @@ function MiniCalendar({ value, onSelect }: { value: string | null; onSelect: (is
                 height: 31,
                 borderRadius: "50%",
                 border: "none",
-                background: isSelected ? "rgba(255,255,255,0.27)" : undefined,
+                background: isSelected ? "rgba(255,255,255,0.24)" : undefined,
                 color: isSelected || isToday ? GLASS_FG : GLASS_FG_SECONDARY,
                 fontSize: 13,
                 fontWeight: isSelected || isToday ? 700 : 500,
@@ -2302,45 +2307,37 @@ function StageProgress({
           </span>
         )}
         <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-          {declineMenuOpen &&
-            declinePos &&
-            typeof document !== "undefined" &&
-            createPortal(
-              <div style={{ position: "fixed", top: declinePos.top, left: declinePos.left, transform: "translateY(-50%)", zIndex: 1000 }}>
-                <div
-                  data-decline-popover
-                  className="avid-glass-pop avid-glass-popover"
-                  style={{ display: "flex", flexDirection: "column", minWidth: 210 }}
-                >
-                  {DECLINE_REASONS.map((r, i) => (
-                    <Fragment key={r.key}>
-                      {i > 0 && <div className="avid-glass-sep" />}
-                      <button
-                        onClick={() => {
-                          onDecline?.(r.key);
-                          setDeclineMenuOpen(false);
-                        }}
-                        className="avid-glass-option"
-                        style={{
-                          border: "none",
-                          color: GLASS_FG,
-                          textAlign: "left",
-                          padding: "11px 16px",
-                          fontSize: 14.5,
-                          fontWeight: 400,
-                          fontFamily: FONT,
-                          cursor: "pointer",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {r.label}
-                      </button>
-                    </Fragment>
-                  ))}
-                </div>
-              </div>,
-              document.body
-            )}
+          {declineMenuOpen && declinePos && (
+            <GlassPopoverPortal attr="data-decline-popover" pos={declinePos} transform="translateY(-50%)">
+              <div className="avid-glass-pop avid-glass-popover" style={{ display: "flex", flexDirection: "column", minWidth: 210 }}>
+                {DECLINE_REASONS.map((r, i) => (
+                  <Fragment key={r.key}>
+                    {i > 0 && <div className="avid-glass-sep" />}
+                    <button
+                      onClick={() => {
+                        onDecline?.(r.key);
+                        setDeclineMenuOpen(false);
+                      }}
+                      className="avid-glass-option"
+                      style={{
+                        border: "none",
+                        color: GLASS_FG,
+                        textAlign: "left",
+                        padding: "11px 16px",
+                        fontSize: 14.5,
+                        fontWeight: 400,
+                        fontFamily: FONT,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {r.label}
+                    </button>
+                  </Fragment>
+                ))}
+              </div>
+            </GlassPopoverPortal>
+          )}
           <button
             ref={declineBtnRef}
             className="avid-btn"

@@ -224,31 +224,44 @@ select::-ms-expand {
   transform-origin: top center;
 }
 
-/* ---- Liquid Glass (iOS 27 beta-style) popover material ---- */
-/* iOS 27's dark-mode tuning dialed back the glowy white iOS 26 look: darker
-   edges overall, blur pushed harder so content behind the pane diffuses
-   rather than shows through brightly, and highlights kept dim/greyish
-   instead of a bright white glow (dark-mode iOS 26 caused a distracting
-   glow some users found dizzying). Fixed dark "black glass" regardless of
-   app theme, like iOS dark-mode menus. */
+/* ---- Liquid Glass (iOS 26/27 beta) popover material ---- */
+/* Apple's later betas (26b3+) pushed menus toward black glass that still
+   reads as transparent: a very light dark tint, heavy backdrop blur so page
+   content refracts through, and brightness pulled down so legibility holds
+   without a milky frost. Menus stay fixed dark regardless of app theme.
+   WWDC: larger surfaces use localized dimming + a thicker, more substantial
+   material than nav bars. */
+.avid-glass-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0.2);
+  animation: overlayIn 0.18s ease;
+}
 .avid-glass-popover {
   position: relative;
   border-radius: 22px;
   overflow: hidden;
-  background: rgba(12, 12, 14, 0.62);
-  -webkit-backdrop-filter: blur(72px) saturate(150%);
-  backdrop-filter: blur(72px) saturate(150%);
-  /* outermost half-px dark ring = separation from content, then the
-     layered lift shadows, then a faint inner glow filling the pane */
+  isolation: isolate;
+  /* Low alpha keeps the pane see-through; blur + brightness do the work. */
+  background: rgba(4, 4, 6, 0.38);
+  -webkit-backdrop-filter: blur(96px) saturate(170%) brightness(0.84);
+  backdrop-filter: blur(96px) saturate(170%) brightness(0.84);
   box-shadow:
-    0 0 0 0.5px rgba(0, 0, 0, 0.65),
-    0 34px 80px rgba(0, 0, 0, 0.55),
-    0 8px 22px rgba(0, 0, 0, 0.35),
-    inset 0 0 24px rgba(255, 255, 255, 0.02);
+    0 0 0 0.5px rgba(0, 0, 0, 0.78),
+    0 30px 72px rgba(0, 0, 0, 0.52),
+    0 10px 24px rgba(0, 0, 0, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    inset 0 -16px 28px rgba(0, 0, 0, 0.14);
 }
-/* The "lensing" edge: a 1px rim, mostly dark all the way around with just a
-   dim, greyish glint where the light notionally hits (top-left) -- no
-   bright white glow, per iOS 27's darkened-edges tuning. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .avid-glass-popover {
+    background: rgba(16, 16, 20, 0.94);
+  }
+}
+/* Specular rim: dim grey glint top-left, dark along the bottom edge — no
+   bright white halo (the early iOS 26 betas; later betas darkened this). */
 .avid-glass-popover::before {
   content: "";
   position: absolute;
@@ -257,10 +270,10 @@ select::-ms-expand {
   padding: 1px;
   background: linear-gradient(
     155deg,
-    rgba(210, 210, 218, 0.22),
-    rgba(210, 210, 218, 0.06) 30%,
-    rgba(0, 0, 0, 0.25) 55%,
-    rgba(210, 210, 218, 0.09) 100%
+    rgba(220, 220, 228, 0.18),
+    rgba(200, 200, 208, 0.05) 28%,
+    rgba(0, 0, 0, 0.32) 58%,
+    rgba(200, 200, 208, 0.07) 100%
   );
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
@@ -269,14 +282,16 @@ select::-ms-expand {
   pointer-events: none;
   z-index: 1;
 }
-/* A much-dimmed interior sheen -- present for depth, but grey/dark rather
-   than a bright wash down from the top edge. */
+/* Subtle top sheen + bottom weighting so the pane reads thicker, like a menu
+   morphing from a toolbar control (WWDC: menus use a denser glass variant). */
 .avid-glass-popover::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(180deg, rgba(210, 210, 218, 0.04), rgba(210, 210, 218, 0.01) 30%, transparent 55%);
+  background:
+    linear-gradient(180deg, rgba(220, 220, 228, 0.05) 0%, transparent 28%),
+    linear-gradient(0deg, rgba(0, 0, 0, 0.1) 0%, transparent 32%);
   pointer-events: none;
 }
 /* Menu rows are full-bleed (the container's big radius clips them), with
@@ -286,15 +301,15 @@ select::-ms-expand {
   transition: background-color 0.12s ease;
 }
 .avid-glass-option:hover {
-  background-color: rgba(150, 150, 158, 0.14);
+  background-color: rgba(160, 160, 168, 0.12);
 }
 .avid-glass-option:active {
-  background-color: rgba(150, 150, 158, 0.22);
+  background-color: rgba(160, 160, 168, 0.2);
 }
 .avid-glass-sep {
   height: 1px;
   flex-shrink: 0;
-  background: rgba(210, 210, 218, 0.09);
+  background: rgba(220, 220, 228, 0.08);
 }
 /* iOS menus "pop" open from the control that summoned them -- a quick
    overshooting scale rather than the softer slide-in other popovers use. */
