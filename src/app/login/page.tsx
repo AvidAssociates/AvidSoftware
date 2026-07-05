@@ -41,7 +41,7 @@ function LoginForm() {
   return (
     <div className="login-page">
       <div className="login-stack">
-        <img src="/login-logo.png" alt="Avid Associates" className="login-logo" width={220} height={242} />
+        <img src="/login-logo.png" alt="Avid Associates" className="login-logo" />
         <div className="login-dialog-shell">
           <div className="login-dialog login-dialog-enter">
             <form onSubmit={onSubmit} className="login-form">
@@ -101,7 +101,7 @@ export default function LoginPage() {
       fallback={
         <div className="login-page">
           <div className="login-stack">
-            <img src="/login-logo.png" alt="" className="login-logo" width={220} height={242} />
+            <img src="/login-logo.png" alt="" className="login-logo" />
             <div className="login-dialog-shell">
               <div className="login-dialog login-dialog-enter" />
             </div>

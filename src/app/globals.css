@@ -434,7 +434,7 @@ select::-ms-expand {
 
 .login-logo {
   display: block;
-  width: min(220px, 72vw);
+  width: min(280px, 82vw);
   height: auto;
   margin: 0 auto;
 }
