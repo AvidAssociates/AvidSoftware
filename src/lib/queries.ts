@@ -51,11 +51,6 @@ function activityEntry(type: string, round: number, date: string): MeetingLogEnt
   return { id: uid(), type, round, date };
 }
 
-function lastEventDateOf(history: StageEvent[], stage: string): string | null {
-  const match = [...history].reverse().find((h) => h.stage === stage);
-  return match?.date ?? null;
-}
-
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -150,13 +145,12 @@ export async function updateEntry(
 
   const newStageDate = input.stageDate || todayISO();
   let history = existing.stage_history ?? [];
-  // Insert-or-update, same as setStageEventDate below: if this send-out had
-  // already reached this stage before (e.g. it was advanced to Offer, moved
-  // back to Interview, and is now being advanced to Offer again), re-arriving
-  // at it just now should re-stamp today's date, not silently keep whatever
-  // date was recorded the first time. The old "only append if missing" guard
-  // left stale dates in place on a re-arrival, which then leaked into the
-  // activity log below via lastEventDateOf.
+  // Insert-or-update: if this send-out had already reached this stage before
+  // (e.g. it was advanced to Offer, moved back to Interview, and is now being
+  // advanced to Offer again), re-arriving at it just now should re-stamp
+  // today's date, not silently keep whatever date was recorded the first
+  // time. The old "only append if missing" guard left stale dates in place
+  // on a re-arrival, which then leaked into the activity log below.
   if (input.stage !== existing.stage) {
     const idx = history.map((h) => h.stage).lastIndexOf(input.stage as Entry["stage"]);
     history =
@@ -201,50 +195,6 @@ export async function updateEntry(
 
 export async function deleteEntry(id: string) {
   await getDb().sql`DELETE FROM pipeline_entries WHERE id = ${id}`;
-}
-
-const PIPELINE_ORDER: Entry["stage"][] = ["sent", "interview", "offer", "placed"];
-
-// The single entry point for setting a stage's date, whether that's
-// correcting an already-recorded date or moving the pipeline forward to a
-// stage it hasn't reached yet (which requires a date — there's no default).
-export async function setStageEventDate(
-  id: string,
-  stage: string,
-  date: string
-): Promise<Entry | null> {
-  const db = getDb();
-  const [existing] = (await db.sql`
-    SELECT stage, stage_history, meeting_log FROM pipeline_entries WHERE id = ${id}
-  `) as { stage: string; stage_history: StageEvent[]; meeting_log: MeetingLogEntry[] }[];
-  if (!existing) return null;
-
-  const history = existing.stage_history ?? [];
-  const idx = history.map((h) => h.stage).lastIndexOf(stage as Entry["stage"]);
-  const updatedHistory =
-    idx === -1
-      ? [...history, { stage: stage as Entry["stage"], date }]
-      : history.map((h, i) => (i === idx ? { ...h, date } : h));
-
-  const newStage =
-    PIPELINE_ORDER.indexOf(stage as Entry["stage"]) > PIPELINE_ORDER.indexOf(existing.stage as Entry["stage"])
-      ? stage
-      : existing.stage;
-
-  let meetingLog = existing.meeting_log ?? [];
-  if (newStage === "offer" && existing.stage !== "offer") {
-    meetingLog = [...meetingLog, activityEntry("Offer", 0, lastEventDateOf(updatedHistory, "offer") ?? date)];
-  }
-  if (newStage === "placed" && existing.stage !== "placed") {
-    meetingLog = [...meetingLog, activityEntry("Placed", 0, lastEventDateOf(updatedHistory, "placed") ?? date)];
-  }
-
-  const [row] = (await db.sql`
-    UPDATE pipeline_entries SET stage_history = ${JSON.stringify(updatedHistory)}, stage = ${newStage}, meeting_log = ${JSON.stringify(meetingLog)}
-    WHERE id = ${id}
-    RETURNING *
-  `) as EntryRow[];
-  return toEntry(row);
 }
 
 // Appends a meeting to the log (Phone R1 -> Phone R2 -> Face-to-Face R1,

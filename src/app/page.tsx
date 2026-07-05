@@ -19,7 +19,7 @@ import {
   Settings,
   Tv,
 } from "lucide-react";
-import { Billing, DeclineReason, Entry, RosterMember, Stage, StageEvent } from "@/lib/types";
+import { Billing, DeclineReason, Entry, RosterMember, Stage } from "@/lib/types";
 import {
   ADMIN,
   DEFAULT_TEAM,
@@ -311,18 +311,6 @@ function Dashboard({
     // "today" on a newly-reached stage itself (it would use its own clock,
     // which disagrees with the user's local date for part of the day).
     const res = await send(`/api/entries/${entry.id}`, "PUT", { ...optimistic, stageDate: todayISO() });
-    if (res.ok) applyEntry(await res.json());
-  };
-  // Double-clicking a stage sets/corrects its date without changing which
-  // stage is current (that's what a single click does).
-  const setStageDate = async (entry: Entry, stage: Stage, date: string) => {
-    const idx = entry.stageHistory.map((h) => h.stage).lastIndexOf(stage);
-    const stageHistory =
-      idx === -1
-        ? [...entry.stageHistory, { stage, date }]
-        : entry.stageHistory.map((h, i) => (i === idx ? { ...h, date } : h));
-    applyEntry({ ...entry, stageHistory });
-    const res = await send(`/api/entries/${entry.id}/stage-date`, "PATCH", { stage, date });
     if (res.ok) applyEntry(await res.json());
   };
   const deleteEntry = async (id: string) => {
@@ -663,7 +651,6 @@ function Dashboard({
                   onSaveEntry={(updated) => saveEntry(updated, false)}
                   onDelete={() => deleteEntry(e.id)}
                   onSetStage={(stage) => advanceStage(e, stage)}
-                  onEditDate={(stage, date) => setStageDate(e, stage, date)}
                   onRestore={() => setDeclined(e, false)}
                   onDecline={(reason) => setDeclined(e, true, reason)}
                   onLogMeeting={(type, round, date) => logMeeting(e, type, round, date)}
@@ -787,7 +774,6 @@ function EntryRow({
   onSaveEntry,
   onDelete,
   onSetStage,
-  onEditDate,
   onRestore,
   onDecline,
   onLogMeeting,
@@ -801,7 +787,6 @@ function EntryRow({
   onSaveEntry: (entry: Entry) => void;
   onDelete: () => void;
   onSetStage: (stage: Stage) => void;
-  onEditDate: (stage: Stage, date: string) => void;
   onRestore: () => void;
   onDecline: (reason: DeclineReason) => void;
   onLogMeeting: (type: string, round: number, date: string) => void;
@@ -936,7 +921,6 @@ function EntryRow({
           onSave={handleSave}
           onCloseStatus={() => setMode(null)}
           onSetStage={onSetStage}
-          onEditDate={onEditDate}
           onRestore={onRestore}
           onDecline={onDecline}
           onLogMeeting={onLogMeeting}
@@ -983,7 +967,6 @@ function EntryRow({
         onSave={handleSave}
         onCloseStatus={() => setMode(null)}
         onSetStage={onSetStage}
-        onEditDate={onEditDate}
         onRestore={onRestore}
         onDecline={onDecline}
         onLogMeeting={onLogMeeting}
@@ -1263,7 +1246,6 @@ function RowExpandedPanel({
   onSave,
   onCloseStatus,
   onSetStage,
-  onEditDate,
   onRestore,
   onDecline,
   onLogMeeting,
@@ -1280,7 +1262,6 @@ function RowExpandedPanel({
   onSave: () => void;
   onCloseStatus: () => void;
   onSetStage: (stage: Stage) => void;
-  onEditDate: (stage: Stage, date: string) => void;
   onRestore: () => void;
   onDecline: (reason: DeclineReason) => void;
   onLogMeeting: (type: string, round: number, date: string) => void;
@@ -1338,9 +1319,7 @@ function RowExpandedPanel({
                 stage={entry.stage}
                 declined={entry.declined}
                 declinedReason={entry.declinedReason}
-                history={entry.stageHistory}
                 onSetStage={onSetStage}
-                onEditDate={onEditDate}
                 onRestore={onRestore}
                 onDecline={onDecline}
                 large
@@ -1532,7 +1511,6 @@ function useGlassPopover(attr: string, width: number, estHeight: number) {
 // slot reserved so labels never shift as selection changes -- iOS menus.
 function glassMenuRow(withCheckSlot: boolean): React.CSSProperties {
   return {
-    background: "transparent",
     border: "none",
     color: GLASS_FG,
     textAlign: "left",
@@ -1822,10 +1800,6 @@ function BillingRow({
 }
 
 // ---------- stage progress indicator ----------
-function lastEventDate(history: StageEvent[], stage: Stage): string | null {
-  const event = [...history].reverse().find((h) => h.stage === stage);
-  return event?.date ?? null;
-}
 
 // Liquid Glass popover text colors -- Apple's dark-mode label colors
 // (label / secondaryLabel / tertiaryLabel on a dark pane), fixed regardless
@@ -1884,10 +1858,10 @@ function MiniCalendar({ value, onSelect }: { value: string | null; onSelect: (is
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 4px 10px 8px" }}>
         <span style={{ fontSize: 14.5, fontWeight: 600, letterSpacing: -0.2 }}>{monthLabel}</span>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <button onClick={goPrev} className="avid-cal-nav" style={{ border: "none", background: "none", color: GLASS_FG, cursor: "pointer", display: "flex", padding: 5, borderRadius: 7 }}>
+          <button onClick={goPrev} className="avid-cal-nav" style={{ border: "none", color: GLASS_FG, cursor: "pointer", display: "flex", padding: 5, borderRadius: 7 }}>
             <ChevronLeft size={16} strokeWidth={2.5} />
           </button>
-          <button onClick={goNext} className="avid-cal-nav" style={{ border: "none", background: "none", color: GLASS_FG, cursor: "pointer", display: "flex", padding: 5, borderRadius: 7 }}>
+          <button onClick={goNext} className="avid-cal-nav" style={{ border: "none", color: GLASS_FG, cursor: "pointer", display: "flex", padding: 5, borderRadius: 7 }}>
             <ChevronRight size={16} strokeWidth={2.5} />
           </button>
         </div>
@@ -1915,7 +1889,7 @@ function MiniCalendar({ value, onSelect }: { value: string | null; onSelect: (is
                 height: 31,
                 borderRadius: "50%",
                 border: "none",
-                background: isSelected ? "rgba(255,255,255,0.27)" : "transparent",
+                background: isSelected ? "rgba(255,255,255,0.27)" : undefined,
                 color: isSelected || isToday ? GLASS_FG : GLASS_FG_SECONDARY,
                 fontSize: 13,
                 fontWeight: isSelected || isToday ? 700 : 500,
@@ -1938,10 +1912,8 @@ function StageProgress({
   stage,
   declined,
   declinedReason,
-  history = [],
   onSetStage,
   onToggleDeclined,
-  onEditDate,
   onRestore,
   onDecline,
   large,
@@ -1950,24 +1922,15 @@ function StageProgress({
   stage: Stage;
   declined: boolean;
   declinedReason?: DeclineReason | null;
-  history?: StageEvent[];
   onSetStage?: (stage: Stage) => void;
   onToggleDeclined?: () => void;
-  onEditDate?: (stage: Stage, date: string) => void;
   onRestore?: () => void;
   onDecline?: (reason: DeclineReason) => void;
   large?: boolean;
 }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-  // Where the hover date-tooltip anchors, in viewport coordinates -- it
-  // portals to <body> (like the calendar popover) so the expand panel's
-  // overflow:hidden can't clip it to a sliver above the dot.
-  const [hoverTipPos, setHoverTipPos] = useState<{ top: number; left: number } | null>(null);
-  const [openIdx, setOpenIdx] = useState<number | null>(null);
   const [declineMenuOpen, setDeclineMenuOpen] = useState(false);
-  const dotRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const declineBtnRef = useRef<HTMLButtonElement | null>(null);
-  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null);
   const [declinePos, setDeclinePos] = useState<{ top: number; left: number } | null>(null);
   const idx = Math.max(0, PIPELINE.findIndex((s) => s.key === stage));
   const color = declined ? t.danger : STAGE_COLOR[stage];
@@ -1994,57 +1957,6 @@ function StageProgress({
     const timer = setTimeout(() => setPoppedIdx(null), 400);
     return () => clearTimeout(timer);
   }, [poppedIdx]);
-
-  // The date popover closes on an outside click or Escape — not on mouse
-  // movement, so it stays put while you pick a date.
-  useEffect(() => {
-    if (openIdx === null) return;
-    const onPointerDown = (e: MouseEvent) => {
-      if (!(e.target instanceof Element) || !e.target.closest("[data-stage-popover]")) {
-        setOpenIdx(null);
-      }
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpenIdx(null);
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [openIdx]);
-
-  // The popover is portaled to <body> (so it's never clipped by the table's
-  // rounded-corner overflow:hidden) and positioned from the anchor dot's
-  // real screen position, clamped to stay fully on-screen.
-  useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect -- measures real DOM
-       layout (getBoundingClientRect), which is only available in an effect */
-    if (openIdx === null) {
-      setPopoverPos(null);
-      return;
-    }
-    const place = () => {
-      const el = dotRefs.current[openIdx];
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      const width = 228;
-      const height = 260;
-      const left = Math.min(Math.max(rect.left + rect.width / 2, width / 2 + 8), window.innerWidth - width / 2 - 8);
-      const top =
-        rect.bottom + height + 10 <= window.innerHeight ? rect.bottom + 10 : Math.max(8, rect.top - height - 10);
-      setPopoverPos({ top, left });
-    };
-    place();
-    /* eslint-enable react-hooks/set-state-in-effect */
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
-    return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
-    };
-  }, [openIdx]);
 
   // Decline-reason menu: opens to the right of the button, portaled to
   // <body> so it isn't clipped, and stays open until an outside click,
@@ -2139,85 +2051,12 @@ function StageProgress({
                 <div
                   key={`dot-${i}`}
                   style={{ position: "relative" }}
-                  onMouseEnter={(e) => {
-                    setHoverIdx(i);
-                    const r = e.currentTarget.getBoundingClientRect();
-                    setHoverTipPos({ top: r.top - 8, left: r.left + r.width / 2 });
-                  }}
+                  onMouseEnter={() => setHoverIdx(i)}
                   onMouseLeave={() => setHoverIdx((cur) => (cur === i ? null : cur))}
                 >
-                  {onEditDate &&
-                    i === idx &&
-                    openIdx === i &&
-                    popoverPos &&
-                    typeof document !== "undefined" &&
-                    createPortal(
-                      <div
-                        style={{
-                          position: "fixed",
-                          top: popoverPos.top,
-                          left: popoverPos.left,
-                          transform: "translateX(-50%)",
-                          zIndex: 1000,
-                        }}
-                      >
-                        <div
-                          data-stage-popover
-                          className="avid-glass-pop avid-glass-popover"
-                          style={{ padding: "12px 10px 10px" }}
-                        >
-                          <MiniCalendar
-                            value={lastEventDate(history, s.key)}
-                            onSelect={(iso) => {
-                              onEditDate(s.key, iso);
-                              setOpenIdx(null);
-                            }}
-                          />
-                        </div>
-                      </div>,
-                      document.body
-                    )}
-                  {onEditDate &&
-                    i === idx &&
-                    openIdx !== i &&
-                    hoverIdx === i &&
-                    hoverTipPos &&
-                    typeof document !== "undefined" &&
-                    createPortal(
-                      <div
-                        className="avid-glass-popover"
-                        style={{
-                          position: "fixed",
-                          top: hoverTipPos.top,
-                          left: hoverTipPos.left,
-                          transform: "translate(-50%, -100%)",
-                          color: GLASS_FG,
-                          fontSize: 11.5,
-                          fontWeight: 600,
-                          padding: "6px 11px",
-                          borderRadius: 11,
-                          whiteSpace: "nowrap",
-                          zIndex: 1000,
-                          pointerEvents: "none",
-                          // A tiny hovering hint shouldn't throw the panel-sized
-                          // shadow stack the glass class carries -- that read as
-                          // a dark blob around the selected dot on hover.
-                          boxShadow: "0 4px 12px rgba(0,0,0,0.28)",
-                        }}
-                      >
-                        {lastEventDate(history, s.key) ? fmtDate(lastEventDate(history, s.key)!) : "Click to set date"}
-                      </div>,
-                      document.body
-                    )}
                   <button
-                    ref={(el) => {
-                      dotRefs.current[i] = el;
-                    }}
                     onClick={() => {
-                      if (i === idx) {
-                        if (onEditDate) setOpenIdx(i);
-                        return;
-                      }
+                      if (i === idx) return;
                       onSetStage?.(s.key);
                     }}
                     title={s.label}
@@ -2292,7 +2131,6 @@ function StageProgress({
                         }}
                         className="avid-glass-option"
                         style={{
-                          background: "transparent",
                           border: "none",
                           color: GLASS_FG,
                           textAlign: "left",

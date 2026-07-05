@@ -105,14 +105,17 @@ select::-ms-expand {
   transform: translateY(-1px);
 }
 
+/* The calendar is the one exception to the glass system's grey hover tint --
+   day cells get a genuine white circle on hover (like Apple's own calendar
+   pickers), with only minimal movement, not the bold grow used elsewhere. */
 .avid-cal-day,
 .avid-cal-nav {
   transition: background-color 0.12s ease, transform 0.15s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .avid-cal-day:hover,
 .avid-cal-nav:hover {
-  background-color: rgba(255, 255, 255, 0.12);
-  transform: scale(1.18);
+  background-color: rgba(255, 255, 255, 0.22);
+  transform: scale(1.06);
 }
 .avid-cal-day:active,
 .avid-cal-nav:active {
@@ -221,31 +224,31 @@ select::-ms-expand {
   transform-origin: top center;
 }
 
-/* ---- Liquid Glass (iOS 27-style) popover material ---- */
-/* Modeled on Apple's three-layer glass anatomy -- illumination, highlight,
-   shadow -- with iOS 27's tuning: keep genuine transparency but diffuse
-   the content behind the pane much harder (heavier blur at a lighter
-   tint), and add more depth/separation from the page. Fixed dark "black
-   glass" regardless of app theme, like iOS dark-mode menus. */
+/* ---- Liquid Glass (iOS 27 beta-style) popover material ---- */
+/* iOS 27's dark-mode tuning dialed back the glowy white iOS 26 look: darker
+   edges overall, blur pushed harder so content behind the pane diffuses
+   rather than shows through brightly, and highlights kept dim/greyish
+   instead of a bright white glow (dark-mode iOS 26 caused a distracting
+   glow some users found dizzying). Fixed dark "black glass" regardless of
+   app theme, like iOS dark-mode menus. */
 .avid-glass-popover {
   position: relative;
   border-radius: 22px;
   overflow: hidden;
-  background: rgba(15, 15, 18, 0.52);
-  -webkit-backdrop-filter: blur(64px) saturate(170%);
-  backdrop-filter: blur(64px) saturate(170%);
+  background: rgba(12, 12, 14, 0.62);
+  -webkit-backdrop-filter: blur(72px) saturate(150%);
+  backdrop-filter: blur(72px) saturate(150%);
   /* outermost half-px dark ring = separation from content, then the
      layered lift shadows, then a faint inner glow filling the pane */
   box-shadow:
-    0 0 0 0.5px rgba(0, 0, 0, 0.55),
+    0 0 0 0.5px rgba(0, 0, 0, 0.65),
     0 34px 80px rgba(0, 0, 0, 0.55),
     0 8px 22px rgba(0, 0, 0, 0.35),
-    inset 0 0 24px rgba(255, 255, 255, 0.045);
+    inset 0 0 24px rgba(255, 255, 255, 0.02);
 }
-/* The "lensing" edge: a 1px specular rim, brightest where the light
-   notionally hits (top-left), fading along the sides, with a soft bounce
-   at the bottom -- drawn as a gradient ring via mask-compositing so the
-   brightness genuinely varies around the edge (a flat border can't). */
+/* The "lensing" edge: a 1px rim, mostly dark all the way around with just a
+   dim, greyish glint where the light notionally hits (top-left) -- no
+   bright white glow, per iOS 27's darkened-edges tuning. */
 .avid-glass-popover::before {
   content: "";
   position: absolute;
@@ -254,10 +257,10 @@ select::-ms-expand {
   padding: 1px;
   background: linear-gradient(
     155deg,
-    rgba(255, 255, 255, 0.55),
-    rgba(255, 255, 255, 0.15) 30%,
-    rgba(255, 255, 255, 0.06) 55%,
-    rgba(255, 255, 255, 0.28) 100%
+    rgba(210, 210, 218, 0.22),
+    rgba(210, 210, 218, 0.06) 30%,
+    rgba(0, 0, 0, 0.25) 55%,
+    rgba(210, 210, 218, 0.09) 100%
   );
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
@@ -266,31 +269,32 @@ select::-ms-expand {
   pointer-events: none;
   z-index: 1;
 }
-/* iOS 27's layered highlight: a soft interior sheen washing down from the
-   top edge, sitting under the rim but over the blurred backdrop. */
+/* A much-dimmed interior sheen -- present for depth, but grey/dark rather
+   than a bright wash down from the top edge. */
 .avid-glass-popover::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02) 30%, transparent 55%);
+  background: linear-gradient(180deg, rgba(210, 210, 218, 0.04), rgba(210, 210, 218, 0.01) 30%, transparent 55%);
   pointer-events: none;
 }
 /* Menu rows are full-bleed (the container's big radius clips them), with
-   iOS's edge-to-edge hairline separators between rows. */
+   iOS's edge-to-edge hairline separators between rows. Hover/active reads
+   as a neutral grey wash, not a white highlight. */
 .avid-glass-option {
   transition: background-color 0.12s ease;
 }
 .avid-glass-option:hover {
-  background-color: rgba(255, 255, 255, 0.11);
+  background-color: rgba(150, 150, 158, 0.14);
 }
 .avid-glass-option:active {
-  background-color: rgba(255, 255, 255, 0.18);
+  background-color: rgba(150, 150, 158, 0.22);
 }
 .avid-glass-sep {
   height: 1px;
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.09);
+  background: rgba(210, 210, 218, 0.09);
 }
 /* iOS menus "pop" open from the control that summoned them -- a quick
    overshooting scale rather than the softer slide-in other popovers use. */
