@@ -274,13 +274,6 @@ export function makeStyles(t: Theme) {
       padding: "26px 22px",
       borderBottom: `1px solid ${t.border}`,
     },
-    billingRow: {
-      display: "flex",
-      alignItems: "center",
-      gap: 20,
-      padding: "18px 22px",
-      borderBottom: `1px solid ${t.border}`,
-    },
     // Send-Outs row -- ONE flat 7-column grid, every column an equal 1fr:
     //   Date | Candidate | Company | Status | Role | Team | Actions
     // Equal fractions => the 7 columns are evenly spaced by construction,
@@ -306,11 +299,6 @@ export function makeStyles(t: Theme) {
     soCol: { minWidth: 0, textAlign: "center" as const },
     soStatusCol: { minWidth: 0, textAlign: "center" as const },
     soActionsCol: { minWidth: 0, display: "flex", justifyContent: "center" as const },
-    colActions: { width: 56, flexShrink: 0, display: "flex", justifyContent: "flex-end" },
-    colRecruiter: { width: 140, flexShrink: 0 },
-    colClient: { flex: 1, minWidth: 160 },
-    colAmount: { width: 120, flexShrink: 0, textAlign: "right" as const },
-    colDate: { width: 90, flexShrink: 0 },
     cardPrimary: { fontSize: 14.5, fontWeight: 600, color: t.ink },
     cardSub: { fontSize: 12.5, color: t.muted, marginTop: 3, fontWeight: 500 },
     amountText: { fontSize: 15, fontWeight: 700, color: t.ink, fontVariantNumeric: "tabular-nums" as const },

@@ -506,23 +506,23 @@ function Dashboard({
             </div>
             <div />
           </div>
+        ) : view === "report" ? (
+          <div className="avid-hero-inline" style={S.heroInlineRow}>
+            <h1 className="avid-hero-title" style={S.heroInlineTitle}>Production Reports</h1>
+            <div className="avid-hero-stats" style={S.heroStatsRow}>
+              <HeroStat S={S} label="Billed YTD" value={money(reportStats.total)} color={STAGE_COLOR.placed} />
+              <HeroStat S={S} label="Deals" value={String(reportStats.deals)} />
+              <HeroStat S={S} label="Top Producer" value={reportStats.topName} color={t.accent} />
+            </div>
+            <div />
+          </div>
         ) : (
           <>
-            <h1 className="avid-hero-title" style={S.heroTitle}>{view === "leaderboard" ? "Leaderboard" : "Production Reports"}</h1>
+            <h1 className="avid-hero-title" style={S.heroTitle}>Leaderboard</h1>
             <div className="avid-hero-stats" style={S.heroStatsRow}>
-              {view === "leaderboard" ? (
-                <>
-                  <HeroStat S={S} label="Send-Outs" value={String(leaderboardStats.total)} />
-                  <HeroStat S={S} label="First-Time" value={String(leaderboardStats.firstTimeCount)} color={t.accent} />
-                  <HeroStat S={S} label="Top This Month" value={leaderboardStats.topName} color={STAGE_COLOR.placed} />
-                </>
-              ) : (
-                <>
-                  <HeroStat S={S} label="Billed YTD" value={money(reportStats.total)} color={STAGE_COLOR.placed} />
-                  <HeroStat S={S} label="Deals" value={String(reportStats.deals)} />
-                  <HeroStat S={S} label="Top Producer" value={reportStats.topName} color={t.accent} />
-                </>
-              )}
+              <HeroStat S={S} label="Send-Outs" value={String(leaderboardStats.total)} />
+              <HeroStat S={S} label="First-Time" value={String(leaderboardStats.firstTimeCount)} color={t.accent} />
+              <HeroStat S={S} label="Top This Month" value={leaderboardStats.topName} color={STAGE_COLOR.placed} />
             </div>
           </>
         )}
@@ -676,12 +676,17 @@ function Dashboard({
             ) : (
               <div>
                 {!isMobile && (
-                  <div style={S.cardHeaderRow}>
-                    <div style={S.colRecruiter}>Team</div>
-                    <div style={S.colClient}>Client</div>
-                    <div style={S.colAmount}>Amount</div>
-                    <div style={S.colDate}>Date</div>
-                    <div style={S.colActions} />
+                  // Same 7-column grid as Send-Outs (soGrid), for the same
+                  // spacing/sizing -- Billings has no Status or Role data, so
+                  // those two slots stay blank rather than relabeled.
+                  <div style={{ ...S.cardHeaderRow, ...S.soGrid }}>
+                    <div style={S.soCol}>Date</div>
+                    <div style={S.soCol}>Candidate</div>
+                    <div style={S.soCol}>Company</div>
+                    <div style={S.soStatusCol} />
+                    <div style={S.soCol} />
+                    <div style={S.soCol}>Team</div>
+                    <div style={S.soCol}>Amount</div>
                   </div>
                 )}
                 {filteredBillings.map((b) => (
@@ -1893,6 +1898,10 @@ function BillingRow({
       onCancel={() => setConfirmDelete(false)}
     />
   );
+  // Edit/Delete are off for now -- no Actions column in the new Send-Outs-
+  // matched layout. Left wired (onEdit/onDelete, confirmDialog) so flipping
+  // this back on is a one-line change instead of rebuilding the row.
+  const showActions = false;
 
   if (mobile) {
     return (
@@ -1901,61 +1910,72 @@ function BillingRow({
         style={{ padding: "14px 16px", borderBottom: `1px solid ${S._t.border}`, display: "flex", flexDirection: "column", gap: 6 }}
       >
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-          <div style={S.cardPrimary}>{billing.company || "—"}</div>
+          <div style={S.cardPrimary}>{billing.candidate || "—"}</div>
           <span style={S.amountText}>{money(billing.amount)}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div style={{ ...S.cardSub, marginTop: 0 }}>
-            {[billing.team.join(", "), billing.candidate, fmtDate(billing.date)].filter(Boolean).join(" · ")}
+            {[billing.company, billing.team.join("/"), fmtDate(billing.date)].filter(Boolean).join(" · ")}
           </div>
-          <div style={{ display: "flex", gap: 2 }}>
-            <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
-              <Pencil size={14} />
-            </button>
-            <button
-              className="avid-btn"
-              style={{ ...S.iconGhost, color: t.danger }}
-              onClick={() => setConfirmDelete(true)}
-              title="Delete"
-            >
-              <Trash2 size={14} />
-            </button>
-          </div>
+          {showActions && (
+            <div style={{ display: "flex", gap: 2 }}>
+              <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
+                <Pencil size={14} />
+              </button>
+              <button
+                className="avid-btn"
+                style={{ ...S.iconGhost, color: t.danger }}
+                onClick={() => setConfirmDelete(true)}
+                title="Delete"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          )}
         </div>
-        {confirmDialog}
+        {showActions && confirmDialog}
       </div>
     );
   }
 
+  // Same 7-column soGrid as Send-Outs, for matching spacing/sizing: Date,
+  // Candidate, Company, blank (no Status data), blank (no Role data), Team,
+  // Amount in place of Actions.
   return (
-    <div className="avid-row avid-row-enter" style={S.billingRow}>
-      <div style={S.colRecruiter}>
-        <div style={S.cardPrimary}>{billing.team.join(", ") || "—"}</div>
-      </div>
-      <div style={S.colClient}>
-        <div style={S.cardPrimary}>{billing.company || "—"}</div>
-        {billing.candidate ? <div style={S.cardSub}>{billing.candidate}</div> : null}
-      </div>
-      <div style={S.colAmount}>
-        <span style={S.amountText}>{money(billing.amount)}</span>
-      </div>
-      <div style={S.colDate}>
+    <div className="avid-row avid-row-enter" style={{ ...S.cardRow, ...S.soGrid }}>
+      <div style={S.soCol}>
         <div style={S.cardSub}>{fmtDate(billing.date)}</div>
       </div>
-      <div style={S.colActions}>
-        <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
-          <Pencil size={14} />
-        </button>
-        <button
-          className="avid-btn"
-          style={{ ...S.iconGhost, color: t.danger }}
-          onClick={() => setConfirmDelete(true)}
-          title="Delete"
-        >
-          <Trash2 size={14} />
-        </button>
+      <div style={S.soCol}>
+        <div style={S.cardPrimary}>{billing.candidate || "—"}</div>
       </div>
-      {confirmDialog}
+      <div style={S.soCol}>
+        <div style={S.cardSub}>{billing.company || "—"}</div>
+      </div>
+      <div style={S.soStatusCol} />
+      <div style={S.soCol} />
+      <div style={S.soCol}>
+        <div style={S.cardSub}>{billing.team.join("/") || "—"}</div>
+      </div>
+      <div style={S.soCol}>
+        <span style={S.amountText}>{money(billing.amount)}</span>
+      </div>
+      {showActions && (
+        <div style={S.soActionsCol}>
+          <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
+            <Pencil size={14} />
+          </button>
+          <button
+            className="avid-btn"
+            style={{ ...S.iconGhost, color: t.danger }}
+            onClick={() => setConfirmDelete(true)}
+            title="Delete"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      )}
+      {showActions && confirmDialog}
     </div>
   );
 }
