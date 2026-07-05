@@ -509,17 +509,17 @@ body:has(.login-root) {
 }
 
 .login-dialog-enter {
-  animation: loginSlideUp 0.72s cubic-bezier(0.16, 1, 0.28, 1) both;
+  animation: loginSlideUp 0.95s cubic-bezier(0.16, 1, 0.3, 1) 1s both;
 }
 
 @keyframes loginSlideUp {
   from {
     opacity: 0;
-    transform: translateY(48px);
+    transform: translateY(112px) scale(0.97);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
