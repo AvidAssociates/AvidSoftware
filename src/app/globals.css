@@ -434,7 +434,15 @@ select::-ms-expand {
 
 .login-logo-slot {
   width: 100%;
-  min-height: 72px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.login-logo {
+  display: block;
+  width: min(220px, 72vw);
+  height: auto;
 }
 
 .login-dialog-shell {

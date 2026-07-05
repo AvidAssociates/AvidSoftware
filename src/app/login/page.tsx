@@ -4,6 +4,16 @@ import { FormEvent, useState, Suspense } from "react";
 import type { CSSProperties } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FONT } from "@/lib/ui";
+import { LOGO_FULL_SRC } from "@/lib/logos";
+
+function LoginLogo() {
+  if (!LOGO_FULL_SRC) return <div className="login-logo-slot" aria-hidden="true" />;
+  return (
+    <div className="login-logo-slot">
+      <img src={LOGO_FULL_SRC} alt="Avid Associates" className="login-logo" width={220} height={330} />
+    </div>
+  );
+}
 
 function LoginForm() {
   const router = useRouter();
@@ -41,7 +51,7 @@ function LoginForm() {
   return (
     <div className="login-page">
       <div className="login-stack">
-        <div className="login-logo-slot" aria-hidden="true" />
+        <LoginLogo />
         <div className="login-dialog-shell">
           <div className="login-dialog login-dialog-enter">
             <div className="login-dialog-header">
@@ -106,7 +116,7 @@ export default function LoginPage() {
       fallback={
         <div className="login-page">
           <div className="login-stack">
-            <div className="login-logo-slot" aria-hidden="true" />
+            <LoginLogo />
             <div className="login-dialog-shell">
               <div className="login-dialog login-dialog-enter" />
             </div>
