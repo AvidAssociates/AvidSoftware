@@ -19,7 +19,7 @@ import {
   Settings,
   Tv,
 } from "lucide-react";
-import { Billing, DeclineReason, Entry, RosterMember, Stage } from "@/lib/types";
+import { Billing, DeclineReason, Entry, EntryMutationResult, RosterMember, Stage } from "@/lib/types";
 import {
   ADMIN,
   DEFAULT_TEAM,
@@ -91,6 +91,11 @@ const send = (url: string, method: string, body?: unknown) =>
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
+
+function normalizeEntryMutation(data: Entry | EntryMutationResult): EntryMutationResult {
+  if (data && typeof data === "object" && "entry" in data) return data;
+  return { entry: data };
+}
 
 // ============================================================
 export default function App() {
@@ -292,16 +297,22 @@ function Dashboard({
 
   // Every mutation updates local state immediately (no reload, no flicker),
   // then reconciles with the server's response in the background.
+  const applyEntryMutation = (data: Entry | EntryMutationResult) => {
+    const { entry, billing, billingDeletedId } = normalizeEntryMutation(data);
+    applyEntry(entry);
+    if (billing) applyBilling(billing);
+    if (billingDeletedId) setBillings((prev) => prev.filter((b) => b.id !== billingDeletedId));
+  };
   const saveEntry = async (entry: Entry, isNew: boolean) => {
     applyEntry(entry);
     const res = await send(isNew ? "/api/entries" : `/api/entries/${entry.id}`, isNew ? "POST" : "PUT", entry);
-    if (res.ok) applyEntry(await res.json());
+    if (res.ok) applyEntryMutation(await res.json());
   };
   const setDeclined = async (entry: Entry, declined: boolean, reason: DeclineReason | null = null) => {
     const optimistic = { ...entry, declined, declinedReason: declined ? reason : null };
     applyEntry(optimistic);
     const res = await send(`/api/entries/${entry.id}`, "PUT", optimistic);
-    if (res.ok) applyEntry(await res.json());
+    if (res.ok) applyEntryMutation(await res.json());
   };
   const advanceStage = async (entry: Entry, stage: Stage) => {
     const optimistic = { ...entry, stage, declined: false };
@@ -311,11 +322,15 @@ function Dashboard({
     // "today" on a newly-reached stage itself (it would use its own clock,
     // which disagrees with the user's local date for part of the day).
     const res = await send(`/api/entries/${entry.id}`, "PUT", { ...optimistic, stageDate: todayISO() });
-    if (res.ok) applyEntry(await res.json());
+    if (res.ok) applyEntryMutation(await res.json());
   };
   const deleteEntry = async (id: string) => {
     setEntries((prev) => prev.filter((e) => e.id !== id));
-    await send(`/api/entries/${id}`, "DELETE");
+    const res = await send(`/api/entries/${id}`, "DELETE");
+    if (res.ok) {
+      const data = (await res.json()) as { billingDeletedId?: string };
+      if (data.billingDeletedId) setBillings((prev) => prev.filter((b) => b.id !== data.billingDeletedId));
+    }
   };
   // Appends a meeting (Phone R1 -> Phone R2 -> Face-to-Face R1, ...) instead
   // of writing a whole new send-out entry — the fixed 4-stage tracker never
@@ -2391,6 +2406,7 @@ function BillingForm({
       notes: "",
       addedBy: user,
       createdAt: "",
+      entryId: null,
     }
   );
   const toggleTeam = (name: string) => {

@@ -54,6 +54,15 @@ export type Billing = {
   notes: string | null;
   addedBy: string | null;
   createdAt: string;
+  // Set when this row was auto-created from a placed send-out; NULL for
+  // fees logged directly on the Billings tab.
+  entryId: string | null;
+};
+
+export type EntryMutationResult = {
+  entry: Entry;
+  billing?: Billing;
+  billingDeletedId?: string;
 };
 
 export type Retainer = {

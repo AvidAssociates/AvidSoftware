@@ -13,7 +13,7 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-  const entry = await createEntry({
+  const result = await createEntry({
     id: body.id,
     date: body.date,
     candidate: body.candidate,
@@ -29,5 +29,5 @@ export async function POST(request: Request) {
     addedBy: body.addedBy,
     firstTime: body.firstTime === undefined ? true : Boolean(body.firstTime),
   });
-  return NextResponse.json(entry, { status: 201 });
+  return NextResponse.json(result, { status: 201 });
 }
