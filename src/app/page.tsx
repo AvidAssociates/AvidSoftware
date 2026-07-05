@@ -1291,7 +1291,9 @@ function RowExpandedPanel({
       <div>
         <div
           style={{
-            padding: "4px 22px 20px",
+            // Enough top headroom that a hover-grown stage dot never reaches
+            // the .avid-expand overflow boundary and gets clipped.
+            padding: "12px 22px 20px",
             borderBottom: `1px solid ${t.border}`,
             display: "flex",
             flexDirection: "column",
@@ -1432,7 +1434,9 @@ function ActivityLogPanel({
       )}
       {canAdd && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 10, borderTop: `1px solid ${t.border}` }}>
-          <div style={{ display: "flex", gap: 6 }}>
+          {/* Type and date share the row's width equally with centered
+              text; the round number sits between them in a roomier box. */}
+          <div style={{ display: "flex", gap: 10 }}>
             <GlassSelect
               value={draftType}
               options={INTERVIEW_TYPES}
@@ -1440,19 +1444,19 @@ function ActivityLogPanel({
                 setDraftType(type);
                 setDraftRound(nextRoundForType(entry, type));
               }}
-              triggerStyle={{ ...S.input, flex: 1, padding: "7px 9px", fontSize: 12.5 }}
+              triggerStyle={{ ...S.input, flex: "1 1 0", minWidth: 0, padding: "7px 9px", fontSize: 12.5, textAlign: "center" }}
             />
             <input
               type="number"
               min="1"
               value={draftRound}
               onChange={(e) => setDraftRound(Number(e.target.value))}
-              style={{ ...S.input, width: 50, padding: "7px 9px", fontSize: 12.5 }}
+              style={{ ...S.input, width: 64, padding: "7px 9px", fontSize: 12.5, textAlign: "center" }}
             />
             <GlassDatePicker
               value={draftDate}
               onChange={setDraftDate}
-              triggerStyle={{ ...S.input, padding: "7px 9px", fontSize: 12.5 }}
+              triggerStyle={{ ...S.input, flex: "1 1 0", minWidth: 0, padding: "7px 9px", fontSize: 12.5, textAlign: "center" }}
             />
           </div>
           <button
@@ -1955,6 +1959,10 @@ function StageProgress({
   large?: boolean;
 }) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  // Where the hover date-tooltip anchors, in viewport coordinates -- it
+  // portals to <body> (like the calendar popover) so the expand panel's
+  // overflow:hidden can't clip it to a sliver above the dot.
+  const [hoverTipPos, setHoverTipPos] = useState<{ top: number; left: number } | null>(null);
   const [openIdx, setOpenIdx] = useState<number | null>(null);
   const [declineMenuOpen, setDeclineMenuOpen] = useState(false);
   const dotRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -2131,7 +2139,11 @@ function StageProgress({
                 <div
                   key={`dot-${i}`}
                   style={{ position: "relative" }}
-                  onMouseEnter={() => setHoverIdx(i)}
+                  onMouseEnter={(e) => {
+                    setHoverIdx(i);
+                    const r = e.currentTarget.getBoundingClientRect();
+                    setHoverTipPos({ top: r.top - 8, left: r.left + r.width / 2 });
+                  }}
                   onMouseLeave={() => setHoverIdx((cur) => (cur === i ? null : cur))}
                 >
                   {onEditDate &&
@@ -2165,27 +2177,38 @@ function StageProgress({
                       </div>,
                       document.body
                     )}
-                  {onEditDate && i === idx && openIdx !== i && hoverIdx === i && (
-                    <div
-                      className="avid-glass-popover"
-                      style={{
-                        position: "absolute",
-                        bottom: "100%",
-                        left: "50%",
-                        transform: "translate(-50%, -8px)",
-                        color: GLASS_FG,
-                        fontSize: 11.5,
-                        fontWeight: 600,
-                        padding: "6px 11px",
-                        borderRadius: 11,
-                        whiteSpace: "nowrap",
-                        zIndex: 5,
-                        pointerEvents: "none",
-                      }}
-                    >
-                      {lastEventDate(history, s.key) ? fmtDate(lastEventDate(history, s.key)!) : "Click to set date"}
-                    </div>
-                  )}
+                  {onEditDate &&
+                    i === idx &&
+                    openIdx !== i &&
+                    hoverIdx === i &&
+                    hoverTipPos &&
+                    typeof document !== "undefined" &&
+                    createPortal(
+                      <div
+                        className="avid-glass-popover"
+                        style={{
+                          position: "fixed",
+                          top: hoverTipPos.top,
+                          left: hoverTipPos.left,
+                          transform: "translate(-50%, -100%)",
+                          color: GLASS_FG,
+                          fontSize: 11.5,
+                          fontWeight: 600,
+                          padding: "6px 11px",
+                          borderRadius: 11,
+                          whiteSpace: "nowrap",
+                          zIndex: 1000,
+                          pointerEvents: "none",
+                          // A tiny hovering hint shouldn't throw the panel-sized
+                          // shadow stack the glass class carries -- that read as
+                          // a dark blob around the selected dot on hover.
+                          boxShadow: "0 4px 12px rgba(0,0,0,0.28)",
+                        }}
+                      >
+                        {lastEventDate(history, s.key) ? fmtDate(lastEventDate(history, s.key)!) : "Click to set date"}
+                      </div>,
+                      document.body
+                    )}
                   <button
                     ref={(el) => {
                       dotRefs.current[i] = el;
@@ -2207,7 +2230,7 @@ function StageProgress({
                       background: declined ? t.surface : i <= idx ? color : t.surface,
                       cursor: "pointer",
                       padding: 0,
-                      transform: hoverIdx === i ? "scale(1.45)" : "scale(1)",
+                      transform: hoverIdx === i ? "scale(1.25)" : "scale(1)",
                     }}
                   />
                 </div>
