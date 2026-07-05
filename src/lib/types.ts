@@ -50,6 +50,7 @@ export type Billing = {
   amount: number;
   company: string | null;
   candidate: string | null;
+  role: string | null;
   notes: string | null;
   addedBy: string | null;
   createdAt: string;

@@ -325,6 +325,7 @@ type BillingRow = {
   amount: number;
   company: string | null;
   candidate: string | null;
+  role: string | null;
   notes: string | null;
   added_by: string | null;
   created_at: string;
@@ -338,6 +339,7 @@ function toBilling(row: BillingRow): Billing {
     amount: Number(row.amount),
     company: row.company,
     candidate: row.candidate,
+    role: row.role,
     notes: row.notes,
     addedBy: row.added_by,
     createdAt: row.created_at,
@@ -359,12 +361,13 @@ export async function createBilling(input: {
   amount: number;
   company?: string | null;
   candidate?: string | null;
+  role?: string | null;
   notes?: string | null;
   addedBy?: string | null;
 }): Promise<Billing> {
   const db = getDb();
   const [row] = (await db.sql`
-    INSERT INTO billings (id, date, team, amount, company, candidate, notes, added_by)
+    INSERT INTO billings (id, date, team, amount, company, candidate, role, notes, added_by)
     VALUES (
       ${input.id},
       ${input.date},
@@ -372,6 +375,7 @@ export async function createBilling(input: {
       ${input.amount},
       ${input.company ?? null},
       ${input.candidate ?? null},
+      ${input.role ?? null},
       ${input.notes ?? null},
       ${input.addedBy ?? null}
     )
@@ -388,6 +392,7 @@ export async function updateBilling(
     amount: number;
     company?: string | null;
     candidate?: string | null;
+    role?: string | null;
     notes?: string | null;
   }
 ): Promise<Billing> {
@@ -399,6 +404,7 @@ export async function updateBilling(
       amount = ${input.amount},
       company = ${input.company ?? null},
       candidate = ${input.candidate ?? null},
+      role = ${input.role ?? null},
       notes = ${input.notes ?? null}
     WHERE id = ${id}
     RETURNING *

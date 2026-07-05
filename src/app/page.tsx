@@ -383,7 +383,8 @@ function Dashboard({
         (b) =>
           b.team.some((name) => name.toLowerCase().includes(q)) ||
           b.company?.toLowerCase().includes(q) ||
-          b.candidate?.toLowerCase().includes(q)
+          b.candidate?.toLowerCase().includes(q) ||
+          b.role?.toLowerCase().includes(q)
       );
     }
     return list;
@@ -676,14 +677,14 @@ function Dashboard({
             ) : (
               <div>
                 {!isMobile && (
-                  // Same 7-column grid as Send-Outs (soGrid): Amount sits in the
-                  // center Status slot; Actions returns on the right.
+                  // Same 7-column grid as Send-Outs (soGrid): Amount in the center
+                  // Status slot, Role beside it, Actions on the right.
                   <div style={{ ...S.cardHeaderRow, ...S.soGrid }}>
                     <div style={S.soCol}>Date</div>
                     <div style={S.soCol}>Candidate</div>
                     <div style={S.soCol}>Company</div>
                     <div style={S.soStatusCol}>Amount</div>
-                    <div style={S.soCol} />
+                    <div style={S.soCol}>Role</div>
                     <div style={S.soCol}>Team</div>
                     <div style={S.soActionsCol}>Actions</div>
                   </div>
@@ -1911,7 +1912,7 @@ function BillingRow({
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div style={{ ...S.cardSub, marginTop: 0 }}>
-            {[billing.company, billing.team.join("/"), fmtDate(billing.date)].filter(Boolean).join(" · ")}
+            {[billing.company, billing.role, billing.team.join("/"), fmtDate(billing.date)].filter(Boolean).join(" · ")}
           </div>
           {showActions && (
             <div style={{ display: "flex", gap: 2 }}>
@@ -1934,8 +1935,8 @@ function BillingRow({
     );
   }
 
-  // Same 7-column soGrid as Send-Outs: Date, Candidate, Company, Amount
-  // (center Status slot), blank Role slot, Team, Actions.
+  // Same 7-column soGrid as Send-Outs: Date, Candidate, Company, Amount,
+  // Role, Team, Actions.
   return (
     <div className="avid-row avid-row-enter" style={{ ...S.cardRow, ...S.soGrid }}>
       <div style={S.soCol}>
@@ -1950,7 +1951,9 @@ function BillingRow({
       <div style={S.soStatusCol}>
         <span style={S.amountText}>{money(billing.amount)}</span>
       </div>
-      <div style={S.soCol} />
+      <div style={S.soCol}>
+        <div style={S.cardSub}>{billing.role || "—"}</div>
+      </div>
       <div style={S.soCol}>
         <div style={S.cardSub}>{billing.team.join("/") || "—"}</div>
       </div>
@@ -2384,6 +2387,7 @@ function BillingForm({
       amount: 0,
       company: "",
       candidate: "",
+      role: "",
       notes: "",
       addedBy: user,
       createdAt: "",
@@ -2396,7 +2400,7 @@ function BillingForm({
     });
   };
   const set =
-    (k: "date" | "company" | "candidate" | "notes") =>
+    (k: "date" | "company" | "candidate" | "role" | "notes") =>
     (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       setForm((f) => ({ ...f, [k]: e.target.value }));
   const valid = form.team.length > 0 && form.amount > 0 && form.date;
@@ -2439,6 +2443,9 @@ function BillingForm({
           </Field>
           <Field S={S} label="Company">
             <input style={S.input} placeholder="Client company" value={form.company || ""} onChange={set("company")} />
+          </Field>
+          <Field S={S} label="Role">
+            <input style={S.input} placeholder="e.g. Account Manager" value={form.role || ""} onChange={set("role")} />
           </Field>
           <Field S={S} label="Candidate placed">
             <input style={S.input} placeholder="Optional" value={form.candidate || ""} onChange={set("candidate")} />
