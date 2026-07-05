@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { logMeeting } from "@/lib/queries";
+import { requireAuth } from "@/lib/require-auth";
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
   const { id } = await params;
   const body = await request.json();
   if (!body.type || !body.round || !body.date) {

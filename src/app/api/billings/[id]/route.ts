@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { deleteBilling, updateBilling } from "@/lib/queries";
+import { requireAuth } from "@/lib/require-auth";
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
   const { id } = await params;
   const body = await request.json();
   const amount = Number(body.amount);
@@ -31,6 +34,8 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
   const { id } = await params;
   await deleteBilling(id);
   return NextResponse.json({ ok: true });

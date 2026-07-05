@@ -18,6 +18,7 @@ import {
   Moon,
   Settings,
   Tv,
+  LogOut,
 } from "lucide-react";
 import { Billing, DeclineReason, Entry, EntryMutationResult, RosterMember, Stage } from "@/lib/types";
 import {
@@ -102,6 +103,7 @@ export default function App() {
   const [isDark, setIsDark] = useState(true);
   const [booting, setBooting] = useState(true);
   const [roster, setRoster] = useState<RosterMember[]>([]);
+  const [authUser, setAuthUser] = useState<{ displayName: string; email: string } | null>(null);
 
   const reloadRoster = async () => {
     const list = await getJSON<RosterMember[]>("/api/roster", []);
@@ -109,11 +111,24 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Browser-only prefs + initial roster fetch. An effect is required here.
+    // Browser-only prefs + auth + initial roster fetch.
     /* eslint-disable react-hooks/set-state-in-effect */
     const storedTheme = getLocal("theme-dark");
     if (storedTheme !== null) setIsDark(storedTheme === "1");
-    reloadRoster().finally(() => setBooting(false));
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (!res.ok) {
+          window.location.href = "/login";
+          return;
+        }
+        const data = (await res.json()) as { user: { displayName: string; email: string } };
+        setAuthUser(data.user);
+        await reloadRoster();
+      } finally {
+        setBooting(false);
+      }
+    })();
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
@@ -137,7 +152,7 @@ export default function App() {
     document.documentElement.style.colorScheme = isDark ? "dark" : "light";
   }, [t.bg, isDark]);
 
-  if (booting) {
+  if (booting || !authUser) {
     return (
       <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: t.bg }}>
         <div
@@ -156,13 +171,17 @@ export default function App() {
 
   return (
     <Dashboard
-      user={teamNames[0] || "Team"}
+      user={authUser.displayName}
       t={t}
       isDark={isDark}
       roster={roster}
       teamNames={teamNames}
       reloadRoster={reloadRoster}
       onToggleTheme={toggleTheme}
+      onLogout={async () => {
+        await fetch("/api/auth/logout", { method: "POST" });
+        window.location.href = "/login";
+      }}
     />
   );
 }
@@ -176,6 +195,7 @@ function Dashboard({
   teamNames,
   reloadRoster,
   onToggleTheme,
+  onLogout,
 }: {
   user: string;
   t: Theme;
@@ -184,6 +204,7 @@ function Dashboard({
   teamNames: string[];
   reloadRoster: () => Promise<void>;
   onToggleTheme: () => void;
+  onLogout: () => void;
 }) {
   const S = makeStyles(t);
   const isMobile = useIsMobile();
@@ -498,6 +519,9 @@ function Dashboard({
               <Settings size={16} />
             </button>
           )}
+          <button className="avid-btn" style={S.iconGhost} onClick={onLogout} title="Sign out">
+            <LogOut size={16} />
+          </button>
         </div>
       </header>
 
