@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { deleteRosterMember, renameRosterMember } from "@/lib/queries";
+import { requireAuth } from "@/lib/require-auth";
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
   const { id } = await params;
   const body = await request.json();
   const name = String(body.name || "").trim();
@@ -22,6 +25,8 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireAuth();
+  if (auth instanceof NextResponse) return auth;
   const { id } = await params;
   await deleteRosterMember(Number(id));
   return NextResponse.json({ ok: true });
