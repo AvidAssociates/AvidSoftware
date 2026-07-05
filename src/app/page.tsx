@@ -676,17 +676,16 @@ function Dashboard({
             ) : (
               <div>
                 {!isMobile && (
-                  // Same 7-column grid as Send-Outs (soGrid), for the same
-                  // spacing/sizing -- Billings has no Status or Role data, so
-                  // those two slots stay blank rather than relabeled.
+                  // Same 7-column grid as Send-Outs (soGrid): Amount sits in the
+                  // center Status slot; Actions returns on the right.
                   <div style={{ ...S.cardHeaderRow, ...S.soGrid }}>
                     <div style={S.soCol}>Date</div>
                     <div style={S.soCol}>Candidate</div>
                     <div style={S.soCol}>Company</div>
-                    <div style={S.soStatusCol} />
+                    <div style={S.soStatusCol}>Amount</div>
                     <div style={S.soCol} />
                     <div style={S.soCol}>Team</div>
-                    <div style={S.soCol}>Amount</div>
+                    <div style={S.soActionsCol}>Actions</div>
                   </div>
                 )}
                 {filteredBillings.map((b) => (
@@ -1898,10 +1897,7 @@ function BillingRow({
       onCancel={() => setConfirmDelete(false)}
     />
   );
-  // Edit/Delete are off for now -- no Actions column in the new Send-Outs-
-  // matched layout. Left wired (onEdit/onDelete, confirmDialog) so flipping
-  // this back on is a one-line change instead of rebuilding the row.
-  const showActions = false;
+  const showActions = true;
 
   if (mobile) {
     return (
@@ -1938,9 +1934,8 @@ function BillingRow({
     );
   }
 
-  // Same 7-column soGrid as Send-Outs, for matching spacing/sizing: Date,
-  // Candidate, Company, blank (no Status data), blank (no Role data), Team,
-  // Amount in place of Actions.
+  // Same 7-column soGrid as Send-Outs: Date, Candidate, Company, Amount
+  // (center Status slot), blank Role slot, Team, Actions.
   return (
     <div className="avid-row avid-row-enter" style={{ ...S.cardRow, ...S.soGrid }}>
       <div style={S.soCol}>
@@ -1952,30 +1947,27 @@ function BillingRow({
       <div style={S.soCol}>
         <div style={S.cardSub}>{billing.company || "—"}</div>
       </div>
-      <div style={S.soStatusCol} />
+      <div style={S.soStatusCol}>
+        <span style={S.amountText}>{money(billing.amount)}</span>
+      </div>
       <div style={S.soCol} />
       <div style={S.soCol}>
         <div style={S.cardSub}>{billing.team.join("/") || "—"}</div>
       </div>
-      <div style={S.soCol}>
-        <span style={S.amountText}>{money(billing.amount)}</span>
+      <div style={S.soActionsCol}>
+        <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
+          <Pencil size={14} />
+        </button>
+        <button
+          className="avid-btn"
+          style={{ ...S.iconGhost, color: t.danger }}
+          onClick={() => setConfirmDelete(true)}
+          title="Delete"
+        >
+          <Trash2 size={14} />
+        </button>
       </div>
-      {showActions && (
-        <div style={S.soActionsCol}>
-          <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
-            <Pencil size={14} />
-          </button>
-          <button
-            className="avid-btn"
-            style={{ ...S.iconGhost, color: t.danger }}
-            onClick={() => setConfirmDelete(true)}
-            title="Delete"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
-      )}
-      {showActions && confirmDialog}
+      {confirmDialog}
     </div>
   );
 }
