@@ -4,6 +4,7 @@ import { FormEvent, useState, Suspense } from "react";
 import type { CSSProperties } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FONT } from "@/lib/ui";
+import loginLogo from "@/assets/login-logo.png";
 
 function LoginForm() {
   const router = useRouter();
@@ -41,7 +42,13 @@ function LoginForm() {
   return (
     <div className="login-page">
       <div className="login-stack">
-        <img src="/login-logo.png" alt="Avid Associates" className="login-logo" />
+        <img
+          src={loginLogo.src}
+          alt="Avid Associates"
+          className="login-logo"
+          width={loginLogo.width}
+          height={loginLogo.height}
+        />
         <div className="login-dialog-shell">
           <div className="login-dialog login-dialog-enter">
             <form onSubmit={onSubmit} className="login-form">
@@ -101,7 +108,7 @@ export default function LoginPage() {
       fallback={
         <div className="login-page">
           <div className="login-stack">
-            <img src="/login-logo.png" alt="" className="login-logo" />
+            <img src={loginLogo.src} alt="" className="login-logo" width={loginLogo.width} height={loginLogo.height} />
             <div className="login-dialog-shell">
               <div className="login-dialog login-dialog-enter" />
             </div>
