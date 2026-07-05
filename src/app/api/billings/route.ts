@@ -22,6 +22,7 @@ export async function POST(request: Request) {
     amount,
     company: body.company,
     candidate: body.candidate,
+    role: body.role,
     notes: body.notes,
     addedBy: body.addedBy,
   });

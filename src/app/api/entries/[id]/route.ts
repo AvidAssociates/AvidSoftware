@@ -7,7 +7,7 @@ export async function PUT(
 ) {
   const { id } = await params;
   const body = await request.json();
-  const entry = await updateEntry(id, {
+  const result = await updateEntry(id, {
     date: body.date,
     candidate: body.candidate,
     company: body.company,
@@ -22,10 +22,10 @@ export async function PUT(
     firstTime: body.firstTime === undefined ? true : Boolean(body.firstTime),
     stageDate: body.stageDate,
   });
-  if (!entry) {
+  if (!result) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  return NextResponse.json(entry);
+  return NextResponse.json(result);
 }
 
 export async function DELETE(
@@ -33,6 +33,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  await deleteEntry(id);
-  return NextResponse.json({ ok: true });
+  const billingDeletedId = await deleteEntry(id);
+  return NextResponse.json({ ok: true, billingDeletedId });
 }

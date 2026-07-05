@@ -1,6 +1,6 @@
 import { getDb } from "./db";
 import { uid } from "./ui";
-import { Billing, Entry, MeetingLogEntry, ProductionGoals, Retainer, RosterMember, StageEvent } from "./types";
+import { Billing, Entry, EntryMutationResult, MeetingLogEntry, ProductionGoals, Retainer, RosterMember, StageEvent } from "./types";
 
 type EntryRow = {
   id: string;
@@ -78,7 +78,7 @@ export async function createEntry(input: {
   notes?: string | null;
   addedBy?: string | null;
   firstTime: boolean;
-}): Promise<Entry> {
+}): Promise<EntryMutationResult> {
   const db = getDb();
   // The Sent date defaults to the send-out's own date — no other default.
   const history: StageEvent[] = [{ stage: input.stage as Entry["stage"], date: input.date }];
@@ -110,7 +110,19 @@ export async function createEntry(input: {
     )
     RETURNING *
   `) as EntryRow[];
-  return toEntry(row);
+  const entry = toEntry(row);
+  if (isEffectivelyPlaced(input)) {
+    const billing = await syncBillingForPlacedEntry(input.id, {
+      date: todayISO(),
+      team: input.team,
+      company: input.company,
+      candidate: input.candidate,
+      role: input.role,
+      addedBy: input.addedBy,
+    });
+    return { entry, billing };
+  }
+  return { entry };
 }
 
 export async function updateEntry(
@@ -136,7 +148,7 @@ export async function updateEntry(
     // anyone in the US once it's evening locally).
     stageDate?: string;
   }
-): Promise<Entry | null> {
+): Promise<EntryMutationResult | null> {
   const db = getDb();
   const [existing] = (await db.sql`
     SELECT stage, stage_history, meeting_log FROM pipeline_entries WHERE id = ${id}
@@ -190,11 +202,42 @@ export async function updateEntry(
     WHERE id = ${id}
     RETURNING *
   `) as EntryRow[];
-  return toEntry(row);
+  const entry = toEntry(row);
+  const wasPlaced = existing.stage === "placed";
+  const justMarkedPlaced = !wasPlaced && isEffectivelyPlaced(input);
+  const billingDate = justMarkedPlaced
+    ? newStageDate
+    : placedDateFromHistory(history, newStageDate);
+
+  if (isEffectivelyPlaced(input)) {
+    const billing = await syncBillingForPlacedEntry(
+      id,
+      {
+        date: billingDate,
+        team: input.team,
+        company: input.company,
+        candidate: input.candidate,
+        role: input.role,
+      },
+      { updateDate: justMarkedPlaced }
+    );
+    return { entry, billing };
+  }
+
+  if (wasPlaced) {
+    const billingDeletedId = (await removeAutoBillingForEntry(id)) ?? undefined;
+    return billingDeletedId ? { entry, billingDeletedId } : { entry };
+  }
+
+  return { entry };
 }
 
-export async function deleteEntry(id: string) {
-  await getDb().sql`DELETE FROM pipeline_entries WHERE id = ${id}`;
+export async function deleteEntry(id: string): Promise<string | null> {
+  const db = getDb();
+  const billingDeletedId = await removeAutoBillingForEntry(id);
+  await db.sql`UPDATE billings SET entry_id = NULL WHERE entry_id = ${id}`;
+  await db.sql`DELETE FROM pipeline_entries WHERE id = ${id}`;
+  return billingDeletedId;
 }
 
 // Appends a meeting to the log (Phone R1 -> Phone R2 -> Face-to-Face R1,
@@ -325,9 +368,11 @@ type BillingRow = {
   amount: number;
   company: string | null;
   candidate: string | null;
+  role: string | null;
   notes: string | null;
   added_by: string | null;
   created_at: string;
+  entry_id: string | null;
 };
 
 function toBilling(row: BillingRow): Billing {
@@ -338,10 +383,98 @@ function toBilling(row: BillingRow): Billing {
     amount: Number(row.amount),
     company: row.company,
     candidate: row.candidate,
+    role: row.role ?? null,
     notes: row.notes,
     addedBy: row.added_by,
     createdAt: row.created_at,
+    entryId: row.entry_id ?? null,
   };
+}
+
+function isEffectivelyPlaced(input: { stage: string; declined: boolean }) {
+  return input.stage === "placed" && !input.declined;
+}
+
+function placedDateFromHistory(history: StageEvent[], fallback: string) {
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].stage === "placed") return history[i].date;
+  }
+  return fallback;
+}
+
+type BillingSyncInput = {
+  date: string;
+  team: string[];
+  company: string;
+  candidate: string;
+  role?: string | null;
+  addedBy?: string | null;
+};
+
+// A placed send-out always has a matching billing row (amount starts at $0
+// until the fee is entered). Manual billings skip this and leave entry_id NULL.
+async function syncBillingForPlacedEntry(
+  entryId: string,
+  input: BillingSyncInput,
+  options?: { updateDate?: boolean }
+): Promise<Billing> {
+  const db = getDb();
+  const [existing] = (await db.sql`
+    SELECT * FROM billings WHERE entry_id = ${entryId}
+  `) as BillingRow[];
+
+  if (existing) {
+    const [row] = options?.updateDate
+      ? ((await db.sql`
+          UPDATE billings SET
+            date = ${input.date},
+            team = ${input.team},
+            company = ${input.company},
+            candidate = ${input.candidate},
+            role = ${input.role ?? null}
+          WHERE id = ${existing.id}
+          RETURNING *
+        `) as BillingRow[])
+      : ((await db.sql`
+          UPDATE billings SET
+            team = ${input.team},
+            company = ${input.company},
+            candidate = ${input.candidate},
+            role = ${input.role ?? null}
+          WHERE id = ${existing.id}
+          RETURNING *
+        `) as BillingRow[]);
+    return toBilling(row);
+  }
+
+  const [row] = (await db.sql`
+    INSERT INTO billings (id, date, team, amount, company, candidate, role, notes, added_by, entry_id)
+    VALUES (
+      ${uid()},
+      ${input.date},
+      ${input.team},
+      0,
+      ${input.company},
+      ${input.candidate},
+      ${input.role ?? null},
+      null,
+      ${input.addedBy ?? null},
+      ${entryId}
+    )
+    RETURNING *
+  `) as BillingRow[];
+  return toBilling(row);
+}
+
+// Only removes auto-created rows that still have no fee logged.
+async function removeAutoBillingForEntry(entryId: string): Promise<string | null> {
+  const db = getDb();
+  const [existing] = (await db.sql`
+    SELECT id, amount FROM billings WHERE entry_id = ${entryId}
+  `) as { id: string; amount: number }[];
+  if (!existing || Number(existing.amount) !== 0) return null;
+  await db.sql`DELETE FROM billings WHERE id = ${existing.id}`;
+  return existing.id;
 }
 
 export async function listBillings(): Promise<Billing[]> {
@@ -359,12 +492,13 @@ export async function createBilling(input: {
   amount: number;
   company?: string | null;
   candidate?: string | null;
+  role?: string | null;
   notes?: string | null;
   addedBy?: string | null;
 }): Promise<Billing> {
   const db = getDb();
   const [row] = (await db.sql`
-    INSERT INTO billings (id, date, team, amount, company, candidate, notes, added_by)
+    INSERT INTO billings (id, date, team, amount, company, candidate, role, notes, added_by)
     VALUES (
       ${input.id},
       ${input.date},
@@ -372,6 +506,7 @@ export async function createBilling(input: {
       ${input.amount},
       ${input.company ?? null},
       ${input.candidate ?? null},
+      ${input.role ?? null},
       ${input.notes ?? null},
       ${input.addedBy ?? null}
     )
@@ -388,6 +523,7 @@ export async function updateBilling(
     amount: number;
     company?: string | null;
     candidate?: string | null;
+    role?: string | null;
     notes?: string | null;
   }
 ): Promise<Billing> {
@@ -399,6 +535,7 @@ export async function updateBilling(
       amount = ${input.amount},
       company = ${input.company ?? null},
       candidate = ${input.candidate ?? null},
+      role = ${input.role ?? null},
       notes = ${input.notes ?? null}
     WHERE id = ${id}
     RETURNING *

@@ -21,6 +21,7 @@ export async function PUT(
     amount,
     company: body.company,
     candidate: body.candidate,
+    role: body.role,
     notes: body.notes,
   });
   return NextResponse.json(billing);

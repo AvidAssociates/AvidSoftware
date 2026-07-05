@@ -11,13 +11,16 @@ Single page at `/`, with four tabs:
 - **Send-Outs** — log a candidate with company, role, interview type/round,
   and the team members working it. Advance its stage by clicking a dot on
   its progress track, or mark it declined (with a reason).
-- **Billings** — log a fee against one or more team members. A solo deal
-  (one person) counts toward that person's Personal total; a team deal (two
-  or more) credits the *full, unsplit* amount to everyone listed, toward
-  Total only — never divided. The summary table shows Monthly/YTD Personal
-  and Total per recruiter, plus editable retainers and goal progress
-  (Monthly Avg Needed / Company YTD / % to Goal, from the yearly + monthly
-  goals set on the Report tab).
+- **Billings** — the fee ledger. Marking a send-out **Placed** auto-creates
+  a billing row (amount starts at $0 until the fee is entered). You can also
+  log a billing directly without a send-out first — useful for deals that
+  never went through the pipeline. A solo deal (one person) counts toward
+  that person's Personal total; a team deal (two or more) credits the
+  *full, unsplit* amount to everyone listed, toward Total only — never
+  divided. The summary table shows Monthly/YTD Personal and Total per
+  recruiter, plus editable retainers and goal progress (Monthly Avg Needed
+  / Company YTD / % to Goal, from the yearly + monthly goals set on the
+  Report tab).
 - **Report** — a year's production: a firm-wide monthly bar chart (with an
   optional monthly goal line, colored by over/under) and a per-recruiter
   line chart. Exportable to PDF via the print button.

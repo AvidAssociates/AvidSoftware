@@ -19,7 +19,7 @@ import {
   Settings,
   Tv,
 } from "lucide-react";
-import { Billing, DeclineReason, Entry, RosterMember, Stage } from "@/lib/types";
+import { Billing, DeclineReason, Entry, EntryMutationResult, RosterMember, Stage } from "@/lib/types";
 import {
   ADMIN,
   DEFAULT_TEAM,
@@ -91,6 +91,11 @@ const send = (url: string, method: string, body?: unknown) =>
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
+
+function normalizeEntryMutation(data: Entry | EntryMutationResult): EntryMutationResult {
+  if (data && typeof data === "object" && "entry" in data) return data;
+  return { entry: data };
+}
 
 // ============================================================
 export default function App() {
@@ -292,16 +297,22 @@ function Dashboard({
 
   // Every mutation updates local state immediately (no reload, no flicker),
   // then reconciles with the server's response in the background.
+  const applyEntryMutation = (data: Entry | EntryMutationResult) => {
+    const { entry, billing, billingDeletedId } = normalizeEntryMutation(data);
+    applyEntry(entry);
+    if (billing) applyBilling(billing);
+    if (billingDeletedId) setBillings((prev) => prev.filter((b) => b.id !== billingDeletedId));
+  };
   const saveEntry = async (entry: Entry, isNew: boolean) => {
     applyEntry(entry);
     const res = await send(isNew ? "/api/entries" : `/api/entries/${entry.id}`, isNew ? "POST" : "PUT", entry);
-    if (res.ok) applyEntry(await res.json());
+    if (res.ok) applyEntryMutation(await res.json());
   };
   const setDeclined = async (entry: Entry, declined: boolean, reason: DeclineReason | null = null) => {
     const optimistic = { ...entry, declined, declinedReason: declined ? reason : null };
     applyEntry(optimistic);
     const res = await send(`/api/entries/${entry.id}`, "PUT", optimistic);
-    if (res.ok) applyEntry(await res.json());
+    if (res.ok) applyEntryMutation(await res.json());
   };
   const advanceStage = async (entry: Entry, stage: Stage) => {
     const optimistic = { ...entry, stage, declined: false };
@@ -311,11 +322,15 @@ function Dashboard({
     // "today" on a newly-reached stage itself (it would use its own clock,
     // which disagrees with the user's local date for part of the day).
     const res = await send(`/api/entries/${entry.id}`, "PUT", { ...optimistic, stageDate: todayISO() });
-    if (res.ok) applyEntry(await res.json());
+    if (res.ok) applyEntryMutation(await res.json());
   };
   const deleteEntry = async (id: string) => {
     setEntries((prev) => prev.filter((e) => e.id !== id));
-    await send(`/api/entries/${id}`, "DELETE");
+    const res = await send(`/api/entries/${id}`, "DELETE");
+    if (res.ok) {
+      const data = (await res.json()) as { billingDeletedId?: string };
+      if (data.billingDeletedId) setBillings((prev) => prev.filter((b) => b.id !== data.billingDeletedId));
+    }
   };
   // Appends a meeting (Phone R1 -> Phone R2 -> Face-to-Face R1, ...) instead
   // of writing a whole new send-out entry — the fixed 4-stage tracker never
@@ -383,7 +398,8 @@ function Dashboard({
         (b) =>
           b.team.some((name) => name.toLowerCase().includes(q)) ||
           b.company?.toLowerCase().includes(q) ||
-          b.candidate?.toLowerCase().includes(q)
+          b.candidate?.toLowerCase().includes(q) ||
+          b.role?.toLowerCase().includes(q)
       );
     }
     return list;
@@ -676,17 +692,16 @@ function Dashboard({
             ) : (
               <div>
                 {!isMobile && (
-                  // Same 7-column grid as Send-Outs (soGrid), for the same
-                  // spacing/sizing -- Billings has no Status or Role data, so
-                  // those two slots stay blank rather than relabeled.
+                  // Same 7-column grid as Send-Outs (soGrid): Amount in the center
+                  // Status slot, Role beside it, Actions on the right.
                   <div style={{ ...S.cardHeaderRow, ...S.soGrid }}>
                     <div style={S.soCol}>Date</div>
                     <div style={S.soCol}>Candidate</div>
                     <div style={S.soCol}>Company</div>
-                    <div style={S.soStatusCol} />
-                    <div style={S.soCol} />
+                    <div style={S.soStatusCol}>Amount</div>
+                    <div style={S.soCol}>Role</div>
                     <div style={S.soCol}>Team</div>
-                    <div style={S.soCol}>Amount</div>
+                    <div style={S.soActionsCol}>Actions</div>
                   </div>
                 )}
                 {filteredBillings.map((b) => (
@@ -1592,7 +1607,7 @@ function ActivityLogPanel({
   );
 }
 
-// ---------- Liquid Glass pickers ----------
+// ---------- Liquid Glass pickers (iOS 27 beta) ----------
 // One shared anchor-and-dismiss brain for every glass popover: outside
 // click (scoped by data attribute) and Escape close it; placement keeps it
 // centered under its trigger and inside the viewport, re-measured on
@@ -1644,6 +1659,28 @@ function useGlassPopover(attr: string, width: number, estHeight: number) {
   }, [open, width, estHeight]);
 
   return { open, setOpen, pos, btnRef };
+}
+
+// Portals the glass popover shell so every menu/calendar shares one z-index stack.
+function GlassPopoverPortal({
+  attr,
+  pos,
+  children,
+  transform = "translateX(-50%)",
+}: {
+  attr: string;
+  pos: { top: number; left: number };
+  children: ReactNode;
+  transform?: string;
+}) {
+  if (typeof document === "undefined") return null;
+  const attrMark = { [attr]: "" } as Record<string, string>;
+  return createPortal(
+    <div {...attrMark} style={{ position: "fixed", top: pos.top, left: pos.left, transform, zIndex: 1000 }}>
+      {children}
+    </div>,
+    document.body
+  );
 }
 
 // One shared row treatment for every glass menu: full-bleed (the pane's
@@ -1707,39 +1744,32 @@ function GlassSelect({
         </span>
         <ChevronDown size={12} style={{ flexShrink: 0, opacity: 0.6 }} />
       </button>
-      {open &&
-        pos &&
-        typeof document !== "undefined" &&
-        createPortal(
+      {open && pos && (
+        <GlassPopoverPortal attr="data-glass-select" pos={pos}>
           <div
-            data-glass-select
-            style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 1000 }}
+            className="avid-glass-pop avid-glass-popover"
+            style={{ display: "flex", flexDirection: "column", minWidth: 210, maxHeight: 336, overflowY: "auto" }}
           >
-            <div
-              className="avid-glass-pop avid-glass-popover"
-              style={{ display: "flex", flexDirection: "column", minWidth: 210, maxHeight: 336, overflowY: "auto" }}
-            >
-              {options.map((opt, i) => (
-                <Fragment key={opt}>
-                  {i > 0 && <div className="avid-glass-sep" />}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onChange(opt);
-                      setOpen(false);
-                    }}
-                    className="avid-glass-option"
-                    style={glassMenuRow(true)}
-                  >
-                    <GlassCheckSlot checked={opt === value} />
-                    {labels?.[opt] || opt}
-                  </button>
-                </Fragment>
-              ))}
-            </div>
-          </div>,
-          document.body
-        )}
+            {options.map((opt, i) => (
+              <Fragment key={opt}>
+                {i > 0 && <div className="avid-glass-sep" />}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(opt);
+                    setOpen(false);
+                  }}
+                  className="avid-glass-option"
+                  style={glassMenuRow(true)}
+                >
+                  <GlassCheckSlot checked={opt === value} />
+                  {labels?.[opt] || opt}
+                </button>
+              </Fragment>
+            ))}
+          </div>
+        </GlassPopoverPortal>
+      )}
     </>
   );
 }
@@ -1772,26 +1802,19 @@ function GlassDatePicker({
       >
         {value ? fmtDate(value) : placeholder}
       </button>
-      {open &&
-        pos &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            data-glass-date
-            style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 1000 }}
-          >
-            <div className="avid-glass-pop avid-glass-popover" style={{ padding: "12px 10px 10px" }}>
-              <MiniCalendar
-                value={value || null}
-                onSelect={(iso) => {
-                  onChange(iso);
-                  setOpen(false);
-                }}
-              />
-            </div>
-          </div>,
-          document.body
-        )}
+      {open && pos && (
+        <GlassPopoverPortal attr="data-glass-date" pos={pos}>
+          <div className="avid-glass-pop avid-glass-popover" style={{ padding: "12px 10px 10px" }}>
+            <MiniCalendar
+              value={value || null}
+              onSelect={(iso) => {
+                onChange(iso);
+                setOpen(false);
+              }}
+            />
+          </div>
+        </GlassPopoverPortal>
+      )}
     </>
   );
 }
@@ -1836,36 +1859,29 @@ function TeamMultiSelect({
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
         <ChevronDown size={12} style={{ flexShrink: 0, opacity: 0.6 }} />
       </button>
-      {open &&
-        pos &&
-        typeof document !== "undefined" &&
-        createPortal(
+      {open && pos && (
+        <GlassPopoverPortal attr="data-team-popover" pos={pos}>
           <div
-            data-team-popover
-            style={{ position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 1000 }}
+            className="avid-glass-pop avid-glass-popover"
+            style={{ display: "flex", flexDirection: "column", minWidth: 210 }}
           >
-            <div
-              className="avid-glass-pop avid-glass-popover"
-              style={{ display: "flex", flexDirection: "column", minWidth: 210 }}
-            >
-              {teamNames.map((name, i) => (
-                <Fragment key={name}>
-                  {i > 0 && <div className="avid-glass-sep" />}
-                  <button
-                    type="button"
-                    onClick={() => onToggle(name)}
-                    className="avid-glass-option"
-                    style={glassMenuRow(true)}
-                  >
-                    <GlassCheckSlot checked={selected.includes(name)} />
-                    {name}
-                  </button>
-                </Fragment>
-              ))}
-            </div>
-          </div>,
-          document.body
-        )}
+            {teamNames.map((name, i) => (
+              <Fragment key={name}>
+                {i > 0 && <div className="avid-glass-sep" />}
+                <button
+                  type="button"
+                  onClick={() => onToggle(name)}
+                  className="avid-glass-option"
+                  style={glassMenuRow(true)}
+                >
+                  <GlassCheckSlot checked={selected.includes(name)} />
+                  {name}
+                </button>
+              </Fragment>
+            ))}
+          </div>
+        </GlassPopoverPortal>
+      )}
     </>
   );
 }
@@ -1898,10 +1914,7 @@ function BillingRow({
       onCancel={() => setConfirmDelete(false)}
     />
   );
-  // Edit/Delete are off for now -- no Actions column in the new Send-Outs-
-  // matched layout. Left wired (onEdit/onDelete, confirmDialog) so flipping
-  // this back on is a one-line change instead of rebuilding the row.
-  const showActions = false;
+  const showActions = true;
 
   if (mobile) {
     return (
@@ -1915,7 +1928,7 @@ function BillingRow({
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div style={{ ...S.cardSub, marginTop: 0 }}>
-            {[billing.company, billing.team.join("/"), fmtDate(billing.date)].filter(Boolean).join(" · ")}
+            {[billing.company, billing.role, billing.team.join("/"), fmtDate(billing.date)].filter(Boolean).join(" · ")}
           </div>
           {showActions && (
             <div style={{ display: "flex", gap: 2 }}>
@@ -1938,9 +1951,8 @@ function BillingRow({
     );
   }
 
-  // Same 7-column soGrid as Send-Outs, for matching spacing/sizing: Date,
-  // Candidate, Company, blank (no Status data), blank (no Role data), Team,
-  // Amount in place of Actions.
+  // Same 7-column soGrid as Send-Outs: Date, Candidate, Company, Amount,
+  // Role, Team, Actions.
   return (
     <div className="avid-row avid-row-enter" style={{ ...S.cardRow, ...S.soGrid }}>
       <div style={S.soCol}>
@@ -1952,42 +1964,40 @@ function BillingRow({
       <div style={S.soCol}>
         <div style={S.cardSub}>{billing.company || "—"}</div>
       </div>
-      <div style={S.soStatusCol} />
-      <div style={S.soCol} />
+      <div style={S.soStatusCol}>
+        <span style={S.amountText}>{money(billing.amount)}</span>
+      </div>
+      <div style={S.soCol}>
+        <div style={S.cardSub}>{billing.role || "—"}</div>
+      </div>
       <div style={S.soCol}>
         <div style={S.cardSub}>{billing.team.join("/") || "—"}</div>
       </div>
-      <div style={S.soCol}>
-        <span style={S.amountText}>{money(billing.amount)}</span>
+      <div style={S.soActionsCol}>
+        <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
+          <Pencil size={14} />
+        </button>
+        <button
+          className="avid-btn"
+          style={{ ...S.iconGhost, color: t.danger }}
+          onClick={() => setConfirmDelete(true)}
+          title="Delete"
+        >
+          <Trash2 size={14} />
+        </button>
       </div>
-      {showActions && (
-        <div style={S.soActionsCol}>
-          <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
-            <Pencil size={14} />
-          </button>
-          <button
-            className="avid-btn"
-            style={{ ...S.iconGhost, color: t.danger }}
-            onClick={() => setConfirmDelete(true)}
-            title="Delete"
-          >
-            <Trash2 size={14} />
-          </button>
-        </div>
-      )}
-      {showActions && confirmDialog}
+      {confirmDialog}
     </div>
   );
 }
 
 // ---------- stage progress indicator ----------
 
-// Liquid Glass popover text colors -- Apple's dark-mode label colors
-// (label / secondaryLabel / tertiaryLabel on a dark pane), fixed regardless
-// of the app's own light/dark theme, same as iOS dark menus.
+// Liquid Glass popover text — iOS 27 beta dark-menu label colors (fixed
+// regardless of app theme; menus don't flip light/dark).
 const GLASS_FG = "#F5F5F7";
-const GLASS_FG_SECONDARY = "rgba(235,235,245,0.6)";
-const GLASS_FG_TERTIARY = "rgba(235,235,245,0.3)";
+const GLASS_FG_SECONDARY = "rgba(235, 235, 245, 0.55)";
+const GLASS_FG_TERTIARY = "rgba(235, 235, 245, 0.28)";
 
 const DECLINE_REASONS: { key: DeclineReason; label: string }[] = [
   { key: "candidate", label: "Rejected by candidate" },
@@ -1996,10 +2006,7 @@ const DECLINE_REASONS: { key: DeclineReason; label: string }[] = [
 
 const WEEKDAY_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 
-// Styled after iOS's inline date picker (dark): month + year bold at the
-// left of the header with the paging chevrons grouped at the right, a row
-// of dim single-letter weekday caps, and circular day cells -- the selected
-// day gets a translucent filled circle, today reads bold with a faint ring.
+// iOS 27 beta inline date picker: month header, weekday caps, circular cells.
 function MiniCalendar({ value, onSelect }: { value: string | null; onSelect: (iso: string) => void }) {
   const initial = value ? new Date(`${value}T00:00:00`) : new Date();
   const [viewYear, setViewYear] = useState(initial.getFullYear());
@@ -2070,13 +2077,13 @@ function MiniCalendar({ value, onSelect }: { value: string | null; onSelect: (is
                 height: 31,
                 borderRadius: "50%",
                 border: "none",
-                background: isSelected ? "rgba(255,255,255,0.27)" : undefined,
+                background: isSelected ? "rgba(255, 255, 255, 0.2)" : undefined,
                 color: isSelected || isToday ? GLASS_FG : GLASS_FG_SECONDARY,
                 fontSize: 13,
-                fontWeight: isSelected || isToday ? 700 : 500,
+                fontWeight: isSelected || isToday ? 600 : 400,
                 cursor: "pointer",
                 fontVariantNumeric: "tabular-nums",
-                boxShadow: isToday && !isSelected ? "inset 0 0 0 1.5px rgba(245,245,247,0.4)" : "none",
+                boxShadow: isToday && !isSelected ? "inset 0 0 0 1.5px rgba(245, 245, 247, 0.32)" : "none",
               }}
             >
               {day}
@@ -2292,45 +2299,37 @@ function StageProgress({
           </span>
         )}
         <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-          {declineMenuOpen &&
-            declinePos &&
-            typeof document !== "undefined" &&
-            createPortal(
-              <div style={{ position: "fixed", top: declinePos.top, left: declinePos.left, transform: "translateY(-50%)", zIndex: 1000 }}>
-                <div
-                  data-decline-popover
-                  className="avid-glass-pop avid-glass-popover"
-                  style={{ display: "flex", flexDirection: "column", minWidth: 210 }}
-                >
-                  {DECLINE_REASONS.map((r, i) => (
-                    <Fragment key={r.key}>
-                      {i > 0 && <div className="avid-glass-sep" />}
-                      <button
-                        onClick={() => {
-                          onDecline?.(r.key);
-                          setDeclineMenuOpen(false);
-                        }}
-                        className="avid-glass-option"
-                        style={{
-                          border: "none",
-                          color: GLASS_FG,
-                          textAlign: "left",
-                          padding: "11px 16px",
-                          fontSize: 14.5,
-                          fontWeight: 400,
-                          fontFamily: FONT,
-                          cursor: "pointer",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {r.label}
-                      </button>
-                    </Fragment>
-                  ))}
-                </div>
-              </div>,
-              document.body
-            )}
+          {declineMenuOpen && declinePos && (
+            <GlassPopoverPortal attr="data-decline-popover" pos={declinePos} transform="translateY(-50%)">
+              <div className="avid-glass-pop avid-glass-popover" style={{ display: "flex", flexDirection: "column", minWidth: 210 }}>
+                {DECLINE_REASONS.map((r, i) => (
+                  <Fragment key={r.key}>
+                    {i > 0 && <div className="avid-glass-sep" />}
+                    <button
+                      onClick={() => {
+                        onDecline?.(r.key);
+                        setDeclineMenuOpen(false);
+                      }}
+                      className="avid-glass-option"
+                      style={{
+                        border: "none",
+                        color: GLASS_FG,
+                        textAlign: "left",
+                        padding: "11px 16px",
+                        fontSize: 14.5,
+                        fontWeight: 400,
+                        fontFamily: FONT,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {r.label}
+                    </button>
+                  </Fragment>
+                ))}
+              </div>
+            </GlassPopoverPortal>
+          )}
           <button
             ref={declineBtnRef}
             className="avid-btn"
@@ -2392,9 +2391,11 @@ function BillingForm({
       amount: 0,
       company: "",
       candidate: "",
+      role: "",
       notes: "",
       addedBy: user,
       createdAt: "",
+      entryId: null,
     }
   );
   const toggleTeam = (name: string) => {
@@ -2404,7 +2405,7 @@ function BillingForm({
     });
   };
   const set =
-    (k: "date" | "company" | "candidate" | "notes") =>
+    (k: "date" | "company" | "candidate" | "role" | "notes") =>
     (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       setForm((f) => ({ ...f, [k]: e.target.value }));
   const valid = form.team.length > 0 && form.amount > 0 && form.date;
@@ -2447,6 +2448,9 @@ function BillingForm({
           </Field>
           <Field S={S} label="Company">
             <input style={S.input} placeholder="Client company" value={form.company || ""} onChange={set("company")} />
+          </Field>
+          <Field S={S} label="Role">
+            <input style={S.input} placeholder="e.g. Account Manager" value={form.role || ""} onChange={set("role")} />
           </Field>
           <Field S={S} label="Candidate placed">
             <input style={S.input} placeholder="Optional" value={form.candidate || ""} onChange={set("candidate")} />
