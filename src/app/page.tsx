@@ -493,9 +493,6 @@ function Dashboard({
               <BillingsGoalStats billings={billings} monthKey={monthKey} year={monthCursorYear} goals={billingsGoals} t={t} />
               <div />
             </div>
-            <div className="avid-billings-scroll" style={{ marginTop: 24 }}>
-              <BillingsTable billings={billings} teamNames={teamNames} monthKey={monthKey} year={monthCursorYear} t={t} />
-            </div>
           </>
         ) : view === "sendouts" ? (
           <div className="avid-hero-inline" style={S.heroInlineRow}>
@@ -662,6 +659,13 @@ function Dashboard({
         ) : view === "leaderboard" ? (
           <div style={S.reportPad}>
             <LeaderboardView entries={monthEntries} teamNames={teamNames} t={t} />
+            <div style={S.reportSection}>
+              <h3 style={S.chartTitle}>Billings — MTD &amp; YTD</h3>
+              <p style={S.chartSubtitle}>Per-recruiter billings for {monthLabel}, personal and shared searches.</p>
+              <div className="avid-billings-scroll">
+                <BillingsTable billings={billings} teamNames={teamNames} monthKey={monthKey} year={monthCursorYear} t={t} />
+              </div>
+            </div>
           </div>
         ) : (
           <div>
