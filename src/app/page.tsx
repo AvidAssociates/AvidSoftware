@@ -802,10 +802,8 @@ function Dashboard({
                         t={t}
                         billing={b}
                         mobile={isMobile}
-                        onEdit={() => {
-                          setEditingBilling(b);
-                          setShowBillingForm(true);
-                        }}
+                        teamNames={teamNames}
+                        onSave={(updated) => saveBilling(updated, false)}
                         onDelete={() => deleteBilling(b.id)}
                       />
                     ))}
@@ -2004,17 +2002,100 @@ function BillingRow({
   t,
   billing,
   mobile,
-  onEdit,
+  teamNames,
+  onSave,
   onDelete,
 }: {
   S: Styles;
   t: Theme;
   billing: Billing;
   mobile?: boolean;
-  onEdit: () => void;
+  teamNames: string[];
+  onSave: (billing: Billing) => void;
   onDelete: () => void;
 }) {
+  const [editOpen, setEditOpen] = useState(false);
+  const toggleEdit = () => setEditOpen((open) => !open);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const makeDraft = () => ({
+    date: billing.date,
+    candidate: billing.candidate || "",
+    company: billing.company || "",
+    role: billing.role || "",
+    team: billing.team,
+    amount: billing.amount,
+  });
+  const [draft, setDraft] = useState(makeDraft);
+  const [prevEditOpen, setPrevEditOpen] = useState(editOpen);
+  if (editOpen !== prevEditOpen) {
+    setPrevEditOpen(editOpen);
+    if (editOpen) setDraft(makeDraft());
+  }
+
+  const toggleTeam = (name: string) =>
+    setDraft((d) => ({
+      ...d,
+      team: d.team.includes(name) ? d.team.filter((n) => n !== name) : [...d.team, name],
+    }));
+  const canSave = draft.team.length > 0 && draft.amount > 0 && Boolean(draft.date);
+  const handleSave = () => {
+    onSave({
+      ...billing,
+      date: draft.date,
+      candidate: draft.candidate || null,
+      company: draft.company || null,
+      role: draft.role || null,
+      team: draft.team,
+      amount: draft.amount,
+    });
+    setEditOpen(false);
+  };
+
+  const fieldStyle = { ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5, textAlign: "center" as const };
+  const dateField = (
+    <GlassDatePicker
+      value={draft.date}
+      onChange={(iso) => setDraft((d) => ({ ...d, date: iso }))}
+      triggerStyle={fieldStyle}
+    />
+  );
+  const candidateField = (
+    <input
+      style={{ ...fieldStyle, fontSize: 13.5, fontWeight: 600 }}
+      value={draft.candidate}
+      placeholder="Candidate"
+      onChange={(e) => setDraft((d) => ({ ...d, candidate: e.target.value }))}
+    />
+  );
+  const companyField = (
+    <input
+      style={fieldStyle}
+      value={draft.company}
+      placeholder="Company"
+      onChange={(e) => setDraft((d) => ({ ...d, company: e.target.value }))}
+    />
+  );
+  const amountField = (
+    <input
+      type="number"
+      min="0"
+      step="500"
+      style={{ ...fieldStyle, fontWeight: 700 }}
+      value={draft.amount || ""}
+      onChange={(e) => setDraft((d) => ({ ...d, amount: Number(e.target.value) }))}
+    />
+  );
+  const roleField = (
+    <input
+      style={fieldStyle}
+      value={draft.role}
+      placeholder="Role"
+      onChange={(e) => setDraft((d) => ({ ...d, role: e.target.value }))}
+    />
+  );
+  const teamField = <TeamMultiSelect S={S} teamNames={teamNames} selected={draft.team} onToggle={toggleTeam} />;
+
   const confirmDialog = (
     <ConfirmDeleteDialog
       S={S}
@@ -2027,78 +2108,140 @@ function BillingRow({
       onCancel={() => setConfirmDelete(false)}
     />
   );
-  const showActions = true;
 
-  if (mobile) {
-    return (
-      <div
-        className="avid-row avid-row-enter"
-        style={{ padding: "14px 16px", borderBottom: `1px solid ${S._t.border}`, display: "flex", flexDirection: "column", gap: 6 }}
-      >
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-          <div style={S.cardPrimary}>{billing.candidate || "—"}</div>
-          <span style={S.amountText}>{money(billing.amount)}</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ ...S.cardSub, marginTop: 0 }}>
-            {[billing.company, billing.role, billing.team.join("/"), fmtDate(billing.date)].filter(Boolean).join(" · ")}
-          </div>
-          {showActions && (
-            <div style={{ display: "flex", gap: 2 }}>
-              <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
-                <Pencil size={14} />
-              </button>
-              <button
-                className="avid-btn"
-                style={{ ...S.iconGhost, color: t.danger }}
-                onClick={() => setConfirmDelete(true)}
-                title="Delete"
-              >
-                <Trash2 size={14} />
-              </button>
+  const saveBar = (
+    <div className="avid-expand" style={{ gridTemplateRows: editOpen ? "1fr" : "0fr" }}>
+      <div>
+        <div
+          style={{
+            padding: "12px 22px 20px",
+            borderBottom: `1px solid ${t.border}`,
+            display: "flex",
+            justifyContent: mobile ? "flex-end" : undefined,
+          }}
+        >
+          {mobile ? (
+            <button
+              type="button"
+              className="avid-btn"
+              style={{ ...S.ghostBtn, opacity: canSave ? 1 : 0.5 }}
+              disabled={!canSave}
+              onClick={handleSave}
+            >
+              Save
+            </button>
+          ) : (
+            <div
+              style={{
+                width: "100%",
+                display: "grid",
+                gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+                columnGap: 20,
+                alignItems: "center",
+              }}
+            >
+              <div style={{ gridColumn: "7 / 8", display: "flex", justifyContent: "center" }}>
+                <button
+                  type="button"
+                  className="avid-btn"
+                  style={{ ...S.ghostBtn, opacity: canSave ? 1 : 0.5 }}
+                  disabled={!canSave}
+                  onClick={handleSave}
+                >
+                  Save
+                </button>
+              </div>
             </div>
           )}
         </div>
-        {showActions && confirmDialog}
+      </div>
+    </div>
+  );
+
+  if (mobile) {
+    return (
+      <div>
+        <div
+          className="avid-row avid-row-enter"
+          style={{
+            padding: "14px 16px",
+            borderBottom: editOpen ? "none" : `1px solid ${S._t.border}`,
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+          }}
+        >
+          {editOpen ? (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {candidateField}
+                {dateField}
+              </div>
+              {companyField}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {amountField}
+                {roleField}
+              </div>
+              {teamField}
+            </>
+          ) : (
+            <>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+                <div style={S.cardPrimary}>{billing.candidate || "—"}</div>
+                <span style={S.amountText}>{money(billing.amount)}</span>
+              </div>
+              <div style={{ ...S.cardSub, marginTop: 0 }}>
+                {[billing.company, billing.role, billing.team.join("/"), fmtDate(billing.date)].filter(Boolean).join(" · ")}
+              </div>
+            </>
+          )}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 2 }}>
+            <button className="avid-btn" style={S.iconGhost} onClick={toggleEdit} title="Edit">
+              <Pencil size={14} />
+            </button>
+            <button
+              className="avid-btn"
+              style={{ ...S.iconGhost, color: t.danger }}
+              onClick={() => setConfirmDelete(true)}
+              title="Delete"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        </div>
+        {saveBar}
+        {confirmDialog}
       </div>
     );
   }
 
-  // Same 7-column soGrid as Send-Outs: Date, Candidate, Company, Amount,
-  // Role, Team, Actions.
   return (
-    <div className="avid-row avid-row-enter" style={{ ...S.cardRow, ...S.soGrid }}>
-      <div style={S.soCol}>
-        <div style={S.cardSub}>{fmtDate(billing.date)}</div>
+    <div>
+      <div
+        className="avid-row avid-row-enter"
+        style={{ ...S.cardRow, ...S.soGrid, borderBottom: editOpen ? "none" : `1px solid ${S._t.border}` }}
+      >
+        <div style={S.soCol}>{editOpen ? dateField : <div style={S.cardSub}>{fmtDate(billing.date)}</div>}</div>
+        <div style={S.soCol}>{editOpen ? candidateField : <div style={S.cardPrimary}>{billing.candidate || "—"}</div>}</div>
+        <div style={S.soCol}>{editOpen ? companyField : <div style={S.cardSub}>{billing.company || "—"}</div>}</div>
+        <div style={S.soStatusCol}>{editOpen ? amountField : <span style={S.amountText}>{money(billing.amount)}</span>}</div>
+        <div style={S.soCol}>{editOpen ? roleField : <div style={S.cardSub}>{billing.role || "—"}</div>}</div>
+        <div style={S.soCol}>{editOpen ? teamField : <div style={S.cardSub}>{billing.team.join("/") || "—"}</div>}</div>
+        <div style={S.soActionsCol}>
+          <button className="avid-btn" style={S.iconGhost} onClick={toggleEdit} title="Edit">
+            <Pencil size={14} />
+          </button>
+          <button
+            className="avid-btn"
+            style={{ ...S.iconGhost, color: t.danger }}
+            onClick={() => setConfirmDelete(true)}
+            title="Delete"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
       </div>
-      <div style={S.soCol}>
-        <div style={S.cardPrimary}>{billing.candidate || "—"}</div>
-      </div>
-      <div style={S.soCol}>
-        <div style={S.cardSub}>{billing.company || "—"}</div>
-      </div>
-      <div style={S.soStatusCol}>
-        <span style={S.amountText}>{money(billing.amount)}</span>
-      </div>
-      <div style={S.soCol}>
-        <div style={S.cardSub}>{billing.role || "—"}</div>
-      </div>
-      <div style={S.soCol}>
-        <div style={S.cardSub}>{billing.team.join("/") || "—"}</div>
-      </div>
-      <div style={S.soActionsCol}>
-        <button className="avid-btn" style={S.iconGhost} onClick={onEdit} title="Edit">
-          <Pencil size={14} />
-        </button>
-        <button
-          className="avid-btn"
-          style={{ ...S.iconGhost, color: t.danger }}
-          onClick={() => setConfirmDelete(true)}
-          title="Delete"
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
+      {saveBar}
       {confirmDialog}
     </div>
   );
