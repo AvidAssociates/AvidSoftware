@@ -89,6 +89,46 @@ export type Retainer = {
   amount: number | null;
 };
 
+export type SearchStage = "signed" | "sourcing" | "interviewing" | "filled";
+
+export type SearchStageEvent = {
+  stage: SearchStage;
+  date: string;
+};
+
+export type RetainedSearch = {
+  id: string;
+  date: string;
+  client: string;
+  role: string | null;
+  team: string[];
+  stage: SearchStage;
+  stageHistory: SearchStageEvent[];
+  retainerAmount: number | null;
+  notes: string | null;
+  addedBy: string | null;
+  createdAt: string;
+  candidates?: SearchCandidate[];
+};
+
+export type CandidateStage = "presented" | "interview" | "offer" | "placed";
+
+export type CandidateStageEvent = {
+  stage: CandidateStage;
+  date: string;
+};
+
+export type SearchCandidate = {
+  id: string;
+  searchId: string;
+  name: string;
+  stage: CandidateStage;
+  stageHistory: CandidateStageEvent[];
+  notes: string | null;
+  addedBy: string | null;
+  createdAt: string;
+};
+
 export type RosterMember = {
   id: number;
   name: string;

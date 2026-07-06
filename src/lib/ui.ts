@@ -1,4 +1,4 @@
-import { Stage, BillingCollectionStage } from "./types";
+import { Stage, BillingCollectionStage, SearchStage, CandidateStage } from "./types";
 
 export const DEFAULT_TEAM = ["Brad", "Joe", "Reid", "Matt", "Justice"];
 export const ADMIN = "Brad";
@@ -19,6 +19,32 @@ export const BILLING_COLLECTION: { key: BillingCollectionStage; label: string; c
   { key: "invoiced", label: "Invoiced", color: STAGE_COLOR.interview },
   { key: "collected", label: "Collected", color: STAGE_COLOR.placed },
 ];
+
+export const SEARCH_PIPELINE: { key: SearchStage; label: string }[] = [
+  { key: "signed", label: "Signed" },
+  { key: "sourcing", label: "Sourcing" },
+  { key: "interviewing", label: "Interviewing" },
+  { key: "filled", label: "Filled" },
+];
+export const SEARCH_STAGE_COLOR: Record<SearchStage, string> = {
+  signed: STAGE_COLOR.offer,
+  sourcing: STAGE_COLOR.sent,
+  interviewing: STAGE_COLOR.interview,
+  filled: STAGE_COLOR.placed,
+};
+
+export const CANDIDATE_PIPELINE: { key: CandidateStage; label: string }[] = [
+  { key: "presented", label: "Presented" },
+  { key: "interview", label: "Interview" },
+  { key: "offer", label: "Offer" },
+  { key: "placed", label: "Placed" },
+];
+export const CANDIDATE_STAGE_COLOR: Record<CandidateStage, string> = {
+  presented: STAGE_COLOR.sent,
+  interview: STAGE_COLOR.interview,
+  offer: STAGE_COLOR.offer,
+  placed: STAGE_COLOR.placed,
+};
 export const BRAND_RED = "#ED1D24";
 export const INTERVIEW_TYPES = ["Phone", "Video", "Face-to-Face"];
 export const FONT = `'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;

@@ -20,7 +20,7 @@ import {
   Tv,
   LogOut,
 } from "lucide-react";
-import { Billing, BillingCollectionStage, DeclineReason, Entry, EntryMutationResult, MeetingLogEntry, RosterMember, Stage } from "@/lib/types";
+import { Billing, BillingCollectionStage, CandidateStage, DeclineReason, Entry, EntryMutationResult, MeetingLogEntry, RetainedSearch, RosterMember, SearchCandidate, SearchStage, Stage } from "@/lib/types";
 import {
   ADMIN,
   BILLING_COLLECTION,
@@ -28,6 +28,8 @@ import {
   FONT,
   INTERVIEW_TYPES,
   PIPELINE,
+  SEARCH_PIPELINE,
+  SEARCH_STAGE_COLOR,
   STAGE_COLOR,
   Theme,
   fmtDate,
@@ -42,6 +44,7 @@ import ReportView from "@/components/ReportView";
 import { BillingsGoalStats, BillingsTable } from "@/components/BillingsSummary";
 import LeaderboardView from "@/components/LeaderboardView";
 import SettingsModal from "@/components/SettingsModal";
+import SearchesView from "@/components/SearchesView";
 
 type Styles = ReturnType<typeof makeStyles>;
 
@@ -269,10 +272,12 @@ function Dashboard({
   const isMobile = useIsMobile();
   const [entries, setEntries] = useState<Entry[]>([]);
   const [billings, setBillings] = useState<Billing[]>([]);
+  const [searches, setSearches] = useState<RetainedSearch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<"sendouts" | "billings" | "report" | "leaderboard">("sendouts");
+  const [view, setView] = useState<"searches" | "sendouts" | "billings" | "report" | "leaderboard">("sendouts");
   const [showEntryForm, setShowEntryForm] = useState(false);
   const [showBillingForm, setShowBillingForm] = useState(false);
+  const [showSearchForm, setShowSearchForm] = useState(false);
   const [editingBilling, setEditingBilling] = useState<Billing | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [tvOpen, setTvOpen] = useState(false);
@@ -341,12 +346,14 @@ function Dashboard({
   // the very first mount shows the loading state.
   const loadData = async (silent = false) => {
     if (!silent) setLoading(true);
-    const [e, b] = await Promise.all([
+    const [e, b, s] = await Promise.all([
       getJSON<Entry[]>("/api/entries", []),
       getJSON<Billing[]>("/api/billings", []),
+      getJSON<RetainedSearch[]>("/api/searches", []),
     ]);
     setEntries(e);
     setBillings(b);
+    setSearches(s);
     if (!silent) setLoading(false);
   };
 
@@ -474,8 +481,113 @@ function Dashboard({
     if (res.ok) applyBilling(await res.json());
   };
 
+  const applySearch = (search: RetainedSearch) =>
+    setSearches((prev) => {
+      const idx = prev.findIndex((s) => s.id === search.id);
+      if (idx === -1) return [search, ...prev];
+      const next = [...prev];
+      next[idx] = search;
+      return next;
+    });
+  const saveSearch = async (search: RetainedSearch, isNew: boolean) => {
+    applySearch(search);
+    const res = await send(isNew ? "/api/searches" : `/api/searches/${search.id}`, isNew ? "POST" : "PUT", search);
+    if (res.ok) applySearch(await res.json());
+  };
+  const moveSearch = async (search: RetainedSearch, stage: SearchStage) => {
+    const optimistic = { ...search, stage };
+    applySearch(optimistic);
+    const res = await send(`/api/searches/${search.id}`, "PUT", { ...optimistic, stageDate: todayISO() });
+    if (res.ok) applySearch(await res.json());
+  };
+  const deleteSearch = async (id: string) => {
+    setSearches((prev) => prev.filter((s) => s.id !== id));
+    await send(`/api/searches/${id}`, "DELETE");
+  };
+  const saveSearchCandidate = async (searchId: string, candidate: SearchCandidate, isNew: boolean) => {
+    setSearches((prev) =>
+      prev.map((s) => {
+        if (s.id !== searchId) return s;
+        const candidates = s.candidates ?? [];
+        const idx = candidates.findIndex((c) => c.id === candidate.id);
+        const nextCandidates = idx === -1 ? [candidate, ...candidates] : candidates.map((c, i) => (i === idx ? candidate : c));
+        return { ...s, candidates: nextCandidates };
+      })
+    );
+    const res = await send(
+      isNew ? `/api/searches/${searchId}/candidates` : `/api/searches/${searchId}/candidates/${candidate.id}`,
+      isNew ? "POST" : "PUT",
+      candidate
+    );
+    if (res.ok) {
+      const saved = (await res.json()) as SearchCandidate;
+      setSearches((prev) =>
+        prev.map((s) => {
+          if (s.id !== searchId) return s;
+          const candidates = s.candidates ?? [];
+          const idx = candidates.findIndex((c) => c.id === saved.id);
+          const nextCandidates = idx === -1 ? [saved, ...candidates] : candidates.map((c, i) => (i === idx ? saved : c));
+          return { ...s, candidates: nextCandidates };
+        })
+      );
+    }
+  };
+  const moveSearchCandidate = async (searchId: string, candidate: SearchCandidate, stage: CandidateStage) => {
+    const optimistic = { ...candidate, stage };
+    setSearches((prev) =>
+      prev.map((s) => {
+        if (s.id !== searchId) return s;
+        return {
+          ...s,
+          candidates: (s.candidates ?? []).map((c) => (c.id === candidate.id ? optimistic : c)),
+        };
+      })
+    );
+    const res = await send(`/api/searches/${searchId}/candidates/${candidate.id}`, "PUT", {
+      ...optimistic,
+      stageDate: todayISO(),
+    });
+    if (res.ok) {
+      const saved = (await res.json()) as SearchCandidate;
+      setSearches((prev) =>
+        prev.map((s) => {
+          if (s.id !== searchId) return s;
+          return {
+            ...s,
+            candidates: (s.candidates ?? []).map((c) => (c.id === saved.id ? saved : c)),
+          };
+        })
+      );
+    }
+  };
+  const deleteSearchCandidate = async (searchId: string, candidateId: string) => {
+    setSearches((prev) =>
+      prev.map((s) => {
+        if (s.id !== searchId) return s;
+        return { ...s, candidates: (s.candidates ?? []).filter((c) => c.id !== candidateId) };
+      })
+    );
+    await send(`/api/searches/${searchId}/candidates/${candidateId}`, "DELETE");
+  };
+
   const monthEntries = useMemo(() => entries.filter((e) => e.date?.startsWith(monthKey)), [entries, monthKey]);
   const monthBillings = useMemo(() => billings.filter((b) => b.date?.startsWith(monthKey)), [billings, monthKey]);
+  const monthSearches = useMemo(() => searches.filter((s) => s.date?.startsWith(monthKey)), [searches, monthKey]);
+
+  const filteredSearches = useMemo(() => {
+    let list = [...monthSearches];
+    if (filterTeam !== "All") list = list.filter((s) => s.team.includes(filterTeam));
+    if (query.trim()) {
+      const q = query.toLowerCase();
+      list = list.filter(
+        (s) =>
+          s.client.toLowerCase().includes(q) ||
+          s.role?.toLowerCase().includes(q) ||
+          s.team.some((n) => n.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [monthSearches, filterTeam, query]);
 
   const filteredEntries = useMemo(() => {
     let list = [...monthEntries];
@@ -520,6 +632,16 @@ function Dashboard({
       declined: monthEntries.filter((e) => e.declined).length,
     };
   }, [monthEntries]);
+
+  const searchStats = useMemo(() => {
+    const active = monthSearches.filter((s) => s.stage !== "filled");
+    return {
+      total: monthSearches.length,
+      active: active.length,
+      filled: monthSearches.filter((s) => s.stage === "filled").length,
+      candidates: monthSearches.reduce((sum, s) => sum + (s.candidates?.length ?? 0), 0),
+    };
+  }, [monthSearches]);
 
   const yearBillings = useMemo(
     () => billings.filter((b) => b.date?.startsWith(String(reportYear))),
@@ -629,6 +751,17 @@ function Dashboard({
               <HeroStat S={S} label="Top This Month" value={leaderboardStats.topName} color={STAGE_COLOR.placed} />
             </div>
           </>
+        ) : view === "searches" ? (
+          <div className="avid-hero-inline" style={S.heroInlineRow}>
+            <h1 className="avid-hero-title" style={S.heroInlineTitle}>Searches</h1>
+            <div className="avid-hero-stats" style={S.heroStatsRow}>
+              <HeroStat S={S} label="Total" value={String(searchStats.total)} />
+              <HeroStat S={S} label="Active" value={String(searchStats.active)} color={SEARCH_STAGE_COLOR.interviewing} />
+              <HeroStat S={S} label="Filled" value={String(searchStats.filled)} color={SEARCH_STAGE_COLOR.filled} />
+              <HeroStat S={S} label="Candidates" value={String(searchStats.candidates)} color={t.accent} />
+            </div>
+            <div />
+          </div>
         ) : (
           <TableSlidePanels
             view={view}
@@ -658,6 +791,13 @@ function Dashboard({
 
       <div style={S.toolbar} className="no-print avid-toolbar">
         <div style={S.segWrap}>
+          <button
+            className="avid-btn"
+            style={view === "searches" ? S.segBtnActive : S.segBtn}
+            onClick={() => setView("searches")}
+          >
+            Searches
+          </button>
           <button
             className="avid-btn"
             style={view === "sendouts" ? S.segBtnActive : S.segBtn}
@@ -693,7 +833,13 @@ function Dashboard({
               <Search size={15} color={t.mutedSoft} />
               <input
                 style={S.search}
-                placeholder={view === "sendouts" ? "Search candidate, company, role…" : "Search recruiter, company, candidate…"}
+                placeholder={
+                  view === "searches"
+                    ? "Search client, role, recruiter…"
+                    : view === "sendouts"
+                      ? "Search candidate, company, role…"
+                      : "Search recruiter, company, candidate…"
+                }
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -711,7 +857,9 @@ function Dashboard({
             <button
               className="avid-btn" style={S.primaryBtn}
               onClick={() => {
-                if (view === "sendouts") {
+                if (view === "searches") {
+                  setShowSearchForm((v) => !v);
+                } else if (view === "sendouts") {
                   // Toggles the inline new-send-out row at the top of the
                   // table -- clicking again slides it back away (cancel).
                   setShowEntryForm((v) => !v);
@@ -745,6 +893,22 @@ function Dashboard({
               </div>
             </div>
           </div>
+        ) : view === "searches" ? (
+          <SearchesView
+            searches={filteredSearches}
+            totalCount={monthSearches.length}
+            t={t}
+            teamNames={teamNames}
+            user={user}
+            showNewForm={showSearchForm}
+            onCloseNewForm={() => setShowSearchForm(false)}
+            onSaveSearch={(search, isNew) => saveSearch(search, isNew)}
+            onDeleteSearch={deleteSearch}
+            onMoveSearch={moveSearch}
+            onSaveCandidate={saveSearchCandidate}
+            onDeleteCandidate={deleteSearchCandidate}
+            onMoveCandidate={moveSearchCandidate}
+          />
         ) : (
           <TableSlidePanels
             view={view}

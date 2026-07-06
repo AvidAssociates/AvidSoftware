@@ -1,6 +1,6 @@
 import { getDb } from "./db";
 import { uid } from "./ui";
-import { Billing, BillingCollectionLogEntry, BillingCollectionStage, Entry, EntryMutationResult, MeetingLogEntry, ProductionGoals, Retainer, RosterMember, StageEvent } from "./types";
+import { Billing, BillingCollectionLogEntry, BillingCollectionStage, CandidateStage, CandidateStageEvent, Entry, EntryMutationResult, MeetingLogEntry, ProductionGoals, RetainedSearch, Retainer, RosterMember, SearchCandidate, SearchStage, SearchStageEvent, StageEvent } from "./types";
 
 type EntryRow = {
   id: string;
@@ -693,6 +693,251 @@ export async function updateBillingCollectionLogDate(
     RETURNING *
   `) as BillingRow[];
   return toBilling(row);
+}
+
+// ---------------- Retained searches ----------------
+
+type SearchRow = {
+  id: string;
+  date: string;
+  client: string;
+  role: string | null;
+  team: string[];
+  stage: string;
+  stage_history: SearchStageEvent[];
+  retainer_amount: number | null;
+  notes: string | null;
+  added_by: string | null;
+  created_at: string;
+};
+
+type CandidateRow = {
+  id: string;
+  search_id: string;
+  name: string;
+  stage: string;
+  stage_history: CandidateStageEvent[];
+  notes: string | null;
+  added_by: string | null;
+  created_at: string;
+};
+
+function toSearch(row: SearchRow, candidates: SearchCandidate[] = []): RetainedSearch {
+  return {
+    id: row.id,
+    date: row.date,
+    client: row.client,
+    role: row.role,
+    team: row.team ?? [],
+    stage: row.stage as SearchStage,
+    stageHistory: row.stage_history ?? [],
+    retainerAmount: row.retainer_amount === null ? null : Number(row.retainer_amount),
+    notes: row.notes,
+    addedBy: row.added_by,
+    createdAt: row.created_at,
+    candidates,
+  };
+}
+
+function toCandidate(row: CandidateRow): SearchCandidate {
+  return {
+    id: row.id,
+    searchId: row.search_id,
+    name: row.name,
+    stage: row.stage as CandidateStage,
+    stageHistory: row.stage_history ?? [],
+    notes: row.notes,
+    addedBy: row.added_by,
+    createdAt: row.created_at,
+  };
+}
+
+function mergeSearchStageHistory(
+  existing: SearchStageEvent[],
+  stage: SearchStage,
+  stageDate: string
+): SearchStageEvent[] {
+  const last = existing[existing.length - 1];
+  if (last?.stage === stage) return existing;
+  return [...existing, { stage, date: stageDate }];
+}
+
+function mergeCandidateStageHistory(
+  existing: CandidateStageEvent[],
+  stage: CandidateStage,
+  stageDate: string
+): CandidateStageEvent[] {
+  const last = existing[existing.length - 1];
+  if (last?.stage === stage) return existing;
+  return [...existing, { stage, date: stageDate }];
+}
+
+export async function listSearches(): Promise<RetainedSearch[]> {
+  const db = getDb();
+  const searchRows = (await db.sql`
+    SELECT * FROM retained_searches ORDER BY date DESC, created_at DESC
+  `) as SearchRow[];
+  const candidateRows = (await db.sql`
+    SELECT * FROM search_candidates ORDER BY created_at DESC
+  `) as CandidateRow[];
+  const bySearch = new Map<string, SearchCandidate[]>();
+  for (const row of candidateRows) {
+    const list = bySearch.get(row.search_id) ?? [];
+    list.push(toCandidate(row));
+    bySearch.set(row.search_id, list);
+  }
+  return searchRows.map((row) => toSearch(row, bySearch.get(row.id) ?? []));
+}
+
+export async function getSearch(id: string): Promise<RetainedSearch | null> {
+  const db = getDb();
+  const [row] = (await db.sql`SELECT * FROM retained_searches WHERE id = ${id}`) as SearchRow[];
+  if (!row) return null;
+  const candidateRows = (await db.sql`
+    SELECT * FROM search_candidates WHERE search_id = ${id} ORDER BY created_at DESC
+  `) as CandidateRow[];
+  return toSearch(row, candidateRows.map(toCandidate));
+}
+
+export async function createSearch(input: {
+  id: string;
+  date: string;
+  client: string;
+  role?: string | null;
+  team: string[];
+  stage?: SearchStage;
+  retainerAmount?: number | null;
+  notes?: string | null;
+  addedBy?: string | null;
+}): Promise<RetainedSearch> {
+  const db = getDb();
+  const stage = input.stage ?? "signed";
+  const history: SearchStageEvent[] = [{ stage, date: input.date }];
+  const [row] = (await db.sql`
+    INSERT INTO retained_searches (id, date, client, role, team, stage, stage_history, retainer_amount, notes, added_by)
+    VALUES (
+      ${input.id},
+      ${input.date},
+      ${input.client},
+      ${input.role ?? null},
+      ${input.team},
+      ${stage},
+      ${JSON.stringify(history)},
+      ${input.retainerAmount ?? null},
+      ${input.notes ?? null},
+      ${input.addedBy ?? null}
+    )
+    RETURNING *
+  `) as SearchRow[];
+  return toSearch(row, []);
+}
+
+export async function updateSearch(
+  id: string,
+  input: {
+    date: string;
+    client: string;
+    role?: string | null;
+    team: string[];
+    stage: SearchStage;
+    retainerAmount?: number | null;
+    notes?: string | null;
+    stageDate?: string;
+  }
+): Promise<RetainedSearch> {
+  const db = getDb();
+  const [existing] = (await db.sql`SELECT * FROM retained_searches WHERE id = ${id}`) as SearchRow[];
+  if (!existing) throw new Error("Search not found");
+  const stageDate = input.stageDate ?? todayISO();
+  const history =
+    input.stage !== existing.stage
+      ? mergeSearchStageHistory(existing.stage_history ?? [], input.stage, stageDate)
+      : (existing.stage_history ?? []);
+  const [row] = (await db.sql`
+    UPDATE retained_searches SET
+      date = ${input.date},
+      client = ${input.client},
+      role = ${input.role ?? null},
+      team = ${input.team},
+      stage = ${input.stage},
+      stage_history = ${JSON.stringify(history)},
+      retainer_amount = ${input.retainerAmount ?? null},
+      notes = ${input.notes ?? null}
+    WHERE id = ${id}
+    RETURNING *
+  `) as SearchRow[];
+  const candidateRows = (await db.sql`
+    SELECT * FROM search_candidates WHERE search_id = ${id} ORDER BY created_at DESC
+  `) as CandidateRow[];
+  return toSearch(row, candidateRows.map(toCandidate));
+}
+
+export async function deleteSearch(id: string): Promise<void> {
+  const db = getDb();
+  await db.sql`DELETE FROM retained_searches WHERE id = ${id}`;
+}
+
+export async function createSearchCandidate(input: {
+  id: string;
+  searchId: string;
+  name: string;
+  stage?: CandidateStage;
+  notes?: string | null;
+  addedBy?: string | null;
+  stageDate?: string;
+}): Promise<SearchCandidate> {
+  const db = getDb();
+  const stage = input.stage ?? "presented";
+  const stageDate = input.stageDate ?? todayISO();
+  const history: CandidateStageEvent[] = [{ stage, date: stageDate }];
+  const [row] = (await db.sql`
+    INSERT INTO search_candidates (id, search_id, name, stage, stage_history, notes, added_by)
+    VALUES (
+      ${input.id},
+      ${input.searchId},
+      ${input.name},
+      ${stage},
+      ${JSON.stringify(history)},
+      ${input.notes ?? null},
+      ${input.addedBy ?? null}
+    )
+    RETURNING *
+  `) as CandidateRow[];
+  return toCandidate(row);
+}
+
+export async function updateSearchCandidate(
+  id: string,
+  input: {
+    name: string;
+    stage: CandidateStage;
+    notes?: string | null;
+    stageDate?: string;
+  }
+): Promise<SearchCandidate> {
+  const db = getDb();
+  const [existing] = (await db.sql`SELECT * FROM search_candidates WHERE id = ${id}`) as CandidateRow[];
+  if (!existing) throw new Error("Candidate not found");
+  const stageDate = input.stageDate ?? todayISO();
+  const history =
+    input.stage !== existing.stage
+      ? mergeCandidateStageHistory(existing.stage_history ?? [], input.stage, stageDate)
+      : (existing.stage_history ?? []);
+  const [row] = (await db.sql`
+    UPDATE search_candidates SET
+      name = ${input.name},
+      stage = ${input.stage},
+      stage_history = ${JSON.stringify(history)},
+      notes = ${input.notes ?? null}
+    WHERE id = ${id}
+    RETURNING *
+  `) as CandidateRow[];
+  return toCandidate(row);
+}
+
+export async function deleteSearchCandidate(id: string): Promise<void> {
+  const db = getDb();
+  await db.sql`DELETE FROM search_candidates WHERE id = ${id}`;
 }
 
 // ---------------- Retainers ----------------
