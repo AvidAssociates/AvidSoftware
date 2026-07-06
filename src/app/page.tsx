@@ -438,6 +438,12 @@ function Dashboard({
     const res = await send(`/api/entries/${entry.id}/meeting-log/${meetingId}`, "DELETE");
     if (res.ok) applyEntry(await res.json());
   };
+  const updateMeetingDate = async (entry: Entry, meetingId: string, date: string) => {
+    const meetingLog = entry.meetingLog.map((m) => (m.id === meetingId ? { ...m, date } : m));
+    applyEntry({ ...entry, meetingLog });
+    const res = await send(`/api/entries/${entry.id}/meeting-log/${meetingId}`, "PATCH", { date });
+    if (res.ok) applyEntry(await res.json());
+  };
   const saveBilling = async (billing: Billing, isNew: boolean) => {
     applyBilling(billing);
     const res = await send(isNew ? "/api/billings" : `/api/billings/${billing.id}`, isNew ? "POST" : "PUT", billing);
@@ -764,6 +770,7 @@ function Dashboard({
                       onDecline={(reason) => setDeclined(e, true, reason)}
                       onLogMeeting={(type, round, date) => logMeeting(e, type, round, date)}
                       onDeleteMeeting={(meetingId) => deleteMeeting(e, meetingId)}
+                      onUpdateMeetingDate={(meetingId, date) => updateMeetingDate(e, meetingId, date)}
                     />
                   ))
                 )}
@@ -924,6 +931,7 @@ function EntryRow({
   onDecline,
   onLogMeeting,
   onDeleteMeeting,
+  onUpdateMeetingDate,
 }: {
   S: Styles;
   t: Theme;
@@ -937,6 +945,7 @@ function EntryRow({
   onDecline: (reason: DeclineReason) => void;
   onLogMeeting: (type: string, round: number, date: string) => void;
   onDeleteMeeting: (meetingId: string) => void;
+  onUpdateMeetingDate: (meetingId: string, date: string) => void;
 }) {
   // Status and Edit are two separate things: Status expands the pipeline
   // tracker + activity log (view only, nothing editable). Edit turns the
@@ -1078,6 +1087,7 @@ function EntryRow({
           onDecline={onDecline}
           onLogMeeting={onLogMeeting}
           onDeleteMeeting={onDeleteMeeting}
+          onUpdateMeetingDate={onUpdateMeetingDate}
         />
         <ConfirmDeleteDialog
           S={S}
@@ -1140,6 +1150,7 @@ function EntryRow({
         onDecline={onDecline}
         onLogMeeting={onLogMeeting}
         onDeleteMeeting={onDeleteMeeting}
+        onUpdateMeetingDate={onUpdateMeetingDate}
       />
       <ConfirmDeleteDialog
         S={S}
@@ -1451,6 +1462,7 @@ function RowExpandedPanel({
   onDecline,
   onLogMeeting,
   onDeleteMeeting,
+  onUpdateMeetingDate,
 }: {
   S: Styles;
   t: Theme;
@@ -1468,6 +1480,7 @@ function RowExpandedPanel({
   onDecline: (reason: DeclineReason) => void;
   onLogMeeting: (type: string, round: number, date: string) => void;
   onDeleteMeeting: (meetingId: string) => void;
+  onUpdateMeetingDate: (meetingId: string, date: string) => void;
 }) {
   return (
     <div className="avid-expand" style={{ gridTemplateRows: statusOpen || editOpen ? "1fr" : "0fr" }}>
@@ -1574,6 +1587,7 @@ function RowExpandedPanel({
                     entry={entry}
                     onLog={onLogMeeting}
                     onDelete={onDeleteMeeting}
+                    onUpdateDate={onUpdateMeetingDate}
                   />
                 </div>
               )}
@@ -1599,12 +1613,14 @@ function ActivityLogPanel({
   entry,
   onLog,
   onDelete,
+  onUpdateDate,
 }: {
   S: Styles;
   t: Theme;
   entry: Entry;
   onLog: (type: string, round: number, date: string) => void;
   onDelete: (meetingId: string) => void;
+  onUpdateDate: (meetingId: string, date: string) => void;
 }) {
   const lastMeeting = [...entry.meetingLog].reverse().find((m) => m.type !== "Offer");
   const [draftType, setDraftType] = useState(lastMeeting?.type || "Phone");
@@ -1637,7 +1653,18 @@ function ActivityLogPanel({
             >
               <span style={{ fontSize: 12.5, fontWeight: 600, color: t.ink }}>{activityLabel(m.type, m.round)}</span>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 12, color: t.muted, fontVariantNumeric: "tabular-nums" }}>{fmtDate(m.date)}</span>
+                <GlassDatePicker
+                  value={m.date}
+                  onChange={(iso) => onUpdateDate(m.id, iso)}
+                  triggerStyle={{
+                    ...S.input,
+                    padding: "2px 7px",
+                    fontSize: 12,
+                    color: t.muted,
+                    fontVariantNumeric: "tabular-nums",
+                    minWidth: 0,
+                  }}
+                />
                 <button
                   type="button"
                   className="avid-btn"
