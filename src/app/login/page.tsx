@@ -8,19 +8,56 @@ import loginLogo from "@/assets/login-logo.png";
 const LOGIN_ANIM_DELAY_MS = 1000;
 const LOGIN_ANIM_DURATION_MS = 950;
 
-function LoginFormSkeleton() {
+function LoginCard({
+  email,
+  password,
+  error,
+  loading,
+  onEmail,
+  onPassword,
+  onSubmit,
+}: {
+  email: string;
+  password: string;
+  error: string;
+  loading: boolean;
+  onEmail: (value: string) => void;
+  onPassword: (value: string) => void;
+  onSubmit: (e: FormEvent) => void;
+}) {
   return (
-    <div className="login-form login-form-skeleton" aria-hidden="true">
+    <form onSubmit={onSubmit} className="login-form" autoComplete="on">
       <label className="login-field">
-        <span className="login-label">Email</span>
-        <span className="login-input login-input-skeleton" />
+        Email
+        <input
+          className="login-input"
+          type="email"
+          name="email"
+          autoComplete="username"
+          value={email}
+          onChange={(e) => onEmail(e.target.value)}
+          placeholder="test"
+          required
+        />
       </label>
       <label className="login-field">
-        <span className="login-label">Password</span>
-        <span className="login-input login-input-skeleton" />
+        Password
+        <input
+          className="login-input"
+          type="password"
+          name="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => onPassword(e.target.value)}
+          placeholder="••••"
+          required
+        />
       </label>
-      <span className="login-submit login-submit-skeleton" />
-    </div>
+      <div className="login-error-slot">{error ? <div className="login-error">{error}</div> : null}</div>
+      <button className="login-submit" type="submit" disabled={loading}>
+        {loading ? "Signing in…" : "Sign in"}
+      </button>
+    </form>
   );
 }
 
@@ -31,32 +68,31 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [formReady, setFormReady] = useState(false);
+  const [boxLanded, setBoxLanded] = useState(false);
 
-  const revealForm = useCallback(() => {
-    setFormReady(true);
+  const onBoxLanded = useCallback(() => {
+    setBoxLanded(true);
   }, []);
 
   useEffect(() => {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) {
-      revealForm();
+      onBoxLanded();
       return;
     }
-    const fallback = window.setTimeout(revealForm, LOGIN_ANIM_DELAY_MS + LOGIN_ANIM_DURATION_MS + 50);
+    const fallback = window.setTimeout(onBoxLanded, LOGIN_ANIM_DELAY_MS + LOGIN_ANIM_DURATION_MS + 50);
     return () => window.clearTimeout(fallback);
-  }, [revealForm]);
+  }, [onBoxLanded]);
 
   const onDialogAnimationEnd = useCallback(
     (event: AnimationEvent<HTMLDivElement>) => {
-      if (event.animationName === "loginSlideUp") revealForm();
+      if (event.animationName === "loginSlideUp") onBoxLanded();
     },
-    [revealForm],
+    [onBoxLanded],
   );
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!formReady) return;
     setError("");
     setLoading(true);
     try {
@@ -81,7 +117,7 @@ function LoginForm() {
   };
 
   return (
-    <div className={`login-page${formReady ? " login-page--active" : ""}`}>
+    <div className="login-page">
       <div className="login-stack">
         <img
           src={loginLogo.src}
@@ -90,47 +126,17 @@ function LoginForm() {
           width={loginLogo.width}
           height={loginLogo.height}
         />
-        <div className={`login-dialog-shell${formReady ? " login-dialog-shell--active" : ""}`}>
+        <div className={`login-dialog-shell${boxLanded ? " login-dialog-shell--landed" : ""}`}>
           <div className="login-dialog login-dialog-enter" onAnimationEnd={onDialogAnimationEnd}>
-            <div className={`login-form-frame${formReady ? " login-form-frame--live" : ""}`}>
-              <LoginFormSkeleton />
-              {formReady ? (
-                <form onSubmit={onSubmit} className="login-form login-form-live" autoComplete="on">
-                  <label className="login-field">
-                    Email
-                    <input
-                      className="login-input"
-                      type="email"
-                      name="email"
-                      autoComplete="username"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="test"
-                      required
-                    />
-                  </label>
-                  <label className="login-field">
-                    Password
-                    <input
-                      className="login-input"
-                      type="password"
-                      name="password"
-                      autoComplete="current-password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••"
-                      required
-                    />
-                  </label>
-
-                  {error ? <div className="login-error">{error}</div> : null}
-
-                  <button className="login-submit login-submit-live" type="submit" disabled={loading}>
-                    {loading ? "Signing in…" : "Sign in"}
-                  </button>
-                </form>
-              ) : null}
-            </div>
+            <LoginCard
+              email={email}
+              password={password}
+              error={error}
+              loading={loading}
+              onEmail={setEmail}
+              onPassword={setPassword}
+              onSubmit={onSubmit}
+            />
           </div>
         </div>
       </div>
@@ -146,8 +152,16 @@ export default function LoginPage() {
           <div className="login-stack">
             <img src={loginLogo.src} alt="" className="login-logo" width={loginLogo.width} height={loginLogo.height} />
             <div className="login-dialog-shell">
-              <div className="login-dialog login-dialog-enter">
-                <LoginFormSkeleton />
+              <div className="login-dialog">
+                <LoginCard
+                  email=""
+                  password=""
+                  error=""
+                  loading={false}
+                  onEmail={() => {}}
+                  onPassword={() => {}}
+                  onSubmit={(e) => e.preventDefault()}
+                />
               </div>
             </div>
           </div>
