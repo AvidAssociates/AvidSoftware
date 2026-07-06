@@ -1,4 +1,4 @@
-import { Stage } from "./types";
+import { Stage, BillingCollectionStage } from "./types";
 
 export const DEFAULT_TEAM = ["Brad", "Joe", "Reid", "Matt", "Justice"];
 export const ADMIN = "Brad";
@@ -15,6 +15,10 @@ export const STAGE_COLOR: Record<Stage, string> = {
   offer: "#8C92F0",
   placed: "#4FBF82",
 };
+export const BILLING_COLLECTION: { key: BillingCollectionStage; label: string; color: string }[] = [
+  { key: "invoiced", label: "Invoiced", color: STAGE_COLOR.interview },
+  { key: "collected", label: "Collected", color: STAGE_COLOR.placed },
+];
 export const BRAND_RED = "#ED1D24";
 export const INTERVIEW_TYPES = ["Phone", "Video", "Face-to-Face"];
 export const FONT = `'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;

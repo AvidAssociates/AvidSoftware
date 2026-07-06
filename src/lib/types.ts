@@ -41,6 +41,19 @@ export type Entry = {
   firstTime: boolean;
 };
 
+export type BillingCollectionStage = "invoiced" | "collected";
+
+export type BillingCollectionEvent = {
+  stage: BillingCollectionStage;
+  date: string;
+};
+
+export type BillingCollectionLogEntry = {
+  id: string;
+  type: "Invoiced" | "Collected";
+  date: string;
+};
+
 export type Billing = {
   id: string;
   date: string;
@@ -56,6 +69,9 @@ export type Billing = {
   createdAt: string;
   salary: number | null;
   feePercent: number | null;
+  collectionStage: BillingCollectionStage;
+  collectionHistory: BillingCollectionEvent[];
+  collectionLog: BillingCollectionLogEntry[];
   // Set when this row was auto-created from a placed send-out; NULL for
   // fees logged directly on the Billings tab.
   entryId: string | null;

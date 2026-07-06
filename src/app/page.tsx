@@ -20,9 +20,10 @@ import {
   Tv,
   LogOut,
 } from "lucide-react";
-import { Billing, DeclineReason, Entry, EntryMutationResult, MeetingLogEntry, RosterMember, Stage } from "@/lib/types";
+import { Billing, BillingCollectionStage, DeclineReason, Entry, EntryMutationResult, MeetingLogEntry, RosterMember, Stage } from "@/lib/types";
 import {
   ADMIN,
+  BILLING_COLLECTION,
   DEFAULT_TEAM,
   FONT,
   INTERVIEW_TYPES,
@@ -462,6 +463,16 @@ function Dashboard({
     setBillings((prev) => prev.filter((b) => b.id !== id));
     await send(`/api/billings/${id}`, "DELETE");
   };
+  const advanceBillingCollection = async (billing: Billing, stage: BillingCollectionStage) => {
+    const res = await send(`/api/billings/${billing.id}/collection`, "PATCH", { stage, stageDate: todayISO() });
+    if (res.ok) applyBilling(await res.json());
+  };
+  const updateBillingCollectionDate = async (billing: Billing, logId: string, date: string) => {
+    const collectionLog = billing.collectionLog.map((e) => (e.id === logId ? { ...e, date } : e));
+    applyBilling({ ...billing, collectionLog });
+    const res = await send(`/api/billings/${billing.id}/collection-log/${logId}`, "PATCH", { date });
+    if (res.ok) applyBilling(await res.json());
+  };
 
   const monthEntries = useMemo(() => entries.filter((e) => e.date?.startsWith(monthKey)), [entries, monthKey]);
   const monthBillings = useMemo(() => billings.filter((b) => b.date?.startsWith(monthKey)), [billings, monthKey]);
@@ -820,6 +831,8 @@ function Dashboard({
                         teamNames={teamNames}
                         onSave={(updated) => saveBilling(updated, false)}
                         onDelete={() => deleteBilling(b.id)}
+                        onSetCollectionStage={(stage) => advanceBillingCollection(b, stage)}
+                        onUpdateCollectionDate={(logId, date) => updateBillingCollectionDate(b, logId, date)}
                       />
                     ))}
                   </div>
@@ -2217,6 +2230,258 @@ function TeamMultiSelect({
   );
 }
 
+function BillingAmountControl({
+  t,
+  billing,
+  expanded,
+  onToggle,
+}: {
+  t: Theme;
+  billing: Billing;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const meta = BILLING_COLLECTION.find((s) => s.key === billing.collectionStage) ?? BILLING_COLLECTION[0];
+  return (
+    <button
+      type="button"
+      className="avid-btn"
+      onClick={onToggle}
+      title={expanded ? "Hide collection status" : "View collection status"}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        border: "none",
+        background: "none",
+        padding: 0,
+        cursor: "pointer",
+        font: "inherit",
+      }}
+    >
+      <span style={{ width: 10, height: 10, borderRadius: "50%", background: meta.color, flexShrink: 0 }} />
+      <span style={{ fontSize: 12.5, fontWeight: 700, color: t.ink, fontVariantNumeric: "tabular-nums" }}>{money(billing.amount)}</span>
+    </button>
+  );
+}
+
+function BillingCollectionLogPanel({
+  S,
+  t,
+  billing,
+  onUpdateDate,
+}: {
+  S: Styles;
+  t: Theme;
+  billing: Billing;
+  onUpdateDate: (logId: string, date: string) => void;
+}) {
+  return (
+    <div style={{ width: "100%", maxWidth: 380 }}>
+      <div
+        style={{
+          fontSize: 10.5,
+          fontWeight: 700,
+          letterSpacing: 0.4,
+          textTransform: "uppercase",
+          color: t.mutedSoft,
+          marginBottom: 8,
+        }}
+      >
+        Activity log
+      </div>
+      {billing.collectionLog.length === 0 ? (
+        <div style={{ fontSize: 12, color: t.mutedSoft }}>Nothing logged yet.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {billing.collectionLog.map((entry) => (
+            <div
+              key={entry.id}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0" }}
+            >
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: t.ink }}>{entry.type}</span>
+              <GlassDatePicker
+                value={entry.date}
+                onChange={(iso) => onUpdateDate(entry.id, iso)}
+                triggerStyle={{
+                  ...S.input,
+                  padding: "2px 7px",
+                  fontSize: 12,
+                  color: t.muted,
+                  fontVariantNumeric: "tabular-nums",
+                  minWidth: 0,
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BillingCollectionProgress({
+  t,
+  stage,
+  onSetStage,
+  large,
+}: {
+  t: Theme;
+  stage: BillingCollectionStage;
+  onSetStage?: (stage: BillingCollectionStage) => void;
+  large?: boolean;
+}) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const idx = Math.max(0, BILLING_COLLECTION.findIndex((s) => s.key === stage));
+  const color = BILLING_COLLECTION[idx]?.color ?? STAGE_COLOR.placed;
+  const fillPct = idx <= 0 ? 0 : 100;
+  const isMobile = useIsMobile();
+  const trackWidth = large ? (isMobile ? 200 : 280) : 180;
+  const dotSize = large ? 22 : 13;
+  const lineH = large ? 5 : 3;
+  const inset = dotSize / 2;
+
+  const [poppedIdx, setPoppedIdx] = useState<number | null>(null);
+  const [prevIdx, setPrevIdx] = useState(idx);
+  if (prevIdx !== idx) {
+    setPrevIdx(idx);
+    setPoppedIdx(idx);
+  }
+  useEffect(() => {
+    if (poppedIdx === null) return;
+    const timer = setTimeout(() => setPoppedIdx(null), 400);
+    return () => clearTimeout(timer);
+  }, [poppedIdx]);
+
+  return (
+    <div style={large ? { position: "relative", width: trackWidth } : { display: "flex", alignItems: "flex-start", gap: 14 }}>
+      <div style={{ width: trackWidth }}>
+        <div style={{ position: "relative", height: dotSize + 4 }}>
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: inset,
+              right: inset,
+              height: lineH,
+              background: t.trackBg,
+              borderRadius: lineH,
+              transform: "translateY(-50%)",
+            }}
+          />
+          <div
+            className="avid-stage-fill"
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: inset,
+              width: `${(fillPct * (trackWidth - inset * 2)) / 100}px`,
+              maxWidth: trackWidth - inset * 2,
+              height: lineH,
+              borderRadius: lineH,
+              background: color,
+              transform: "translateY(-50%)",
+            }}
+          />
+          <div style={{ position: "relative", display: "flex", justifyContent: "space-between" }}>
+            {BILLING_COLLECTION.map((s, i) => (
+              <div
+                key={s.key}
+                style={{ position: "relative" }}
+                onMouseEnter={() => setHoverIdx(i)}
+                onMouseLeave={() => setHoverIdx((cur) => (cur === i ? null : cur))}
+              >
+                <button
+                  onClick={() => {
+                    if (i === idx) return;
+                    onSetStage?.(s.key);
+                  }}
+                  title={s.label}
+                  className={`avid-stage-dot${poppedIdx === i ? " avid-stage-pop" : ""}`}
+                  style={{
+                    width: dotSize,
+                    height: dotSize,
+                    borderRadius: "50%",
+                    border: `2px solid ${i <= idx ? s.color : t.trackBg}`,
+                    background: i <= idx ? s.color : t.surface,
+                    cursor: "pointer",
+                    padding: 0,
+                    transform: hoverIdx === i ? "scale(1.25)" : "scale(1)",
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+        {large && (
+          <div style={{ position: "relative", display: "flex", justifyContent: "space-between", marginTop: 9 }}>
+            {BILLING_COLLECTION.map((s, i) => (
+              <span
+                key={s.key}
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: i === idx ? 700 : 500,
+                  color: i === idx ? s.color : t.mutedSoft,
+                  width: dotSize + 34,
+                  textAlign: i === 0 ? "left" : i === BILLING_COLLECTION.length - 1 ? "right" : "center",
+                  marginLeft: i === 0 ? -dotSize / 2 : 0,
+                  marginRight: i === BILLING_COLLECTION.length - 1 ? -dotSize / 2 : 0,
+                }}
+              >
+                {s.label}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      {!large && (
+        <span style={{ fontSize: 12.5, fontWeight: 600, color, minWidth: 64 }}>{BILLING_COLLECTION[idx].label}</span>
+      )}
+    </div>
+  );
+}
+
+function BillingExpandedPanel({
+  S,
+  t,
+  billing,
+  statusOpen,
+  onCloseStatus,
+  onSetStage,
+  onUpdateDate,
+}: {
+  S: Styles;
+  t: Theme;
+  billing: Billing;
+  statusOpen: boolean;
+  onCloseStatus: () => void;
+  onSetStage: (stage: BillingCollectionStage) => void;
+  onUpdateDate: (logId: string, date: string) => void;
+}) {
+  return (
+    <div className="avid-expand" style={{ gridTemplateRows: statusOpen ? "1fr" : "0fr" }}>
+      <div>
+        <div
+          style={{
+            padding: "12px 22px 20px",
+            borderBottom: `1px solid ${t.border}`,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 18,
+          }}
+        >
+          <BillingCollectionProgress t={t} stage={billing.collectionStage} onSetStage={onSetStage} large />
+          <BillingCollectionLogPanel S={S} t={t} billing={billing} onUpdateDate={onUpdateDate} />
+          <button type="button" className="avid-btn" style={{ ...S.ghostBtn, alignSelf: "flex-end" }} onClick={onCloseStatus}>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BillingRow({
   S,
   t,
@@ -2225,6 +2490,8 @@ function BillingRow({
   teamNames,
   onSave,
   onDelete,
+  onSetCollectionStage,
+  onUpdateCollectionDate,
 }: {
   S: Styles;
   t: Theme;
@@ -2233,9 +2500,14 @@ function BillingRow({
   teamNames: string[];
   onSave: (billing: Billing) => void;
   onDelete: () => void;
+  onSetCollectionStage: (stage: BillingCollectionStage) => void;
+  onUpdateCollectionDate: (logId: string, date: string) => void;
 }) {
-  const [editOpen, setEditOpen] = useState(false);
-  const toggleEdit = () => setEditOpen((open) => !open);
+  const [mode, setMode] = useState<"status" | "edit" | null>(null);
+  const statusOpen = mode === "status";
+  const editOpen = mode === "edit";
+  const toggleStatus = () => setMode((m) => (m === "status" ? null : "status"));
+  const toggleEdit = () => setMode((m) => (m === "edit" ? null : "edit"));
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const makeDraft = () => ({
@@ -2269,7 +2541,7 @@ function BillingRow({
       team: draft.team,
       amount: draft.amount,
     });
-    setEditOpen(false);
+    setMode(null);
   };
 
   const fieldStyle = { ...S.input, width: "100%", padding: "5px 7px", fontSize: 12.5, textAlign: "center" as const };
@@ -2385,7 +2657,7 @@ function BillingRow({
           className="avid-row avid-row-enter"
           style={{
             padding: "14px 16px",
-            borderBottom: editOpen ? "none" : `1px solid ${S._t.border}`,
+            borderBottom: statusOpen || editOpen ? "none" : `1px solid ${S._t.border}`,
             display: "flex",
             flexDirection: "column",
             gap: 10,
@@ -2408,7 +2680,7 @@ function BillingRow({
             <>
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
                 <div style={S.cardPrimary}>{billing.candidate || "—"}</div>
-                <span style={S.amountText}>{money(billing.amount)}</span>
+                <BillingAmountControl t={t} billing={billing} expanded={statusOpen} onToggle={toggleStatus} />
               </div>
               <div style={{ ...S.cardSub, marginTop: 0 }}>
                 {[billing.company, billing.role, billing.team.join("/"), fmtDate(billing.date)].filter(Boolean).join(" · ")}
@@ -2429,6 +2701,15 @@ function BillingRow({
             </button>
           </div>
         </div>
+        <BillingExpandedPanel
+          S={S}
+          t={t}
+          billing={billing}
+          statusOpen={statusOpen}
+          onCloseStatus={() => setMode(null)}
+          onSetStage={onSetCollectionStage}
+          onUpdateDate={onUpdateCollectionDate}
+        />
         {saveBar}
         {confirmDialog}
       </div>
@@ -2439,12 +2720,18 @@ function BillingRow({
     <div>
       <div
         className="avid-row avid-row-enter"
-        style={{ ...S.cardRow, ...S.soGrid, borderBottom: editOpen ? "none" : `1px solid ${S._t.border}` }}
+        style={{ ...S.cardRow, ...S.soGrid, borderBottom: statusOpen || editOpen ? "none" : `1px solid ${S._t.border}` }}
       >
         <div style={S.soCol}>{editOpen ? dateField : <div style={S.cardSub}>{fmtDate(billing.date)}</div>}</div>
         <div style={S.soCol}>{editOpen ? candidateField : <div style={S.cardPrimary}>{billing.candidate || "—"}</div>}</div>
         <div style={S.soCol}>{editOpen ? companyField : <div style={S.cardSub}>{billing.company || "—"}</div>}</div>
-        <div style={S.soStatusCol}>{editOpen ? amountField : <span style={S.amountText}>{money(billing.amount)}</span>}</div>
+        <div style={S.soStatusCol}>
+          {editOpen ? (
+            amountField
+          ) : (
+            <BillingAmountControl t={t} billing={billing} expanded={statusOpen} onToggle={toggleStatus} />
+          )}
+        </div>
         <div style={S.soCol}>{editOpen ? roleField : <div style={S.cardSub}>{billing.role || "—"}</div>}</div>
         <div style={S.soCol}>{editOpen ? teamField : <div style={S.cardSub}>{billing.team.join("/") || "—"}</div>}</div>
         <div style={S.soActionsCol}>
@@ -2461,6 +2748,15 @@ function BillingRow({
           </button>
         </div>
       </div>
+      <BillingExpandedPanel
+        S={S}
+        t={t}
+        billing={billing}
+        statusOpen={statusOpen}
+        onCloseStatus={() => setMode(null)}
+        onSetStage={onSetCollectionStage}
+        onUpdateDate={onUpdateCollectionDate}
+      />
       {saveBar}
       {confirmDialog}
     </div>
@@ -2874,6 +3170,9 @@ function BillingForm({
       entryId: null,
       salary: null,
       feePercent: null,
+      collectionStage: "invoiced",
+      collectionHistory: [{ stage: "invoiced", date: todayISO() }],
+      collectionLog: [{ id: uid(), type: "Invoiced", date: todayISO() }],
     }
   );
   const toggleTeam = (name: string) => {

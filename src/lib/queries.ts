@@ -1,6 +1,6 @@
 import { getDb } from "./db";
 import { uid } from "./ui";
-import { Billing, Entry, EntryMutationResult, MeetingLogEntry, ProductionGoals, Retainer, RosterMember, StageEvent } from "./types";
+import { Billing, BillingCollectionLogEntry, BillingCollectionStage, Entry, EntryMutationResult, MeetingLogEntry, ProductionGoals, Retainer, RosterMember, StageEvent } from "./types";
 
 type EntryRow = {
   id: string;
@@ -397,9 +397,25 @@ type BillingRow = {
   entry_id: string | null;
   salary: number | null;
   fee_percent: number | null;
+  collection_stage: string;
+  collection_history: { stage: BillingCollectionStage; date: string }[];
+  collection_log: BillingCollectionLogEntry[];
 };
 
+function collectionLogEntry(type: BillingCollectionLogEntry["type"], date: string): BillingCollectionLogEntry {
+  return { id: uid(), type, date };
+}
+
+function initialCollectionState(date: string) {
+  return {
+    collection_stage: "invoiced" as BillingCollectionStage,
+    collection_history: [{ stage: "invoiced" as BillingCollectionStage, date }],
+    collection_log: [collectionLogEntry("Invoiced", date)],
+  };
+}
+
 function toBilling(row: BillingRow): Billing {
+  const collectionStage = (row.collection_stage === "collected" ? "collected" : "invoiced") as BillingCollectionStage;
   return {
     id: row.id,
     date: row.date,
@@ -414,6 +430,9 @@ function toBilling(row: BillingRow): Billing {
     entryId: row.entry_id ?? null,
     salary: row.salary === null || row.salary === undefined ? null : Number(row.salary),
     feePercent: row.fee_percent === null || row.fee_percent === undefined ? null : Number(row.fee_percent),
+    collectionStage,
+    collectionHistory: row.collection_history ?? [],
+    collectionLog: row.collection_log ?? [],
   };
 }
 
@@ -473,8 +492,9 @@ async function syncBillingForPlacedEntry(
     return toBilling(row);
   }
 
+  const initial = initialCollectionState(input.date);
   const [row] = (await db.sql`
-    INSERT INTO billings (id, date, team, amount, company, candidate, role, notes, added_by, entry_id)
+    INSERT INTO billings (id, date, team, amount, company, candidate, role, notes, added_by, entry_id, collection_stage, collection_history, collection_log)
     VALUES (
       ${uid()},
       ${input.date},
@@ -485,7 +505,10 @@ async function syncBillingForPlacedEntry(
       ${input.role ?? null},
       null,
       ${input.addedBy ?? null},
-      ${entryId}
+      ${entryId},
+      ${initial.collection_stage},
+      ${JSON.stringify(initial.collection_history)},
+      ${JSON.stringify(initial.collection_log)}
     )
     RETURNING *
   `) as BillingRow[];
@@ -523,8 +546,9 @@ export async function createBilling(input: {
   addedBy?: string | null;
 }): Promise<Billing> {
   const db = getDb();
+  const initial = initialCollectionState(input.date);
   const [row] = (await db.sql`
-    INSERT INTO billings (id, date, team, amount, company, candidate, role, notes, added_by)
+    INSERT INTO billings (id, date, team, amount, company, candidate, role, notes, added_by, collection_stage, collection_history, collection_log)
     VALUES (
       ${input.id},
       ${input.date},
@@ -534,7 +558,10 @@ export async function createBilling(input: {
       ${input.candidate ?? null},
       ${input.role ?? null},
       ${input.notes ?? null},
-      ${input.addedBy ?? null}
+      ${input.addedBy ?? null},
+      ${initial.collection_stage},
+      ${JSON.stringify(initial.collection_history)},
+      ${JSON.stringify(initial.collection_log)}
     )
     RETURNING *
   `) as BillingRow[];
@@ -575,6 +602,97 @@ export async function updateBilling(
 
 export async function deleteBilling(id: string) {
   await getDb().sql`DELETE FROM billings WHERE id = ${id}`;
+}
+
+export async function advanceBillingCollection(
+  id: string,
+  stage: BillingCollectionStage,
+  stageDate?: string
+): Promise<Billing | null> {
+  const db = getDb();
+  const [existing] = (await db.sql`
+    SELECT collection_stage, collection_history, collection_log FROM billings WHERE id = ${id}
+  `) as {
+    collection_stage: BillingCollectionStage;
+    collection_history: { stage: BillingCollectionStage; date: string }[];
+    collection_log: BillingCollectionLogEntry[];
+  }[];
+  if (!existing) return null;
+
+  const newStageDate = stageDate || todayISO();
+  let history = existing.collection_history ?? [];
+  let collectionLog = existing.collection_log ?? [];
+
+  if (stage !== existing.collection_stage) {
+    const idx = history.map((h) => h.stage).lastIndexOf(stage);
+    history =
+      idx === -1
+        ? [...history, { stage, date: newStageDate }]
+        : history.map((h, i) => (i === idx ? { ...h, date: newStageDate } : h));
+  }
+
+  if (stage === "collected" && existing.collection_stage !== "collected") {
+    if (collectionLog.some((e) => e.type === "Collected")) {
+      collectionLog = collectionLog.map((e) => (e.type === "Collected" ? { ...e, date: newStageDate } : e));
+    } else {
+      collectionLog = [...collectionLog, collectionLogEntry("Collected", newStageDate)];
+    }
+  }
+
+  if (stage === "invoiced" && existing.collection_stage === "collected") {
+    collectionLog = collectionLog.filter((e) => e.type !== "Collected");
+    collectionLog = collectionLog.map((e) => (e.type === "Invoiced" ? { ...e, date: newStageDate } : e));
+  }
+
+  if (!collectionLog.some((e) => e.type === "Invoiced")) {
+    collectionLog = [collectionLogEntry("Invoiced", newStageDate), ...collectionLog];
+  }
+
+  const [row] = (await db.sql`
+    UPDATE billings SET
+      collection_stage = ${stage},
+      collection_history = ${JSON.stringify(history)},
+      collection_log = ${JSON.stringify(collectionLog)}
+    WHERE id = ${id}
+    RETURNING *
+  `) as BillingRow[];
+  return toBilling(row);
+}
+
+export async function updateBillingCollectionLogDate(
+  id: string,
+  logId: string,
+  date: string
+): Promise<Billing | null> {
+  const db = getDb();
+  const [existing] = (await db.sql`
+    SELECT collection_log, collection_history, collection_stage FROM billings WHERE id = ${id}
+  `) as {
+    collection_log: BillingCollectionLogEntry[];
+    collection_history: { stage: BillingCollectionStage; date: string }[];
+    collection_stage: BillingCollectionStage;
+  }[];
+  if (!existing) return null;
+
+  const collectionLog = (existing.collection_log ?? []).map((e) => (e.id === logId ? { ...e, date } : e));
+  const touched = collectionLog.find((e) => e.id === logId);
+  let history = existing.collection_history ?? [];
+  if (touched) {
+    const stage = touched.type === "Invoiced" ? "invoiced" : "collected";
+    const idx = history.map((h) => h.stage).lastIndexOf(stage);
+    if (idx !== -1) {
+      history = history.map((h, i) => (i === idx ? { ...h, date } : h));
+    }
+  }
+
+  const [row] = (await db.sql`
+    UPDATE billings SET
+      collection_log = ${JSON.stringify(collectionLog)},
+      collection_history = ${JSON.stringify(history)}
+    WHERE id = ${id}
+    RETURNING *
+  `) as BillingRow[];
+  return toBilling(row);
 }
 
 // ---------------- Retainers ----------------
