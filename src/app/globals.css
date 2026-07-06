@@ -286,6 +286,126 @@ select::-ms-expand {
   }
 }
 
+/* Placed send-out: activity log morphs into fee log (Salary + Fee %). */
+.fee-log-heading {
+  position: relative;
+  height: 14px;
+  margin-bottom: 8px;
+}
+
+.fee-log-heading-from,
+.fee-log-heading-to {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: rgba(235, 235, 245, 0.38);
+}
+
+.fee-log-label-slot {
+  position: relative;
+  min-width: 56px;
+  height: 18px;
+}
+
+.fee-log-label-from,
+.fee-log-label-to {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+}
+
+.fee-log-value-slot {
+  position: relative;
+  height: 28px;
+}
+
+.fee-log-value-from {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fee-log-value-to {
+  position: absolute;
+  inset: 0;
+}
+
+.fee-log-done-row {
+  display: flex;
+  justify-content: center;
+  padding-top: 14px;
+}
+
+.fee-log-panel:not(.fee-log-panel--morph) .fee-log-heading-from,
+.fee-log-panel:not(.fee-log-panel--morph) .fee-log-label-from,
+.fee-log-panel:not(.fee-log-panel--morph) .fee-log-value-from {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.fee-log-panel:not(.fee-log-panel--morph) .fee-log-heading-to,
+.fee-log-panel:not(.fee-log-panel--morph) .fee-log-label-to,
+.fee-log-panel:not(.fee-log-panel--morph) .fee-log-value-to {
+  opacity: 1;
+  transform: none;
+}
+
+.fee-log-panel--morph .fee-log-heading-from {
+  animation: feeLogSlideOutLeft 0.48s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.fee-log-panel--morph .fee-log-heading-to {
+  opacity: 0;
+  animation: feeLogSlideInRight 0.48s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.fee-log-panel--morph .fee-log-label-from {
+  animation: feeLogSlideOutLeft 0.48s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.fee-log-panel--morph .fee-log-label-to {
+  opacity: 0;
+  animation: feeLogSlideInRight 0.48s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.fee-log-panel--morph .fee-log-value-from {
+  animation: feeLogSlideOutLeft 0.48s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.fee-log-panel--morph .fee-log-value-to {
+  opacity: 0;
+  animation: feeLogSlideInRight 0.48s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes feeLogSlideOutLeft {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-22%);
+  }
+}
+
+@keyframes feeLogSlideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(22%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 /* ---- small popovers that open from a click (calendar, etc.) ---- */
 @keyframes popIn {
   from {
@@ -411,6 +531,12 @@ select::-ms-expand {
   .avid-table-panel--leave-right,
   .avid-table-panel--enter-right,
   .avid-table-panel--enter-left,
+  .fee-log-panel--morph .fee-log-heading-from,
+  .fee-log-panel--morph .fee-log-heading-to,
+  .fee-log-panel--morph .fee-log-label-from,
+  .fee-log-panel--morph .fee-log-label-to,
+  .fee-log-panel--morph .fee-log-value-from,
+  .fee-log-panel--morph .fee-log-value-to,
   .tv-rise,
   .tv-bar,
   .tv-progress {

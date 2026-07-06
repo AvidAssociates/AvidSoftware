@@ -395,6 +395,8 @@ type BillingRow = {
   added_by: string | null;
   created_at: string;
   entry_id: string | null;
+  salary: number | null;
+  fee_percent: number | null;
 };
 
 function toBilling(row: BillingRow): Billing {
@@ -410,6 +412,8 @@ function toBilling(row: BillingRow): Billing {
     addedBy: row.added_by,
     createdAt: row.created_at,
     entryId: row.entry_id ?? null,
+    salary: row.salary === null || row.salary === undefined ? null : Number(row.salary),
+    feePercent: row.fee_percent === null || row.fee_percent === undefined ? null : Number(row.fee_percent),
   };
 }
 
@@ -547,6 +551,8 @@ export async function updateBilling(
     candidate?: string | null;
     role?: string | null;
     notes?: string | null;
+    salary?: number | null;
+    feePercent?: number | null;
   }
 ): Promise<Billing> {
   const db = getDb();
@@ -558,7 +564,9 @@ export async function updateBilling(
       company = ${input.company ?? null},
       candidate = ${input.candidate ?? null},
       role = ${input.role ?? null},
-      notes = ${input.notes ?? null}
+      notes = ${input.notes ?? null},
+      salary = ${input.salary ?? null},
+      fee_percent = ${input.feePercent ?? null}
     WHERE id = ${id}
     RETURNING *
   `) as BillingRow[];
