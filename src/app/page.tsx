@@ -98,6 +98,77 @@ function normalizeEntryMutation(data: Entry | EntryMutationResult): EntryMutatio
   return { entry: data };
 }
 
+const TABLE_SLIDE_MS = 320;
+
+function TableSlidePanels({
+  view,
+  sendouts,
+  billings,
+}: {
+  view: "sendouts" | "billings";
+  sendouts: ReactNode;
+  billings: ReactNode;
+}) {
+  const [display, setDisplay] = useState(view);
+  const [leaving, setLeaving] = useState<"sendouts" | "billings" | null>(null);
+  const [direction, setDirection] = useState<"forward" | "back" | null>(null);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (view === display) return;
+
+    const isPair =
+      (display === "sendouts" && view === "billings") || (display === "billings" && view === "sendouts");
+    if (!isPair) {
+      setDisplay(view);
+      setLeaving(null);
+      setDirection(null);
+      return;
+    }
+
+    const forward = display === "sendouts" && view === "billings";
+    setLeaving(display);
+    setDirection(forward ? "forward" : "back");
+    setDisplay(view);
+
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      setLeaving(null);
+      setDirection(null);
+      timerRef.current = null;
+    }, TABLE_SLIDE_MS);
+
+    return () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+    };
+  }, [view, display]);
+
+  const animating = leaving !== null && direction !== null;
+  const leaveClass =
+    direction === "forward"
+      ? "avid-table-panel--leave-left"
+      : direction === "back"
+        ? "avid-table-panel--leave-right"
+        : "";
+  const enterClass =
+    direction === "forward"
+      ? "avid-table-panel--enter-right"
+      : direction === "back"
+        ? "avid-table-panel--enter-left"
+        : "";
+
+  return (
+    <div className="avid-table-stage">
+      {animating ? (
+        <div className={`avid-table-panel ${leaveClass}`}>{leaving === "sendouts" ? sendouts : billings}</div>
+      ) : null}
+      <div className={`avid-table-panel${animating ? ` ${enterClass}` : ""}`}>
+        {display === "sendouts" ? sendouts : billings}
+      </div>
+    </div>
+  );
+}
+
 // ============================================================
 export default function App() {
   const [isDark, setIsDark] = useState(true);
@@ -153,20 +224,7 @@ export default function App() {
   }, [t.bg, isDark]);
 
   if (booting || !authUser) {
-    return (
-      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: t.bg }}>
-        <div
-          style={{
-            width: 26,
-            height: 26,
-            border: `3px solid ${t.border}`,
-            borderTopColor: t.accent,
-            borderRadius: "50%",
-            animation: "spin .8s linear infinite",
-          }}
-        />
-      </div>
-    );
+    return <div style={{ height: "100vh", background: t.bg }} />;
   }
 
   return (
@@ -378,6 +436,12 @@ function Dashboard({
     };
     applyEntry(optimistic);
     const res = await send(`/api/entries/${entry.id}/meeting-log/${meetingId}`, "DELETE");
+    if (res.ok) applyEntry(await res.json());
+  };
+  const updateMeetingDate = async (entry: Entry, meetingId: string, date: string) => {
+    const meetingLog = entry.meetingLog.map((m) => (m.id === meetingId ? { ...m, date } : m));
+    applyEntry({ ...entry, meetingLog });
+    const res = await send(`/api/entries/${entry.id}/meeting-log/${meetingId}`, "PATCH", { date });
     if (res.ok) applyEntry(await res.json());
   };
   const saveBilling = async (billing: Billing, isNew: boolean) => {
@@ -646,56 +710,6 @@ function Dashboard({
           <div style={S.reportPad}>
             <ReportView billings={billings} teamNames={teamNames} year={reportYear} goals={reportGoals} t={t} isDark={isDark} />
           </div>
-        ) : view === "sendouts" ? (
-          <div>
-            {!isMobile && (filteredEntries.length > 0 || showEntryForm) && (
-              <div style={{ ...S.cardHeaderRow, ...S.soGrid }}>
-                <div style={S.soCol}>Date</div>
-                <div style={S.soCol}>Candidate</div>
-                <div style={S.soCol}>Company</div>
-                <div style={S.soStatusCol}>Status</div>
-                <div style={S.soCol}>Role</div>
-                <div style={S.soCol}>Team</div>
-                <div style={S.soActionsCol}>Actions</div>
-              </div>
-            )}
-            <NewEntryRow
-              S={S}
-              t={t}
-              mobile={isMobile}
-              teamNames={teamNames}
-              user={user}
-              open={showEntryForm}
-              onSave={async (entry) => {
-                await saveEntry(entry, true);
-                setShowEntryForm(false);
-              }}
-              onCancel={() => setShowEntryForm(false)}
-            />
-            {filteredEntries.length === 0 && !showEntryForm ? (
-              <div style={S.empty}>
-                {entries.length === 0 ? "No send-outs yet — add the first one." : "Nothing matches these filters."}
-              </div>
-            ) : (
-              filteredEntries.map((e) => (
-                <EntryRow
-                  key={e.id}
-                  S={S}
-                  t={t}
-                  entry={e}
-                  mobile={isMobile}
-                  teamNames={teamNames}
-                  onSaveEntry={(updated) => saveEntry(updated, false)}
-                  onDelete={() => deleteEntry(e.id)}
-                  onSetStage={(stage) => advanceStage(e, stage)}
-                  onRestore={() => setDeclined(e, false)}
-                  onDecline={(reason) => setDeclined(e, true, reason)}
-                  onLogMeeting={(type, round, date) => logMeeting(e, type, round, date)}
-                  onDeleteMeeting={(meetingId) => deleteMeeting(e, meetingId)}
-                />
-              ))
-            )}
-          </div>
         ) : view === "leaderboard" ? (
           <div style={S.reportPad}>
             <LeaderboardView entries={monthEntries} teamNames={teamNames} t={t} />
@@ -708,43 +722,98 @@ function Dashboard({
             </div>
           </div>
         ) : (
-          <div>
-            {filteredBillings.length === 0 ? (
-              <div style={S.empty}>
-                {billings.length === 0 ? "No billings yet — log the first one." : "Nothing matches these filters."}
-              </div>
-            ) : (
+          <TableSlidePanels
+            view={view}
+            sendouts={
               <div>
-                {!isMobile && (
-                  // Same 7-column grid as Send-Outs (soGrid): Amount in the center
-                  // Status slot, Role beside it, Actions on the right.
+                {!isMobile && (filteredEntries.length > 0 || showEntryForm) && (
                   <div style={{ ...S.cardHeaderRow, ...S.soGrid }}>
                     <div style={S.soCol}>Date</div>
                     <div style={S.soCol}>Candidate</div>
                     <div style={S.soCol}>Company</div>
-                    <div style={S.soStatusCol}>Amount</div>
+                    <div style={S.soStatusCol}>Status</div>
                     <div style={S.soCol}>Role</div>
                     <div style={S.soCol}>Team</div>
                     <div style={S.soActionsCol}>Actions</div>
                   </div>
                 )}
-                {filteredBillings.map((b) => (
-                  <BillingRow
-                    key={b.id}
-                    S={S}
-                    t={t}
-                    billing={b}
-                    mobile={isMobile}
-                    onEdit={() => {
-                      setEditingBilling(b);
-                      setShowBillingForm(true);
-                    }}
-                    onDelete={() => deleteBilling(b.id)}
-                  />
-                ))}
+                <NewEntryRow
+                  S={S}
+                  t={t}
+                  mobile={isMobile}
+                  teamNames={teamNames}
+                  user={user}
+                  open={showEntryForm}
+                  onSave={async (entry) => {
+                    await saveEntry(entry, true);
+                    setShowEntryForm(false);
+                  }}
+                  onCancel={() => setShowEntryForm(false)}
+                />
+                {filteredEntries.length === 0 && !showEntryForm ? (
+                  <div style={S.empty}>
+                    {entries.length === 0 ? "No send-outs yet — add the first one." : "Nothing matches these filters."}
+                  </div>
+                ) : (
+                  filteredEntries.map((e) => (
+                    <EntryRow
+                      key={e.id}
+                      S={S}
+                      t={t}
+                      entry={e}
+                      mobile={isMobile}
+                      teamNames={teamNames}
+                      onSaveEntry={(updated) => saveEntry(updated, false)}
+                      onDelete={() => deleteEntry(e.id)}
+                      onSetStage={(stage) => advanceStage(e, stage)}
+                      onRestore={() => setDeclined(e, false)}
+                      onDecline={(reason) => setDeclined(e, true, reason)}
+                      onLogMeeting={(type, round, date) => logMeeting(e, type, round, date)}
+                      onDeleteMeeting={(meetingId) => deleteMeeting(e, meetingId)}
+                      onUpdateMeetingDate={(meetingId, date) => updateMeetingDate(e, meetingId, date)}
+                    />
+                  ))
+                )}
               </div>
-            )}
-          </div>
+            }
+            billings={
+              <div>
+                {filteredBillings.length === 0 ? (
+                  <div style={S.empty}>
+                    {billings.length === 0 ? "No billings yet — log the first one." : "Nothing matches these filters."}
+                  </div>
+                ) : (
+                  <div>
+                    {!isMobile && (
+                      <div style={{ ...S.cardHeaderRow, ...S.soGrid }}>
+                        <div style={S.soCol}>Date</div>
+                        <div style={S.soCol}>Candidate</div>
+                        <div style={S.soCol}>Company</div>
+                        <div style={S.soStatusCol}>Amount</div>
+                        <div style={S.soCol}>Role</div>
+                        <div style={S.soCol}>Team</div>
+                        <div style={S.soActionsCol}>Actions</div>
+                      </div>
+                    )}
+                    {filteredBillings.map((b) => (
+                      <BillingRow
+                        key={b.id}
+                        S={S}
+                        t={t}
+                        billing={b}
+                        mobile={isMobile}
+                        onEdit={() => {
+                          setEditingBilling(b);
+                          setShowBillingForm(true);
+                        }}
+                        onDelete={() => deleteBilling(b.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            }
+          />
         )}
       </div>
 
@@ -862,6 +931,7 @@ function EntryRow({
   onDecline,
   onLogMeeting,
   onDeleteMeeting,
+  onUpdateMeetingDate,
 }: {
   S: Styles;
   t: Theme;
@@ -875,6 +945,7 @@ function EntryRow({
   onDecline: (reason: DeclineReason) => void;
   onLogMeeting: (type: string, round: number, date: string) => void;
   onDeleteMeeting: (meetingId: string) => void;
+  onUpdateMeetingDate: (meetingId: string, date: string) => void;
 }) {
   // Status and Edit are two separate things: Status expands the pipeline
   // tracker + activity log (view only, nothing editable). Edit turns the
@@ -1016,6 +1087,7 @@ function EntryRow({
           onDecline={onDecline}
           onLogMeeting={onLogMeeting}
           onDeleteMeeting={onDeleteMeeting}
+          onUpdateMeetingDate={onUpdateMeetingDate}
         />
         <ConfirmDeleteDialog
           S={S}
@@ -1078,6 +1150,7 @@ function EntryRow({
         onDecline={onDecline}
         onLogMeeting={onLogMeeting}
         onDeleteMeeting={onDeleteMeeting}
+        onUpdateMeetingDate={onUpdateMeetingDate}
       />
       <ConfirmDeleteDialog
         S={S}
@@ -1389,6 +1462,7 @@ function RowExpandedPanel({
   onDecline,
   onLogMeeting,
   onDeleteMeeting,
+  onUpdateMeetingDate,
 }: {
   S: Styles;
   t: Theme;
@@ -1406,6 +1480,7 @@ function RowExpandedPanel({
   onDecline: (reason: DeclineReason) => void;
   onLogMeeting: (type: string, round: number, date: string) => void;
   onDeleteMeeting: (meetingId: string) => void;
+  onUpdateMeetingDate: (meetingId: string, date: string) => void;
 }) {
   return (
     <div className="avid-expand" style={{ gridTemplateRows: statusOpen || editOpen ? "1fr" : "0fr" }}>
@@ -1512,6 +1587,7 @@ function RowExpandedPanel({
                     entry={entry}
                     onLog={onLogMeeting}
                     onDelete={onDeleteMeeting}
+                    onUpdateDate={onUpdateMeetingDate}
                   />
                 </div>
               )}
@@ -1537,12 +1613,14 @@ function ActivityLogPanel({
   entry,
   onLog,
   onDelete,
+  onUpdateDate,
 }: {
   S: Styles;
   t: Theme;
   entry: Entry;
   onLog: (type: string, round: number, date: string) => void;
   onDelete: (meetingId: string) => void;
+  onUpdateDate: (meetingId: string, date: string) => void;
 }) {
   const lastMeeting = [...entry.meetingLog].reverse().find((m) => m.type !== "Offer");
   const [draftType, setDraftType] = useState(lastMeeting?.type || "Phone");
@@ -1575,7 +1653,18 @@ function ActivityLogPanel({
             >
               <span style={{ fontSize: 12.5, fontWeight: 600, color: t.ink }}>{activityLabel(m.type, m.round)}</span>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 12, color: t.muted, fontVariantNumeric: "tabular-nums" }}>{fmtDate(m.date)}</span>
+                <GlassDatePicker
+                  value={m.date}
+                  onChange={(iso) => onUpdateDate(m.id, iso)}
+                  triggerStyle={{
+                    ...S.input,
+                    padding: "2px 7px",
+                    fontSize: 12,
+                    color: t.muted,
+                    fontVariantNumeric: "tabular-nums",
+                    minWidth: 0,
+                  }}
+                />
                 <button
                   type="button"
                   className="avid-btn"
