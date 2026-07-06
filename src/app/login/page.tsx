@@ -40,7 +40,6 @@ function LoginCard({
       <header className="login-card-head">
         <p className="login-eyebrow">Avid Associates</p>
         <h1 className="login-title">Sign in</h1>
-        <div className="login-header-rule" aria-hidden />
       </header>
 
       <div className="login-fields">

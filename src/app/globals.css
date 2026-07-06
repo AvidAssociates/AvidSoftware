@@ -802,14 +802,6 @@ body:has(.login-root) {
   color: #f2f2f7;
 }
 
-.login-header-rule {
-  width: 52px;
-  height: 2px;
-  margin: 14px auto 0;
-  border-radius: 2px;
-  background: linear-gradient(90deg, transparent, rgba(237, 29, 36, 0.85), transparent);
-}
-
 .login-form {
   position: relative;
   z-index: 1;
@@ -917,6 +909,16 @@ body:has(.login-root) {
   background: rgba(0, 0, 0, 0.34);
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.login-input-wrap:hover .login-input:not(:focus):not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.42);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.login-input-wrap:hover .login-input-icon {
+  color: rgba(235, 235, 245, 0.5);
 }
 
 .login-input:focus {
