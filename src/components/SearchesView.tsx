@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, Plus, Trash2, X } from "lucide-react";
+import { ArrowLeft, GripVertical, Plus, Trash2, X } from "lucide-react";
 import type { CandidateStage, RetainedSearch, SearchCandidate, SearchStage } from "@/lib/types";
 import {
   CANDIDATE_PIPELINE,
@@ -31,6 +31,7 @@ function KanbanBoard<T extends string, Item extends { id: string; stage: T }>({
   onMove,
   onCardClick,
   emptyLabel,
+  boardLabel,
 }: {
   t: Theme;
   S: Styles;
@@ -41,10 +42,10 @@ function KanbanBoard<T extends string, Item extends { id: string; stage: T }>({
   onMove: (item: Item, stage: T) => void;
   onCardClick?: (item: Item) => void;
   emptyLabel?: string;
+  boardLabel?: string;
 }) {
   const [dragOver, setDragOver] = useState<T | null>(null);
   const dragItemRef = useRef<Item | null>(null);
-  const draggedRef = useRef(false);
 
   const byStage = useMemo(() => {
     const map = new Map<T, Item[]>();
@@ -58,76 +59,99 @@ function KanbanBoard<T extends string, Item extends { id: string; stage: T }>({
   }, [items, stages]);
 
   return (
-    <div className="avid-kanban-board">
-      {stages.map((stage) => {
-        const columnItems = byStage.get(stage.key) ?? [];
-        const color = stageColors[stage.key];
-        const isOver = dragOver === stage.key;
-        return (
-          <div
-            key={stage.key}
-            className="avid-kanban-column"
-            style={{
-              background: t.surfaceAlt,
-              borderColor: isOver ? color : t.border,
-              boxShadow: isOver ? `0 0 0 1px ${color}` : undefined,
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(stage.key);
-            }}
-            onDragLeave={() => setDragOver((cur) => (cur === stage.key ? null : cur))}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragOver(null);
-              const item = dragItemRef.current;
-              if (!item || item.stage === stage.key) return;
-              onMove(item, stage.key);
-              dragItemRef.current = null;
-            }}
-          >
-            <div className="avid-kanban-column-header">
-              <span className="avid-kanban-column-dot" style={{ background: color }} />
-              <span style={{ fontWeight: 700, fontSize: 13, color: t.ink }}>{stage.label}</span>
-              <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, color: t.mutedSoft }}>
-                {columnItems.length}
-              </span>
-            </div>
-            <div className="avid-kanban-column-body">
-              {columnItems.length === 0 ? (
-                <div style={{ fontSize: 12, color: t.mutedSoft, padding: "8px 4px", textAlign: "center" }}>
-                  {emptyLabel ?? "Drop here"}
-                </div>
-              ) : (
-                columnItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="avid-kanban-card"
-                    style={{ background: t.surface, borderColor: t.border }}
-                    draggable
-                    onDragStart={() => {
-                      draggedRef.current = true;
-                      dragItemRef.current = item;
-                    }}
-                    onDragEnd={() => {
-                      dragItemRef.current = null;
-                      window.setTimeout(() => {
-                        draggedRef.current = false;
-                      }, 0);
-                    }}
-                    onClick={() => {
-                      if (draggedRef.current) return;
-                      onCardClick?.(item);
-                    }}
-                  >
-                    {renderCard(item)}
+    <div>
+      {boardLabel ? (
+        <p style={{ margin: "0 0 14px", fontSize: 12.5, fontWeight: 600, color: t.mutedSoft, letterSpacing: 0.2 }}>
+          {boardLabel}
+        </p>
+      ) : null}
+      <div className="avid-kanban-board">
+        {stages.map((stage) => {
+          const columnItems = byStage.get(stage.key) ?? [];
+          const color = stageColors[stage.key];
+          const isOver = dragOver === stage.key;
+          return (
+            <div
+              key={stage.key}
+              className="avid-kanban-column"
+              style={{
+                background: t.surfaceAlt,
+                borderColor: isOver ? color : t.border,
+                boxShadow: isOver ? `0 0 0 1px ${color}` : undefined,
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(stage.key);
+              }}
+              onDragLeave={() => setDragOver((cur) => (cur === stage.key ? null : cur))}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(null);
+                const item = dragItemRef.current;
+                if (!item || item.stage === stage.key) return;
+                onMove(item, stage.key);
+                dragItemRef.current = null;
+              }}
+            >
+              <div className="avid-kanban-column-header" style={{ borderBottomColor: t.border }}>
+                <span className="avid-kanban-column-dot" style={{ background: color }} />
+                <span style={{ fontWeight: 700, fontSize: 13, color: t.ink }}>{stage.label}</span>
+                <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, color: t.mutedSoft }}>
+                  {columnItems.length}
+                </span>
+              </div>
+              <div className="avid-kanban-column-body">
+                {columnItems.length === 0 ? (
+                  <div className="avid-kanban-drop-hint" style={{ color: t.mutedSoft }}>
+                    {emptyLabel ?? "Drop here"}
                   </div>
-                ))
-              )}
+                ) : (
+                  columnItems.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`avid-kanban-card${onCardClick ? " avid-kanban-card--clickable" : ""}`}
+                      style={{ background: t.surface, borderColor: t.border }}
+                    >
+                      <div
+                        className="avid-kanban-card-drag"
+                        style={{ color: t.mutedSoft }}
+                        draggable
+                        onDragStart={() => {
+                          dragItemRef.current = item;
+                        }}
+                        onDragEnd={() => {
+                          dragItemRef.current = null;
+                        }}
+                        title="Drag to move"
+                      >
+                        <GripVertical size={14} />
+                      </div>
+                      <div
+                        className="avid-kanban-card-body"
+                        role={onCardClick ? "button" : undefined}
+                        tabIndex={onCardClick ? 0 : undefined}
+                        onClick={onCardClick ? () => onCardClick(item) : undefined}
+                        onKeyDown={
+                          onCardClick
+                            ? (e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  onCardClick(item);
+                                }
+                              }
+                            : undefined
+                        }
+                      >
+                        {renderCard(item)}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -396,38 +420,42 @@ export default function SearchesView({
           </button>
         </div>
 
-        {candidates.length === 0 ? (
-          <div style={S.empty}>No candidates yet — add the first one above.</div>
-        ) : (
-          <KanbanBoard
-            t={t}
-            S={S}
-            stages={CANDIDATE_PIPELINE}
-            stageColors={CANDIDATE_STAGE_COLOR}
-            items={candidates}
-            emptyLabel="No candidates"
-            onMove={(candidate, stage) => onMoveCandidate(activeSearch.id, candidate, stage)}
-            renderCard={(candidate) => (
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>{candidate.name}</div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 11.5, color: t.mutedSoft }}>Added {fmtDate(candidate.stageHistory[0]?.date ?? "")}</span>
-                  <button
-                    className="avid-btn"
-                    style={{ ...S.iconGhost, padding: 4 }}
-                    title="Remove candidate"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteCandidate(activeSearch.id, candidate.id);
-                    }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
+        <KanbanBoard
+          t={t}
+          S={S}
+          stages={CANDIDATE_PIPELINE}
+          stageColors={CANDIDATE_STAGE_COLOR}
+          items={candidates}
+          boardLabel="Candidate pipeline — drag cards between stages for this search only"
+          emptyLabel="No candidates"
+          onMove={(candidate, stage) => onMoveCandidate(activeSearch.id, candidate, stage)}
+          renderCard={(candidate) => (
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>{candidate.name}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 11.5, color: t.mutedSoft }}>Added {fmtDate(candidate.stageHistory[0]?.date ?? "")}</span>
+                <button
+                  type="button"
+                  className="avid-btn"
+                  style={{ ...S.iconGhost, padding: 4 }}
+                  title="Remove candidate"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteCandidate(activeSearch.id, candidate.id);
+                  }}
+                >
+                  <Trash2 size={13} />
+                </button>
               </div>
-            )}
-          />
-        )}
+            </div>
+          )}
+        />
+
+        {candidates.length === 0 ? (
+          <div style={{ ...S.empty, paddingTop: 20, paddingBottom: 0 }}>
+            No candidates yet — add one above, then drag the card across the pipeline.
+          </div>
+        ) : null}
 
         {(showNewForm || editingSearch) && (
           <SearchFormModal
@@ -453,35 +481,41 @@ export default function SearchesView({
 
   return (
     <div style={{ padding: "20px 24px 32px" }}>
-      {searches.length === 0 ? (
-        <div style={S.empty}>
-          {totalCount === 0 ? "No searches yet — add the first retained search." : "Nothing matches these filters."}
-        </div>
-      ) : (
-        <KanbanBoard
-          t={t}
-          S={S}
-          stages={SEARCH_PIPELINE}
-          stageColors={SEARCH_STAGE_COLOR}
-          items={searches}
-          onMove={(search, stage) => onMoveSearch(search, stage)}
-          onCardClick={(search) => setActiveSearchId(search.id)}
-          renderCard={(search) => (
-            <div>
-              <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 4, letterSpacing: -0.2 }}>{search.client}</div>
-              <div style={{ fontSize: 13, color: t.muted, marginBottom: 8 }}>{search.role || "Role TBD"}</div>
-              <TeamPills team={search.team} t={t} />
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 11.5, color: t.mutedSoft }}>
-                <span>Signed {fmtDate(search.date)}</span>
-                {search.retainerAmount != null ? <span>{money(search.retainerAmount)}</span> : null}
-              </div>
-              <div style={{ marginTop: 8, fontSize: 11, color: t.accentText, fontWeight: 600 }}>
-                {(search.candidates ?? []).length} candidate{(search.candidates ?? []).length === 1 ? "" : "s"}
-              </div>
+      {searches.length === 0 && totalCount > 0 ? (
+        <div style={{ ...S.empty, paddingBottom: 16 }}>Nothing matches these filters.</div>
+      ) : null}
+
+      <KanbanBoard
+        t={t}
+        S={S}
+        stages={SEARCH_PIPELINE}
+        stageColors={SEARCH_STAGE_COLOR}
+        items={searches}
+        boardLabel="Search pipeline — click a search to open its candidates"
+        emptyLabel="Drop search here"
+        onMove={(search, stage) => onMoveSearch(search, stage)}
+        onCardClick={(search) => setActiveSearchId(search.id)}
+        renderCard={(search) => (
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 4, letterSpacing: -0.2 }}>{search.client}</div>
+            <div style={{ fontSize: 13, color: t.muted, marginBottom: 8 }}>{search.role || "Role TBD"}</div>
+            <TeamPills team={search.team} t={t} />
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 11.5, color: t.mutedSoft }}>
+              <span>Signed {fmtDate(search.date)}</span>
+              {search.retainerAmount != null ? <span>{money(search.retainerAmount)}</span> : null}
             </div>
-          )}
-        />
-      )}
+            <div style={{ marginTop: 8, fontSize: 11, color: t.accentText, fontWeight: 600 }}>
+              {(search.candidates ?? []).length} candidate{(search.candidates ?? []).length === 1 ? "" : "s"} · Open →
+            </div>
+          </div>
+        )}
+      />
+
+      {totalCount === 0 ? (
+        <div style={{ ...S.empty, paddingTop: 20, paddingBottom: 0 }}>
+          No searches yet — click <strong>New</strong> to add a retained search to the Signed column.
+        </div>
+      ) : null}
 
       {(showNewForm || editingSearch) && (
         <SearchFormModal
