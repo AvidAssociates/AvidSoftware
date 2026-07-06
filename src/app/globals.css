@@ -206,6 +206,86 @@ select::-ms-expand {
   overflow: hidden;
 }
 
+/* Send-Outs ↔ Billings table slide (toolbar stays put). */
+.avid-table-stage {
+  position: relative;
+  overflow: hidden;
+}
+
+.avid-table-panel {
+  width: 100%;
+}
+
+.avid-table-panel--leave-left,
+.avid-table-panel--leave-right {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.avid-table-panel--leave-left {
+  animation: avidTableLeaveLeft 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.avid-table-panel--leave-right {
+  animation: avidTableLeaveRight 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.avid-table-panel--enter-right {
+  animation: avidTableEnterFromRight 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.avid-table-panel--enter-left {
+  animation: avidTableEnterFromLeft 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes avidTableLeaveLeft {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-28%);
+  }
+}
+
+@keyframes avidTableLeaveRight {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(28%);
+  }
+}
+
+@keyframes avidTableEnterFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(28%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes avidTableEnterFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-28%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 /* ---- small popovers that open from a click (calendar, etc.) ---- */
 @keyframes popIn {
   from {
@@ -327,6 +407,10 @@ select::-ms-expand {
   .login-dialog-enter,
   .login-dialog-exit,
   .login-spinner::after,
+  .avid-table-panel--leave-left,
+  .avid-table-panel--leave-right,
+  .avid-table-panel--enter-right,
+  .avid-table-panel--enter-left,
   .tv-rise,
   .tv-bar,
   .tv-progress {

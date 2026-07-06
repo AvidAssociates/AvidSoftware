@@ -67,7 +67,7 @@ function LoginCard({
       </label>
       <div className="login-error-slot">{error ? <div className="login-error">{error}</div> : null}</div>
       <button className="login-submit" type="submit" disabled={loading || disabled}>
-        Sign in
+        Submit
       </button>
     </form>
   );

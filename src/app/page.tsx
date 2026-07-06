@@ -98,6 +98,77 @@ function normalizeEntryMutation(data: Entry | EntryMutationResult): EntryMutatio
   return { entry: data };
 }
 
+const TABLE_SLIDE_MS = 320;
+
+function TableSlidePanels({
+  view,
+  sendouts,
+  billings,
+}: {
+  view: "sendouts" | "billings";
+  sendouts: ReactNode;
+  billings: ReactNode;
+}) {
+  const [display, setDisplay] = useState(view);
+  const [leaving, setLeaving] = useState<"sendouts" | "billings" | null>(null);
+  const [direction, setDirection] = useState<"forward" | "back" | null>(null);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (view === display) return;
+
+    const isPair =
+      (display === "sendouts" && view === "billings") || (display === "billings" && view === "sendouts");
+    if (!isPair) {
+      setDisplay(view);
+      setLeaving(null);
+      setDirection(null);
+      return;
+    }
+
+    const forward = display === "sendouts" && view === "billings";
+    setLeaving(display);
+    setDirection(forward ? "forward" : "back");
+    setDisplay(view);
+
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      setLeaving(null);
+      setDirection(null);
+      timerRef.current = null;
+    }, TABLE_SLIDE_MS);
+
+    return () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+    };
+  }, [view, display]);
+
+  const animating = leaving !== null && direction !== null;
+  const leaveClass =
+    direction === "forward"
+      ? "avid-table-panel--leave-left"
+      : direction === "back"
+        ? "avid-table-panel--leave-right"
+        : "";
+  const enterClass =
+    direction === "forward"
+      ? "avid-table-panel--enter-right"
+      : direction === "back"
+        ? "avid-table-panel--enter-left"
+        : "";
+
+  return (
+    <div className="avid-table-stage">
+      {animating ? (
+        <div className={`avid-table-panel ${leaveClass}`}>{leaving === "sendouts" ? sendouts : billings}</div>
+      ) : null}
+      <div className={`avid-table-panel${animating ? ` ${enterClass}` : ""}`}>
+        {display === "sendouts" ? sendouts : billings}
+      </div>
+    </div>
+  );
+}
+
 // ============================================================
 export default function App() {
   const [isDark, setIsDark] = useState(true);
@@ -633,56 +704,6 @@ function Dashboard({
           <div style={S.reportPad}>
             <ReportView billings={billings} teamNames={teamNames} year={reportYear} goals={reportGoals} t={t} isDark={isDark} />
           </div>
-        ) : view === "sendouts" ? (
-          <div>
-            {!isMobile && (filteredEntries.length > 0 || showEntryForm) && (
-              <div style={{ ...S.cardHeaderRow, ...S.soGrid }}>
-                <div style={S.soCol}>Date</div>
-                <div style={S.soCol}>Candidate</div>
-                <div style={S.soCol}>Company</div>
-                <div style={S.soStatusCol}>Status</div>
-                <div style={S.soCol}>Role</div>
-                <div style={S.soCol}>Team</div>
-                <div style={S.soActionsCol}>Actions</div>
-              </div>
-            )}
-            <NewEntryRow
-              S={S}
-              t={t}
-              mobile={isMobile}
-              teamNames={teamNames}
-              user={user}
-              open={showEntryForm}
-              onSave={async (entry) => {
-                await saveEntry(entry, true);
-                setShowEntryForm(false);
-              }}
-              onCancel={() => setShowEntryForm(false)}
-            />
-            {filteredEntries.length === 0 && !showEntryForm ? (
-              <div style={S.empty}>
-                {entries.length === 0 ? "No send-outs yet — add the first one." : "Nothing matches these filters."}
-              </div>
-            ) : (
-              filteredEntries.map((e) => (
-                <EntryRow
-                  key={e.id}
-                  S={S}
-                  t={t}
-                  entry={e}
-                  mobile={isMobile}
-                  teamNames={teamNames}
-                  onSaveEntry={(updated) => saveEntry(updated, false)}
-                  onDelete={() => deleteEntry(e.id)}
-                  onSetStage={(stage) => advanceStage(e, stage)}
-                  onRestore={() => setDeclined(e, false)}
-                  onDecline={(reason) => setDeclined(e, true, reason)}
-                  onLogMeeting={(type, round, date) => logMeeting(e, type, round, date)}
-                  onDeleteMeeting={(meetingId) => deleteMeeting(e, meetingId)}
-                />
-              ))
-            )}
-          </div>
         ) : view === "leaderboard" ? (
           <div style={S.reportPad}>
             <LeaderboardView entries={monthEntries} teamNames={teamNames} t={t} />
@@ -695,43 +716,97 @@ function Dashboard({
             </div>
           </div>
         ) : (
-          <div>
-            {filteredBillings.length === 0 ? (
-              <div style={S.empty}>
-                {billings.length === 0 ? "No billings yet — log the first one." : "Nothing matches these filters."}
-              </div>
-            ) : (
+          <TableSlidePanels
+            view={view}
+            sendouts={
               <div>
-                {!isMobile && (
-                  // Same 7-column grid as Send-Outs (soGrid): Amount in the center
-                  // Status slot, Role beside it, Actions on the right.
+                {!isMobile && (filteredEntries.length > 0 || showEntryForm) && (
                   <div style={{ ...S.cardHeaderRow, ...S.soGrid }}>
                     <div style={S.soCol}>Date</div>
                     <div style={S.soCol}>Candidate</div>
                     <div style={S.soCol}>Company</div>
-                    <div style={S.soStatusCol}>Amount</div>
+                    <div style={S.soStatusCol}>Status</div>
                     <div style={S.soCol}>Role</div>
                     <div style={S.soCol}>Team</div>
                     <div style={S.soActionsCol}>Actions</div>
                   </div>
                 )}
-                {filteredBillings.map((b) => (
-                  <BillingRow
-                    key={b.id}
-                    S={S}
-                    t={t}
-                    billing={b}
-                    mobile={isMobile}
-                    onEdit={() => {
-                      setEditingBilling(b);
-                      setShowBillingForm(true);
-                    }}
-                    onDelete={() => deleteBilling(b.id)}
-                  />
-                ))}
+                <NewEntryRow
+                  S={S}
+                  t={t}
+                  mobile={isMobile}
+                  teamNames={teamNames}
+                  user={user}
+                  open={showEntryForm}
+                  onSave={async (entry) => {
+                    await saveEntry(entry, true);
+                    setShowEntryForm(false);
+                  }}
+                  onCancel={() => setShowEntryForm(false)}
+                />
+                {filteredEntries.length === 0 && !showEntryForm ? (
+                  <div style={S.empty}>
+                    {entries.length === 0 ? "No send-outs yet — add the first one." : "Nothing matches these filters."}
+                  </div>
+                ) : (
+                  filteredEntries.map((e) => (
+                    <EntryRow
+                      key={e.id}
+                      S={S}
+                      t={t}
+                      entry={e}
+                      mobile={isMobile}
+                      teamNames={teamNames}
+                      onSaveEntry={(updated) => saveEntry(updated, false)}
+                      onDelete={() => deleteEntry(e.id)}
+                      onSetStage={(stage) => advanceStage(e, stage)}
+                      onRestore={() => setDeclined(e, false)}
+                      onDecline={(reason) => setDeclined(e, true, reason)}
+                      onLogMeeting={(type, round, date) => logMeeting(e, type, round, date)}
+                      onDeleteMeeting={(meetingId) => deleteMeeting(e, meetingId)}
+                    />
+                  ))
+                )}
               </div>
-            )}
-          </div>
+            }
+            billings={
+              <div>
+                {filteredBillings.length === 0 ? (
+                  <div style={S.empty}>
+                    {billings.length === 0 ? "No billings yet — log the first one." : "Nothing matches these filters."}
+                  </div>
+                ) : (
+                  <div>
+                    {!isMobile && (
+                      <div style={{ ...S.cardHeaderRow, ...S.soGrid }}>
+                        <div style={S.soCol}>Date</div>
+                        <div style={S.soCol}>Candidate</div>
+                        <div style={S.soCol}>Company</div>
+                        <div style={S.soStatusCol}>Amount</div>
+                        <div style={S.soCol}>Role</div>
+                        <div style={S.soCol}>Team</div>
+                        <div style={S.soActionsCol}>Actions</div>
+                      </div>
+                    )}
+                    {filteredBillings.map((b) => (
+                      <BillingRow
+                        key={b.id}
+                        S={S}
+                        t={t}
+                        billing={b}
+                        mobile={isMobile}
+                        onEdit={() => {
+                          setEditingBilling(b);
+                          setShowBillingForm(true);
+                        }}
+                        onDelete={() => deleteBilling(b.id)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            }
+          />
         )}
       </div>
 
