@@ -3,9 +3,9 @@
 import { FormEvent, useCallback, useEffect, useRef, useState, Suspense } from "react";
 import type { AnimationEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Lock, Mail } from "lucide-react";
 import loginLogo from "@/assets/login-logo.png";
 
-const LOGIN_ANIM_DELAY_MS = 1000;
 const LOGIN_COLLAPSE_MS = 450;
 const LOGIN_SPINNER_MS = 500;
 
@@ -21,10 +21,10 @@ function LoginCard({
   password,
   error,
   loading,
+  disabled = false,
   onEmail,
   onPassword,
   onSubmit,
-  disabled = false,
 }: {
   email: string;
   password: string;
@@ -37,37 +37,55 @@ function LoginCard({
 }) {
   return (
     <form onSubmit={onSubmit} className="login-form" autoComplete="on">
-      <label className="login-field">
-        Email
-        <input
-          className="login-input"
-          type="email"
-          name="email"
-          autoComplete="username"
-          value={email}
-          onChange={(e) => onEmail(e.target.value)}
-          placeholder="justiceb@theavidassociates.com"
-          required
-          disabled={disabled}
-        />
-      </label>
-      <label className="login-field">
-        Password
-        <input
-          className="login-input"
-          type="password"
-          name="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => onPassword(e.target.value)}
-          placeholder="••••"
-          required
-          disabled={disabled}
-        />
-      </label>
-      <div className="login-error-slot">{error ? <div className="login-error">{error}</div> : null}</div>
+      <header className="login-card-head">
+        <p className="login-eyebrow">Avid Associates</p>
+        <h1 className="login-title">Sign in</h1>
+        <div className="login-header-rule" aria-hidden />
+      </header>
+
+      <div className="login-fields">
+        <label className="login-field">
+          <span className="login-field-label">Email</span>
+          <div className="login-input-wrap">
+            <Mail className="login-input-icon" size={16} strokeWidth={2} aria-hidden />
+            <input
+              className="login-input"
+              type="email"
+              name="email"
+              autoComplete="username"
+              value={email}
+              onChange={(e) => onEmail(e.target.value)}
+              aria-label="Email address"
+              required
+              disabled={disabled}
+            />
+          </div>
+        </label>
+        <label className="login-field">
+          <span className="login-field-label">Password</span>
+          <div className="login-input-wrap">
+            <Lock className="login-input-icon" size={16} strokeWidth={2} aria-hidden />
+            <input
+              className="login-input"
+              type="password"
+              name="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => onPassword(e.target.value)}
+              aria-label="Password"
+              required
+              disabled={disabled}
+            />
+          </div>
+        </label>
+      </div>
+
+      <div className="login-error-slot" role="alert" aria-live="polite">
+        {error ? <div className="login-error">{error}</div> : null}
+      </div>
+
       <button className="login-submit" type="submit" disabled={loading || disabled}>
-        Submit
+        Sign in
       </button>
     </form>
   );
@@ -201,6 +219,10 @@ function LoginForm() {
     [completeCollapse, exitPhase],
   );
 
+  const onEntryAnimationEnd = useCallback((event: AnimationEvent<HTMLDivElement>) => {
+    if (event.animationName === "loginSlideUp") setEntrySettled(true);
+  }, []);
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (exitBusy) return;
@@ -224,10 +246,6 @@ function LoginForm() {
       void completeCollapse();
     }, LOGIN_COLLAPSE_MS + 80);
   };
-
-  const onEntryAnimationEnd = useCallback((event: AnimationEvent<HTMLDivElement>) => {
-    if (event.animationName === "loginSlideUp") setEntrySettled(true);
-  }, []);
 
   const logoClass = `login-logo${playAnimations ? " login-logo-enter" : " login-logo-prep"}`;
   const dialogClass =
@@ -274,6 +292,7 @@ function LoginForm() {
             />
           </div>
         </div>
+        <p className="login-footer">Authorized personnel only</p>
       </div>
     </div>
   );

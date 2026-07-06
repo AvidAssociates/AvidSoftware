@@ -599,27 +599,7 @@ function Dashboard({
       </header>
 
       <section style={S.hero} className="no-print avid-hero">
-        {view === "billings" ? (
-          <>
-            <div className="avid-hero-inline" style={S.heroInlineRow}>
-              <h1 className="avid-hero-title" style={S.heroInlineTitle}>Billings</h1>
-              <BillingsGoalStats billings={billings} monthKey={monthKey} year={monthCursorYear} goals={billingsGoals} t={t} />
-              <div />
-            </div>
-          </>
-        ) : view === "sendouts" ? (
-          <div className="avid-hero-inline" style={S.heroInlineRow}>
-            <h1 className="avid-hero-title" style={S.heroInlineTitle}>Send-Outs</h1>
-            <div className="avid-hero-stats" style={S.heroStatsRow}>
-              <HeroStat S={S} label="Total" value={String(sendoutStats.total)} />
-              <HeroStat S={S} label="First-Time" value={String(sendoutStats.firstTimeCount)} color={t.accent} />
-              <HeroStat S={S} label="Active" value={String(sendoutStats.active)} color={STAGE_COLOR.interview} />
-              <HeroStat S={S} label="Placed" value={String(sendoutStats.placed)} color={STAGE_COLOR.placed} />
-              <HeroStat S={S} label="Declined" value={String(sendoutStats.declined)} color={t.danger} />
-            </div>
-            <div />
-          </div>
-        ) : view === "report" ? (
+        {view === "report" ? (
           <div className="avid-hero-inline" style={S.heroInlineRow}>
             <h1 className="avid-hero-title" style={S.heroInlineTitle}>Production Reports</h1>
             <div className="avid-hero-stats" style={S.heroStatsRow}>
@@ -629,7 +609,7 @@ function Dashboard({
             </div>
             <div />
           </div>
-        ) : (
+        ) : view === "leaderboard" ? (
           <>
             <h1 className="avid-hero-title" style={S.heroTitle}>Leaderboard</h1>
             <div className="avid-hero-stats" style={S.heroStatsRow}>
@@ -638,6 +618,30 @@ function Dashboard({
               <HeroStat S={S} label="Top This Month" value={leaderboardStats.topName} color={STAGE_COLOR.placed} />
             </div>
           </>
+        ) : (
+          <TableSlidePanels
+            view={view}
+            sendouts={
+              <div className="avid-hero-inline" style={S.heroInlineRow}>
+                <h1 className="avid-hero-title" style={S.heroInlineTitle}>Send-Outs</h1>
+                <div className="avid-hero-stats" style={S.heroStatsRow}>
+                  <HeroStat S={S} label="Total" value={String(sendoutStats.total)} />
+                  <HeroStat S={S} label="First-Time" value={String(sendoutStats.firstTimeCount)} color={t.accent} />
+                  <HeroStat S={S} label="Active" value={String(sendoutStats.active)} color={STAGE_COLOR.interview} />
+                  <HeroStat S={S} label="Placed" value={String(sendoutStats.placed)} color={STAGE_COLOR.placed} />
+                  <HeroStat S={S} label="Declined" value={String(sendoutStats.declined)} color={t.danger} />
+                </div>
+                <div />
+              </div>
+            }
+            billings={
+              <div className="avid-hero-inline" style={S.heroInlineRow}>
+                <h1 className="avid-hero-title" style={S.heroInlineTitle}>Billings</h1>
+                <BillingsGoalStats billings={billings} monthKey={monthKey} year={monthCursorYear} goals={billingsGoals} t={t} />
+                <div />
+              </div>
+            }
+          />
         )}
       </section>
 
