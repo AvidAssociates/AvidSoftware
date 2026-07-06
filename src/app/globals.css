@@ -913,12 +913,24 @@ body:has(.login-root) {
 }
 
 .login-input:focus {
-  border-color: rgba(237, 29, 36, 0.42);
-  box-shadow: 0 0 0 3px rgba(237, 29, 36, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06);
   background: rgba(0, 0, 0, 0.48);
 }
 
 .login-input-wrap:focus-within .login-input-icon {
+  color: rgba(235, 235, 245, 0.5);
+}
+
+.login-input-wrap--error .login-input,
+.login-input-wrap--error:hover .login-input:not(:disabled) {
+  border-color: rgba(237, 29, 36, 0.55);
+  box-shadow: 0 0 0 3px rgba(237, 29, 36, 0.12);
+  background: rgba(237, 29, 36, 0.06);
+}
+
+.login-input-wrap--error .login-input-icon,
+.login-input-wrap--error:hover .login-input-icon {
   color: rgba(237, 29, 36, 0.72);
 }
 

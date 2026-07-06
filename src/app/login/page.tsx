@@ -25,6 +25,7 @@ function LoginCard({
   onEmail,
   onPassword,
   onSubmit,
+  onDismissError,
 }: {
   email: string;
   password: string;
@@ -34,7 +35,10 @@ function LoginCard({
   onEmail: (value: string) => void;
   onPassword: (value: string) => void;
   onSubmit: (e: FormEvent) => void;
+  onDismissError?: () => void;
 }) {
+  const inputWrapClass = (base: string) => `${base}${error ? " login-input-wrap--error" : ""}`;
+
   return (
     <form onSubmit={onSubmit} className="login-form" autoComplete="on">
       <header className="login-card-head">
@@ -44,7 +48,7 @@ function LoginCard({
       <div className="login-fields">
         <label className="login-field">
           <span className="login-field-label">Email</span>
-          <div className="login-input-wrap">
+          <div className={inputWrapClass("login-input-wrap")}>
             <Mail className="login-input-icon" size={16} strokeWidth={2} aria-hidden />
             <input
               className="login-input"
@@ -52,8 +56,12 @@ function LoginCard({
               name="email"
               autoComplete="username"
               value={email}
-              onChange={(e) => onEmail(e.target.value)}
+              onChange={(e) => {
+                onEmail(e.target.value);
+                onDismissError?.();
+              }}
               aria-label="Email address"
+              aria-invalid={error ? true : undefined}
               required
               disabled={disabled}
             />
@@ -61,7 +69,7 @@ function LoginCard({
         </label>
         <label className="login-field">
           <span className="login-field-label">Password</span>
-          <div className="login-input-wrap">
+          <div className={inputWrapClass("login-input-wrap")}>
             <Lock className="login-input-icon" size={16} strokeWidth={2} aria-hidden />
             <input
               className="login-input"
@@ -69,8 +77,12 @@ function LoginCard({
               name="password"
               autoComplete="current-password"
               value={password}
-              onChange={(e) => onPassword(e.target.value)}
+              onChange={(e) => {
+                onPassword(e.target.value);
+                onDismissError?.();
+              }}
               aria-label="Password"
+              aria-invalid={error ? true : undefined}
               required
               disabled={disabled}
             />
@@ -287,6 +299,7 @@ function LoginForm() {
               onEmail={setEmail}
               onPassword={setPassword}
               onSubmit={onSubmit}
+              onDismissError={() => setError("")}
             />
           </div>
         </div>
