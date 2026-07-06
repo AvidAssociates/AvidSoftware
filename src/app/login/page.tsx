@@ -1,13 +1,28 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState, Suspense } from "react";
-import type { AnimationEvent, CSSProperties } from "react";
+import type { AnimationEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FONT } from "@/lib/ui";
 import loginLogo from "@/assets/login-logo.png";
 
 const LOGIN_ANIM_DELAY_MS = 1000;
 const LOGIN_ANIM_DURATION_MS = 950;
+
+function LoginFormSkeleton() {
+  return (
+    <div className="login-form login-form-skeleton" aria-hidden="true">
+      <label className="login-field">
+        <span className="login-label">Email</span>
+        <span className="login-input login-input-skeleton" />
+      </label>
+      <label className="login-field">
+        <span className="login-label">Password</span>
+        <span className="login-input login-input-skeleton" />
+      </label>
+      <span className="login-submit login-submit-skeleton" />
+    </div>
+  );
+}
 
 function LoginForm() {
   const router = useRouter();
@@ -66,7 +81,7 @@ function LoginForm() {
   };
 
   return (
-    <div className="login-page">
+    <div className={`login-page${formReady ? " login-page--active" : ""}`}>
       <div className="login-stack">
         <img
           src={loginLogo.src}
@@ -75,63 +90,53 @@ function LoginForm() {
           width={loginLogo.width}
           height={loginLogo.height}
         />
-        <div className="login-dialog-shell">
-          <div
-            className="login-dialog login-dialog-enter"
-            onAnimationEnd={onDialogAnimationEnd}
-          >
-            {formReady ? (
-              <form onSubmit={onSubmit} className="login-form" autoComplete="on">
-                <label style={labelStyle}>
-                  Email
-                  <input
-                    className="login-input"
-                    type="email"
-                    name="email"
-                    autoComplete="username"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="test"
-                    required
-                  />
-                </label>
-                <label style={labelStyle}>
-                  Password
-                  <input
-                    className="login-input"
-                    type="password"
-                    name="password"
-                    autoComplete="current-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••"
-                    required
-                  />
-                </label>
+        <div className={`login-dialog-shell${formReady ? " login-dialog-shell--active" : ""}`}>
+          <div className="login-dialog login-dialog-enter" onAnimationEnd={onDialogAnimationEnd}>
+            <div className={`login-form-frame${formReady ? " login-form-frame--live" : ""}`}>
+              <LoginFormSkeleton />
+              {formReady ? (
+                <form onSubmit={onSubmit} className="login-form login-form-live" autoComplete="on">
+                  <label className="login-field">
+                    Email
+                    <input
+                      className="login-input"
+                      type="email"
+                      name="email"
+                      autoComplete="username"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="test"
+                      required
+                    />
+                  </label>
+                  <label className="login-field">
+                    Password
+                    <input
+                      className="login-input"
+                      type="password"
+                      name="password"
+                      autoComplete="current-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••"
+                      required
+                    />
+                  </label>
 
-                {error ? <div className="login-error">{error}</div> : null}
+                  {error ? <div className="login-error">{error}</div> : null}
 
-                <button className="login-submit" type="submit" disabled={loading}>
-                  {loading ? "Signing in…" : "Sign in"}
-                </button>
-              </form>
-            ) : null}
+                  <button className="login-submit login-submit-live" type="submit" disabled={loading}>
+                    {loading ? "Signing in…" : "Sign in"}
+                  </button>
+                </form>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
     </div>
   );
 }
-
-const labelStyle: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 6,
-  fontSize: 12.5,
-  fontWeight: 600,
-  color: "rgba(235, 235, 245, 0.62)",
-  fontFamily: FONT,
-};
 
 export default function LoginPage() {
   return (
@@ -141,7 +146,9 @@ export default function LoginPage() {
           <div className="login-stack">
             <img src={loginLogo.src} alt="" className="login-logo" width={loginLogo.width} height={loginLogo.height} />
             <div className="login-dialog-shell">
-              <div className="login-dialog login-dialog-enter" />
+              <div className="login-dialog login-dialog-enter">
+                <LoginFormSkeleton />
+              </div>
             </div>
           </div>
         </div>

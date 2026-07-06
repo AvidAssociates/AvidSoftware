@@ -324,18 +324,21 @@ select::-ms-expand {
   .avid-pop-in,
   .avid-glass-pop,
   .login-dialog-enter,
-  .login-form,
-  .login-page::before,
-  .login-dialog-shell::before,
+  .login-form-live,
+  .login-form-live .login-input,
+  .login-submit-live,
+  .login-form-frame--live .login-form-skeleton,
+  .login-page--active::before,
+  .login-dialog-shell--active::before,
   .tv-rise,
   .tv-bar,
   .tv-progress {
     animation: none !important;
   }
-  .login-page::before {
+  .login-page--active::before {
     opacity: 1;
   }
-  .login-dialog-shell::before {
+  .login-dialog-shell--active::before {
     opacity: 0.55;
   }
   .avid-btn,
@@ -452,7 +455,10 @@ body:has(.login-root) {
     radial-gradient(ellipse 38% 32% at 100% 0%, rgba(237, 29, 36, 0.08) 0%, transparent 78%),
     radial-gradient(ellipse 38% 32% at 0% 100%, rgba(237, 29, 36, 0.09) 0%, transparent 78%),
     radial-gradient(ellipse 38% 32% at 100% 100%, rgba(237, 29, 36, 0.11) 0%, transparent 78%);
-  animation: loginAmbientIn 0.8s ease 1s forwards;
+}
+
+.login-page--active::before {
+  animation: loginAmbientIn 0.7s ease forwards;
 }
 
 .login-stack {
@@ -497,14 +503,16 @@ body:has(.login-root) {
   opacity: 0;
   z-index: 0;
   pointer-events: none;
-  animation: loginGlowIn 0.75s cubic-bezier(0.16, 1, 0.3, 1) 1s forwards;
+}
+
+.login-dialog-shell--active::before {
+  animation: loginGlowIn 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .login-dialog {
   position: relative;
   z-index: 1;
   width: 100%;
-  min-height: 248px;
   padding: 36px 36px 32px;
   box-sizing: border-box;
   border-radius: 22px;
@@ -528,11 +536,86 @@ body:has(.login-root) {
   animation: loginSlideUp 0.95s cubic-bezier(0.16, 1, 0.3, 1) 1s both;
 }
 
+.login-form-frame {
+  display: grid;
+  align-items: start;
+}
+
+.login-form-frame > * {
+  grid-area: 1 / 1;
+}
+
 .login-form {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  animation: loginFormIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: rgba(235, 235, 245, 0.62);
+  font-family: inherit;
+}
+
+.login-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: rgba(235, 235, 245, 0.62);
+}
+
+.login-form-frame--live .login-form-skeleton {
+  animation: loginSkeletonOut 0.32s ease forwards;
+}
+
+.login-form-skeleton {
+  pointer-events: none;
+}
+
+.login-input-skeleton {
+  display: block;
+  min-height: 43px;
+  border-color: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.login-submit-skeleton {
+  display: block;
+  margin-top: 8px;
+  min-height: 46px;
+  border-radius: 12px;
+  background: rgba(237, 29, 36, 0.22);
+  box-shadow: none;
+}
+
+.login-form-live {
+  animation: loginFormIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.login-form-live .login-input {
+  animation: loginFieldIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.login-form-live .login-field:nth-child(1) .login-input {
+  animation-delay: 0.04s;
+}
+
+.login-form-live .login-field:nth-child(2) .login-input {
+  animation-delay: 0.1s;
+}
+
+.login-submit-live {
+  animation: loginButtonPop 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.14s both;
+}
+
+@keyframes loginSkeletonOut {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
 }
 
 @keyframes loginAmbientIn {
@@ -564,6 +647,30 @@ body:has(.login-root) {
   }
   to {
     opacity: 1;
+  }
+}
+
+@keyframes loginFieldIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes loginButtonPop {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.94);
+    box-shadow: 0 0 0 rgba(237, 29, 36, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    box-shadow: 0 6px 18px rgba(237, 29, 36, 0.18);
   }
 }
 
