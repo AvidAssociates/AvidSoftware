@@ -38,7 +38,6 @@ function LoginCard({
   return (
     <form onSubmit={onSubmit} className="login-form" autoComplete="on">
       <header className="login-card-head">
-        <p className="login-eyebrow">Avid Associates</p>
         <h1 className="login-title">Sign in</h1>
       </header>
 
