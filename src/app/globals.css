@@ -325,10 +325,23 @@ select::-ms-expand {
   .avid-glass-pop,
   .login-logo-enter,
   .login-dialog-enter,
+  .login-page--glow::before,
+  .login-page--glow .login-dialog-wrap::before,
   .tv-rise,
   .tv-bar,
   .tv-progress {
     animation: none !important;
+  }
+  .login-logo-prep,
+  .login-dialog-prep {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .login-page--glow::before {
+    opacity: 1;
+  }
+  .login-page--glow .login-dialog-wrap::before {
+    opacity: 0.5;
   }
   .avid-btn,
   .avid-chip,
@@ -433,6 +446,21 @@ body:has(.login-root) {
   background: #000000;
 }
 
+.login-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(ellipse 42% 50% at 0% 50%, rgba(237, 29, 36, 0.16) 0%, transparent 72%),
+    radial-gradient(ellipse 42% 50% at 100% 50%, rgba(237, 29, 36, 0.16) 0%, transparent 72%);
+}
+
+.login-page--glow::before {
+  animation: loginCornerGlowIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 .login-stack {
   display: flex;
   flex-direction: column;
@@ -455,14 +483,46 @@ body:has(.login-root) {
   flex-shrink: 1;
 }
 
+.login-logo-prep {
+  opacity: 0;
+  transform: translateY(-96px);
+}
+
 .login-logo-enter {
   animation: loginSlideDown 1s cubic-bezier(0.16, 1, 0.3, 1) 1s both;
 }
 
+.login-dialog-wrap {
+  position: relative;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.login-dialog-wrap::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 26px;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 0;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(237, 29, 36, 0.24) 0%, transparent 62%),
+    radial-gradient(circle at 100% 0%, rgba(237, 29, 36, 0.2) 0%, transparent 62%),
+    radial-gradient(circle at 0% 100%, rgba(237, 29, 36, 0.18) 0%, transparent 62%),
+    radial-gradient(circle at 100% 100%, rgba(237, 29, 36, 0.22) 0%, transparent 62%);
+  filter: blur(28px);
+}
+
+.login-page--glow .login-dialog-wrap::before {
+  animation: loginBoxGlowIn 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 .login-dialog {
+  position: relative;
+  z-index: 1;
   width: 100%;
   min-height: 304px;
-  flex-shrink: 0;
   padding: 36px 36px 32px;
   box-sizing: border-box;
   border-radius: 22px;
@@ -470,6 +530,11 @@ body:has(.login-root) {
   border: 1px solid rgba(255, 255, 255, 0.07);
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
   overflow: visible;
+}
+
+.login-dialog-prep {
+  opacity: 0;
+  transform: translateY(96px);
 }
 
 .login-dialog-enter {
@@ -500,6 +565,18 @@ body:has(.login-root) {
   font-size: 13px;
   color: #ed1d24;
   font-weight: 600;
+}
+
+@keyframes loginCornerGlowIn {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes loginBoxGlowIn {
+  to {
+    opacity: 0.5;
+  }
 }
 
 @keyframes loginSlideDown {

@@ -1,8 +1,12 @@
 "use client";
 
-import { FormEvent, useState, Suspense } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState, Suspense } from "react";
+import type { AnimationEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import loginLogo from "@/assets/login-logo.png";
+
+const LOGIN_ANIM_DELAY_MS = 1000;
+const LOGIN_ANIM_DURATION_MS = 1000;
 
 function LoginCard({
   email,
@@ -64,6 +68,60 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [playAnimations, setPlayAnimations] = useState(false);
+  const [glowActive, setGlowActive] = useState(false);
+  const glowStarted = useRef(false);
+
+  const startGlow = useCallback(() => {
+    if (glowStarted.current) return;
+    glowStarted.current = true;
+    setGlowActive(true);
+  }, []);
+
+  useEffect(() => {
+    glowStarted.current = false;
+    setPlayAnimations(false);
+    setGlowActive(false);
+
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      setPlayAnimations(true);
+      startGlow();
+      return;
+    }
+
+    const startId = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setPlayAnimations(true));
+    });
+
+    const glowTimer = window.setTimeout(startGlow, LOGIN_ANIM_DELAY_MS + LOGIN_ANIM_DURATION_MS + 40);
+
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      glowStarted.current = false;
+      setPlayAnimations(false);
+      setGlowActive(false);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setPlayAnimations(true));
+      });
+      window.setTimeout(startGlow, LOGIN_ANIM_DELAY_MS + LOGIN_ANIM_DURATION_MS + 40);
+    };
+
+    window.addEventListener("pageshow", onPageShow);
+
+    return () => {
+      cancelAnimationFrame(startId);
+      window.clearTimeout(glowTimer);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, [startGlow]);
+
+  const onDialogAnimationEnd = useCallback(
+    (event: AnimationEvent<HTMLDivElement>) => {
+      if (event.animationName === "loginSlideUp") startGlow();
+    },
+    [startGlow],
+  );
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -90,26 +148,31 @@ function LoginForm() {
     }
   };
 
+  const logoClass = `login-logo${playAnimations ? " login-logo-enter" : " login-logo-prep"}`;
+  const dialogClass = `login-dialog${playAnimations ? " login-dialog-enter" : " login-dialog-prep"}`;
+
   return (
-    <div className="login-page">
+    <div className={`login-page${glowActive ? " login-page--glow" : ""}`}>
       <div className="login-stack">
         <img
           src={loginLogo.src}
           alt="Avid Associates"
-          className="login-logo login-logo-enter"
+          className={logoClass}
           width={loginLogo.width}
           height={loginLogo.height}
         />
-        <div className="login-dialog login-dialog-enter">
-          <LoginCard
-            email={email}
-            password={password}
-            error={error}
-            loading={loading}
-            onEmail={setEmail}
-            onPassword={setPassword}
-            onSubmit={onSubmit}
-          />
+        <div className="login-dialog-wrap">
+          <div className={dialogClass} onAnimationEnd={onDialogAnimationEnd}>
+            <LoginCard
+              email={email}
+              password={password}
+              error={error}
+              loading={loading}
+              onEmail={setEmail}
+              onPassword={setPassword}
+              onSubmit={onSubmit}
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -122,17 +185,19 @@ export default function LoginPage() {
       fallback={
         <div className="login-page">
           <div className="login-stack">
-            <img src={loginLogo.src} alt="" className="login-logo" width={loginLogo.width} height={loginLogo.height} />
-            <div className="login-dialog">
-              <LoginCard
-                email=""
-                password=""
-                error=""
-                loading={false}
-                onEmail={() => {}}
-                onPassword={() => {}}
-                onSubmit={(e) => e.preventDefault()}
-              />
+            <img src={loginLogo.src} alt="" className="login-logo login-logo-prep" width={loginLogo.width} height={loginLogo.height} />
+            <div className="login-dialog-wrap">
+              <div className="login-dialog login-dialog-prep">
+                <LoginCard
+                  email=""
+                  password=""
+                  error=""
+                  loading={false}
+                  onEmail={() => {}}
+                  onPassword={() => {}}
+                  onSubmit={(e) => e.preventDefault()}
+                />
+              </div>
             </div>
           </div>
         </div>
