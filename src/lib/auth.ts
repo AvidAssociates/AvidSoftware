@@ -57,16 +57,6 @@ export async function authenticateUser(email: string, password: string): Promise
   return toUser(row);
 }
 
-export async function getUserByEmail(email: string): Promise<AuthUser | null> {
-  const db = getDb();
-  const normalized = email.trim().toLowerCase();
-  const [row] = (await db.sql`
-    SELECT id, email, display_name FROM users WHERE lower(email) = ${normalized}
-  `) as Omit<UserRow, "password_hash">[];
-  if (!row) return null;
-  return toUser({ ...row, password_hash: "" });
-}
-
 export async function createSession(userId: string) {
   const db = getDb();
   const id = createHash("sha256").update(randomBytes(32)).digest("hex").slice(0, 48);

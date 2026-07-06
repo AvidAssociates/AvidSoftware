@@ -16,36 +16,6 @@ function sleep(ms: number) {
   return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 }
 
-const GOOGLE_ERROR_MESSAGES: Record<string, string> = {
-  google_unauthorized: "This Google account is not authorized to sign in.",
-  google_denied: "Google sign-in was cancelled.",
-  google_failed: "Google sign-in failed. Please try again.",
-  google_misconfigured: "Google sign-in is not available right now.",
-};
-
-function GoogleIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
-      <path
-        fill="#FFC107"
-        d="M43.611 20.083H42V20H24v8h11.303C33.654 32.657 29.223 36 24 36c-5.522 0-10-4.478-10-10s4.478-10 10-10c2.761 0 5.262 1.062 7.142 2.794l5.657-5.657C33.64 10.053 29.082 8 24 8 14.059 8 6 16.059 6 26s8.059 18 18 18 18-8.059 18-18c0-1.214-.124-2.39-.389-3.517z"
-      />
-      <path
-        fill="#FF3D00"
-        d="M6 26c0-1.64.402-3.186 1.117-4.557l-5.657-5.657C.795 18.558 0 22.127 0 26s.795 7.442 2.46 10.214l6.657-5.657C7.598 29.186 6 27.64 6 26z"
-      />
-      <path
-        fill="#4CAF50"
-        d="M24 44c4.795 0 8.97-1.64 12.071-4.428l-5.657-5.657C28.795 35.091 26.477 36 24 36c-5.223 0-9.654-3.343-11.303-8H7.117v5.657C10.211 40.947 16.618 44 24 44z"
-      />
-      <path
-        fill="#1976D2"
-        d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571l.003-.002 5.657 5.657C36.752 39.99 42 34 42 26c0-1.214-.124-2.39-.389-3.517z"
-      />
-    </svg>
-  );
-}
-
 function LoginCard({
   email,
   password,
@@ -54,8 +24,6 @@ function LoginCard({
   onEmail,
   onPassword,
   onSubmit,
-  onGoogleSignIn,
-  showGoogle,
   disabled = false,
 }: {
   email: string;
@@ -66,12 +34,9 @@ function LoginCard({
   onEmail: (value: string) => void;
   onPassword: (value: string) => void;
   onSubmit: (e: FormEvent) => void;
-  onGoogleSignIn: () => void;
-  showGoogle: boolean;
 }) {
   return (
-    <div className="login-card">
-      <form onSubmit={onSubmit} className="login-form" autoComplete="on">
+    <form onSubmit={onSubmit} className="login-form" autoComplete="on">
       <label className="login-field">
         Email
         <input
@@ -104,24 +69,7 @@ function LoginCard({
       <button className="login-submit" type="submit" disabled={loading || disabled}>
         Sign in
       </button>
-      </form>
-      {showGoogle ? (
-        <>
-          <div className="login-divider" aria-hidden="true">
-            <span>or</span>
-          </div>
-          <button
-            type="button"
-            className="login-google-btn"
-            onClick={onGoogleSignIn}
-            disabled={loading || disabled}
-          >
-            <GoogleIcon />
-            Sign in with Google
-          </button>
-        </>
-      ) : null}
-    </div>
+    </form>
   );
 }
 
@@ -140,14 +88,6 @@ function LoginForm() {
   const exitPhaseRef = useRef<ExitPhase>("idle");
   const collapseHandledRef = useRef(false);
   const exitBusy = exitPhase !== "idle";
-  const googleEnabled = Boolean(process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
-
-  useEffect(() => {
-    const code = searchParams.get("error");
-    if (!code) return;
-    const message = GOOGLE_ERROR_MESSAGES[code];
-    if (message) setError(message);
-  }, [searchParams]);
 
   useEffect(() => {
     exitPhaseRef.current = exitPhase;
@@ -289,17 +229,6 @@ function LoginForm() {
     if (event.animationName === "loginSlideUp") setEntrySettled(true);
   }, []);
 
-  const startGoogleSignIn = useCallback(() => {
-    if (exitBusy) return;
-    setError("");
-    const from = searchParams.get("from");
-    const url =
-      from && from.startsWith("/")
-        ? `/api/auth/google?from=${encodeURIComponent(from)}`
-        : "/api/auth/google";
-    window.location.href = url;
-  }, [exitBusy, searchParams]);
-
   const logoClass = `login-logo${playAnimations ? " login-logo-enter" : " login-logo-prep"}`;
   const dialogClass =
     exitPhase === "collapsing"
@@ -339,8 +268,6 @@ function LoginForm() {
               error={error}
               loading={loading}
               disabled={exitBusy}
-              showGoogle={googleEnabled}
-              onGoogleSignIn={startGoogleSignIn}
               onEmail={setEmail}
               onPassword={setPassword}
               onSubmit={onSubmit}
@@ -366,8 +293,6 @@ export default function LoginPage() {
                   password=""
                   error=""
                   loading={false}
-                  showGoogle={false}
-                  onGoogleSignIn={() => {}}
                   onEmail={() => {}}
                   onPassword={() => {}}
                   onSubmit={(e) => e.preventDefault()}
