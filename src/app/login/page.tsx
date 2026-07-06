@@ -1,12 +1,8 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState, Suspense } from "react";
-import type { AnimationEvent } from "react";
+import { FormEvent, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import loginLogo from "@/assets/login-logo.png";
-
-const LOGIN_ANIM_DELAY_MS = 1000;
-const LOGIN_ANIM_DURATION_MS = 950;
 
 function LoginCard({
   email,
@@ -68,28 +64,6 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [boxLanded, setBoxLanded] = useState(false);
-
-  const onBoxLanded = useCallback(() => {
-    setBoxLanded(true);
-  }, []);
-
-  useEffect(() => {
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduced) {
-      onBoxLanded();
-      return;
-    }
-    const fallback = window.setTimeout(onBoxLanded, LOGIN_ANIM_DELAY_MS + LOGIN_ANIM_DURATION_MS + 50);
-    return () => window.clearTimeout(fallback);
-  }, [onBoxLanded]);
-
-  const onDialogAnimationEnd = useCallback(
-    (event: AnimationEvent<HTMLDivElement>) => {
-      if (event.animationName === "loginSlideUp") onBoxLanded();
-    },
-    [onBoxLanded],
-  );
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -122,22 +96,20 @@ function LoginForm() {
         <img
           src={loginLogo.src}
           alt="Avid Associates"
-          className="login-logo"
+          className="login-logo login-logo-enter"
           width={loginLogo.width}
           height={loginLogo.height}
         />
-        <div className={`login-dialog-shell${boxLanded ? " login-dialog-shell--landed" : ""}`}>
-          <div className="login-dialog login-dialog-enter" onAnimationEnd={onDialogAnimationEnd}>
-            <LoginCard
-              email={email}
-              password={password}
-              error={error}
-              loading={loading}
-              onEmail={setEmail}
-              onPassword={setPassword}
-              onSubmit={onSubmit}
-            />
-          </div>
+        <div className="login-dialog login-dialog-enter">
+          <LoginCard
+            email={email}
+            password={password}
+            error={error}
+            loading={loading}
+            onEmail={setEmail}
+            onPassword={setPassword}
+            onSubmit={onSubmit}
+          />
         </div>
       </div>
     </div>
@@ -151,18 +123,16 @@ export default function LoginPage() {
         <div className="login-page">
           <div className="login-stack">
             <img src={loginLogo.src} alt="" className="login-logo" width={loginLogo.width} height={loginLogo.height} />
-            <div className="login-dialog-shell">
-              <div className="login-dialog">
-                <LoginCard
-                  email=""
-                  password=""
-                  error=""
-                  loading={false}
-                  onEmail={() => {}}
-                  onPassword={() => {}}
-                  onSubmit={(e) => e.preventDefault()}
-                />
-              </div>
+            <div className="login-dialog">
+              <LoginCard
+                email=""
+                password=""
+                error=""
+                loading={false}
+                onEmail={() => {}}
+                onPassword={() => {}}
+                onSubmit={(e) => e.preventDefault()}
+              />
             </div>
           </div>
         </div>
