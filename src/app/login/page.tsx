@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState, Suspense } from "react";
 import type { AnimationEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Lock, Mail } from "lucide-react";
 import loginLogo from "@/assets/login-logo.png";
 
 const LOGIN_ANIM_DELAY_MS = 1000;
@@ -27,35 +28,60 @@ function LoginCard({
 }) {
   return (
     <form onSubmit={onSubmit} className="login-form" autoComplete="on">
-      <label className="login-field">
-        Email
-        <input
-          className="login-input"
-          type="email"
-          name="email"
-          autoComplete="username"
-          value={email}
-          onChange={(e) => onEmail(e.target.value)}
-          placeholder="test"
-          required
-        />
-      </label>
-      <label className="login-field">
-        Password
-        <input
-          className="login-input"
-          type="password"
-          name="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => onPassword(e.target.value)}
-          placeholder="••••"
-          required
-        />
-      </label>
-      <div className="login-error-slot">{error ? <div className="login-error">{error}</div> : null}</div>
+      <header className="login-card-head">
+        <p className="login-eyebrow">Avid Associates</p>
+        <h1 className="login-title">Sign in</h1>
+        <p className="login-subtitle">Access your send-out pipeline</p>
+      </header>
+
+      <div className="login-fields">
+        <label className="login-field">
+          <span className="login-field-label">Email</span>
+          <div className="login-input-wrap">
+            <Mail className="login-input-icon" size={16} strokeWidth={2} aria-hidden />
+            <input
+              className="login-input"
+              type="email"
+              name="email"
+              autoComplete="username"
+              value={email}
+              onChange={(e) => onEmail(e.target.value)}
+              aria-label="Email address"
+              required
+            />
+          </div>
+        </label>
+        <label className="login-field">
+          <span className="login-field-label">Password</span>
+          <div className="login-input-wrap">
+            <Lock className="login-input-icon" size={16} strokeWidth={2} aria-hidden />
+            <input
+              className="login-input"
+              type="password"
+              name="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => onPassword(e.target.value)}
+              aria-label="Password"
+              required
+            />
+          </div>
+        </label>
+      </div>
+
+      <div className="login-error-slot" role="alert" aria-live="polite">
+        {error ? <div className="login-error">{error}</div> : null}
+      </div>
+
       <button className="login-submit" type="submit" disabled={loading}>
-        {loading ? "Signing in…" : "Sign in"}
+        {loading ? (
+          <>
+            <span className="login-submit-spinner" aria-hidden />
+            Signing in…
+          </>
+        ) : (
+          "Sign in"
+        )}
       </button>
     </form>
   );
@@ -153,6 +179,12 @@ function LoginForm() {
 
   return (
     <div className={`login-page${glowActive ? " login-page--glow" : ""}`}>
+      <div className="login-ambient" aria-hidden>
+        <div className="login-ambient-grid" />
+        <div className="login-ambient-orb login-ambient-orb--left" />
+        <div className="login-ambient-orb login-ambient-orb--right" />
+      </div>
+
       <div className="login-stack">
         <img
           src={loginLogo.src}
@@ -174,6 +206,7 @@ function LoginForm() {
             />
           </div>
         </div>
+        <p className="login-footer">Authorized personnel only</p>
       </div>
     </div>
   );
@@ -184,6 +217,9 @@ export default function LoginPage() {
     <Suspense
       fallback={
         <div className="login-page">
+          <div className="login-ambient" aria-hidden>
+            <div className="login-ambient-grid" />
+          </div>
           <div className="login-stack">
             <img src={loginLogo.src} alt="" className="login-logo login-logo-prep" width={loginLogo.width} height={loginLogo.height} />
             <div className="login-dialog-wrap">
