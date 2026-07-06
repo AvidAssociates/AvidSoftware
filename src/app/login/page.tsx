@@ -1,12 +1,10 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState, Suspense } from "react";
-import type { AnimationEvent } from "react";
+import { FormEvent, useCallback, useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import loginLogo from "@/assets/login-logo.png";
 
 const LOGIN_ANIM_DELAY_MS = 1000;
-const LOGIN_ANIM_DURATION_MS = 1000;
 
 function LoginCard({
   email,
@@ -36,7 +34,7 @@ function LoginCard({
           autoComplete="username"
           value={email}
           onChange={(e) => onEmail(e.target.value)}
-          placeholder="test"
+          placeholder="justiceb@theavidassociates.com"
           required
         />
       </label>
@@ -69,30 +67,19 @@ function LoginForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [playAnimations, setPlayAnimations] = useState(false);
-  const [glowActive, setGlowActive] = useState(false);
   const [logoEpoch, setLogoEpoch] = useState(() => Date.now());
-  const glowStarted = useRef(false);
 
   const restartLogoAnimation = useCallback(() => {
     setLogoEpoch(Date.now());
   }, []);
 
-  const startGlow = useCallback(() => {
-    if (glowStarted.current) return;
-    glowStarted.current = true;
-    setGlowActive(true);
-  }, []);
-
   const replayEntry = useCallback(() => {
-    glowStarted.current = false;
     setPlayAnimations(false);
-    setGlowActive(false);
     restartLogoAnimation();
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) {
       setPlayAnimations(true);
-      startGlow();
       return undefined;
     }
 
@@ -100,13 +87,10 @@ function LoginForm() {
       requestAnimationFrame(() => setPlayAnimations(true));
     });
 
-    const glowTimer = window.setTimeout(startGlow, LOGIN_ANIM_DELAY_MS + LOGIN_ANIM_DURATION_MS + 40);
-
     return () => {
       cancelAnimationFrame(startId);
-      window.clearTimeout(glowTimer);
     };
-  }, [restartLogoAnimation, startGlow]);
+  }, [restartLogoAnimation]);
 
   useEffect(() => {
     const cleanup = replayEntry();
@@ -124,13 +108,6 @@ function LoginForm() {
       window.removeEventListener("pageshow", onPageShow);
     };
   }, [replayEntry]);
-
-  const onDialogAnimationEnd = useCallback(
-    (event: AnimationEvent<HTMLDivElement>) => {
-      if (event.animationName === "loginSlideUp") startGlow();
-    },
-    [startGlow],
-  );
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -161,7 +138,7 @@ function LoginForm() {
   const dialogClass = `login-dialog${playAnimations ? " login-dialog-enter" : " login-dialog-prep"}`;
 
   return (
-    <div className={`login-page${glowActive ? " login-page--glow" : ""}`}>
+    <div className="login-page">
       <div className="login-stack">
         <img
           key={logoEpoch}
@@ -172,7 +149,7 @@ function LoginForm() {
           height={loginLogo.height}
         />
         <div className="login-dialog-wrap">
-          <div className={dialogClass} onAnimationEnd={onDialogAnimationEnd}>
+          <div className={dialogClass}>
             <LoginCard
               email={email}
               password={password}
