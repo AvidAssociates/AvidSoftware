@@ -1,9 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useState, Suspense } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState, Suspense } from "react";
+import type { AnimationEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Lock, Mail } from "lucide-react";
+import { Lock, LogIn, Mail, Shield, ShieldCheck } from "lucide-react";
 import loginLogo from "@/assets/login-logo.png";
+
+const LOGIN_ANIM_DELAY_MS = 1000;
+const LOGIN_ANIM_DURATION_MS = 1000;
 
 function LoginCard({
   email,
@@ -25,13 +29,20 @@ function LoginCard({
   return (
     <form onSubmit={onSubmit} className="login-form" autoComplete="on">
       <header className="login-card-head">
+        <div className="login-header-badge" aria-hidden>
+          <Shield size={20} strokeWidth={2.2} />
+        </div>
         <p className="login-eyebrow">Avid Associates</p>
         <h1 className="login-title">Sign in</h1>
+        <div className="login-header-rule" aria-hidden />
       </header>
 
       <div className="login-fields">
         <label className="login-field">
-          <span className="login-field-label">Email</span>
+          <span className="login-field-label">
+            <Mail size={13} strokeWidth={2.2} aria-hidden />
+            Email
+          </span>
           <div className="login-input-wrap">
             <Mail className="login-input-icon" size={16} strokeWidth={2} aria-hidden />
             <input
@@ -47,7 +58,10 @@ function LoginCard({
           </div>
         </label>
         <label className="login-field">
-          <span className="login-field-label">Password</span>
+          <span className="login-field-label">
+            <Lock size={13} strokeWidth={2.2} aria-hidden />
+            Password
+          </span>
           <div className="login-input-wrap">
             <Lock className="login-input-icon" size={16} strokeWidth={2} aria-hidden />
             <input
@@ -64,6 +78,18 @@ function LoginCard({
         </label>
       </div>
 
+      <div className="login-trust" aria-hidden>
+        <span className="login-trust-item">
+          <Lock size={12} strokeWidth={2.2} />
+          Encrypted session
+        </span>
+        <span className="login-trust-sep" />
+        <span className="login-trust-item">
+          <ShieldCheck size={12} strokeWidth={2.2} />
+          Authorized users
+        </span>
+      </div>
+
       <div className="login-error-slot" role="alert" aria-live="polite">
         {error ? <div className="login-error">{error}</div> : null}
       </div>
@@ -75,7 +101,10 @@ function LoginCard({
             Signing in…
           </>
         ) : (
-          "Sign in"
+          <>
+            <LogIn size={16} strokeWidth={2.2} aria-hidden />
+            Sign in
+          </>
         )}
       </button>
     </form>
@@ -90,13 +119,24 @@ function LoginForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [playAnimations, setPlayAnimations] = useState(false);
+  const [glowActive, setGlowActive] = useState(false);
+  const glowStarted = useRef(false);
+
+  const startGlow = useCallback(() => {
+    if (glowStarted.current) return;
+    glowStarted.current = true;
+    setGlowActive(true);
+  }, []);
 
   useEffect(() => {
+    glowStarted.current = false;
     setPlayAnimations(false);
+    setGlowActive(false);
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) {
       setPlayAnimations(true);
+      startGlow();
       return;
     }
 
@@ -104,21 +144,34 @@ function LoginForm() {
       requestAnimationFrame(() => setPlayAnimations(true));
     });
 
+    const glowTimer = window.setTimeout(startGlow, LOGIN_ANIM_DELAY_MS + LOGIN_ANIM_DURATION_MS + 40);
+
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return;
+      glowStarted.current = false;
       setPlayAnimations(false);
+      setGlowActive(false);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => setPlayAnimations(true));
       });
+      window.setTimeout(startGlow, LOGIN_ANIM_DELAY_MS + LOGIN_ANIM_DURATION_MS + 40);
     };
 
     window.addEventListener("pageshow", onPageShow);
 
     return () => {
       cancelAnimationFrame(startId);
+      window.clearTimeout(glowTimer);
       window.removeEventListener("pageshow", onPageShow);
     };
-  }, []);
+  }, [startGlow]);
+
+  const onDialogAnimationEnd = useCallback(
+    (event: AnimationEvent<HTMLDivElement>) => {
+      if (event.animationName === "loginSlideUp") startGlow();
+    },
+    [startGlow],
+  );
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -149,7 +202,7 @@ function LoginForm() {
   const dialogClass = `login-dialog${playAnimations ? " login-dialog-enter" : " login-dialog-prep"}`;
 
   return (
-    <div className="login-page">
+    <div className={`login-page${glowActive ? " login-page--glow" : ""}`}>
       <div className="login-stack">
         <img
           src={loginLogo.src}
@@ -159,7 +212,7 @@ function LoginForm() {
           height={loginLogo.height}
         />
         <div className="login-dialog-wrap">
-          <div className={dialogClass}>
+          <div className={dialogClass} onAnimationEnd={onDialogAnimationEnd}>
             <LoginCard
               email={email}
               password={password}
@@ -171,7 +224,10 @@ function LoginForm() {
             />
           </div>
         </div>
-        <p className="login-footer">Authorized personnel only</p>
+        <p className="login-footer">
+          <ShieldCheck size={12} strokeWidth={2.2} aria-hidden />
+          Authorized personnel only
+        </p>
       </div>
     </div>
   );
