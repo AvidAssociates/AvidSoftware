@@ -54,6 +54,8 @@ export type Billing = {
   notes: string | null;
   addedBy: string | null;
   createdAt: string;
+  salary: number | null;
+  feePercent: number | null;
   // Set when this row was auto-created from a placed send-out; NULL for
   // fees logged directly on the Billings tab.
   entryId: string | null;

@@ -26,6 +26,8 @@ export async function PUT(
     candidate: body.candidate,
     role: body.role,
     notes: body.notes,
+    salary: body.salary === undefined || body.salary === null ? null : Number(body.salary),
+    feePercent: body.feePercent === undefined || body.feePercent === null ? null : Number(body.feePercent),
   });
   return NextResponse.json(billing);
 }
