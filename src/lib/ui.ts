@@ -84,7 +84,7 @@ export type Theme = ReturnType<typeof getTheme>;
 export function getTheme(isDark: boolean) {
   return isDark
     ? {
-        bg: "#191918",
+        bg: "#000000",
         surface: "#212120",
         surfaceAlt: "#262625",
         border: "#34332F",
