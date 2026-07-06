@@ -480,7 +480,6 @@ body:has(.login-root) {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  height: 100%;
 }
 
 .login-field {
@@ -549,7 +548,6 @@ body:has(.login-root) {
 }
 
 .login-submit {
-  margin-top: auto;
   width: 100%;
   padding: 14px 16px;
   border: none;
