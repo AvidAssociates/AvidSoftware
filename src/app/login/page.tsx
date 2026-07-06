@@ -1,10 +1,20 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState, Suspense } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState, Suspense } from "react";
+import type { AnimationEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import loginLogo from "@/assets/login-logo.png";
 
 const LOGIN_ANIM_DELAY_MS = 1000;
+const LOGIN_COLLAPSE_MS = 450;
+const LOGIN_SPINNER_MS = 500;
+
+type AuthOutcome = { ok: true; path: string } | { ok: false; error: string };
+type ExitPhase = "idle" | "collapsing" | "spinning";
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+}
 
 function LoginCard({
   email,
@@ -14,11 +24,13 @@ function LoginCard({
   onEmail,
   onPassword,
   onSubmit,
+  disabled = false,
 }: {
   email: string;
   password: string;
   error: string;
   loading: boolean;
+  disabled?: boolean;
   onEmail: (value: string) => void;
   onPassword: (value: string) => void;
   onSubmit: (e: FormEvent) => void;
@@ -36,6 +48,7 @@ function LoginCard({
           onChange={(e) => onEmail(e.target.value)}
           placeholder="justiceb@theavidassociates.com"
           required
+          disabled={disabled}
         />
       </label>
       <label className="login-field">
@@ -49,11 +62,12 @@ function LoginCard({
           onChange={(e) => onPassword(e.target.value)}
           placeholder="••••"
           required
+          disabled={disabled}
         />
       </label>
       <div className="login-error-slot">{error ? <div className="login-error">{error}</div> : null}</div>
-      <button className="login-submit" type="submit" disabled={loading}>
-        {loading ? "Signing in…" : "Sign in"}
+      <button className="login-submit" type="submit" disabled={loading || disabled}>
+        Sign in
       </button>
     </form>
   );
@@ -67,7 +81,17 @@ function LoginForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [playAnimations, setPlayAnimations] = useState(false);
+  const [entrySettled, setEntrySettled] = useState(false);
+  const [exitPhase, setExitPhase] = useState<ExitPhase>("idle");
   const [logoEpoch, setLogoEpoch] = useState(() => Date.now());
+  const authOutcomeRef = useRef<Promise<AuthOutcome> | null>(null);
+  const exitPhaseRef = useRef<ExitPhase>("idle");
+  const collapseHandledRef = useRef(false);
+  const exitBusy = exitPhase !== "idle";
+
+  useEffect(() => {
+    exitPhaseRef.current = exitPhase;
+  }, [exitPhase]);
 
   const restartLogoAnimation = useCallback(() => {
     setLogoEpoch(Date.now());
@@ -109,10 +133,7 @@ function LoginForm() {
     };
   }, [replayEntry]);
 
-  const onSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
+  const runAuth = useCallback(async (): Promise<AuthOutcome> => {
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -120,22 +141,104 @@ function LoginForm() {
         body: JSON.stringify({ email, password }),
       });
       const data = (await res.json()) as { error?: string };
-      if (!res.ok) {
-        setError(data.error || "Sign in failed");
+      if (!res.ok) return { ok: false, error: data.error || "Sign in failed" };
+      const from = searchParams.get("from");
+      return { ok: true, path: from && from.startsWith("/") ? from : "/" };
+    } catch {
+      return { ok: false, error: "Sign in failed" };
+    }
+  }, [email, password, searchParams]);
+
+  const resetAfterFailedSignIn = useCallback((message: string) => {
+    authOutcomeRef.current = null;
+    collapseHandledRef.current = false;
+    setExitPhase("idle");
+    setLoading(false);
+    setError(message);
+    setEntrySettled(true);
+  }, []);
+
+  const finishSuccessfulSignIn = useCallback(
+    async (path: string) => {
+      setExitPhase("spinning");
+      await sleep(LOGIN_SPINNER_MS);
+      router.replace(path);
+      router.refresh();
+    },
+    [router],
+  );
+
+  const completeCollapse = useCallback(async () => {
+    if (collapseHandledRef.current || exitPhaseRef.current !== "collapsing") return;
+    collapseHandledRef.current = true;
+
+    setExitPhase("spinning");
+    const spinnerStarted = Date.now();
+
+    const outcome = await authOutcomeRef.current;
+    if (!outcome) {
+      collapseHandledRef.current = false;
+      setExitPhase("idle");
+      return;
+    }
+    if (!outcome.ok) {
+      resetAfterFailedSignIn(outcome.error);
+      return;
+    }
+
+    const elapsed = Date.now() - spinnerStarted;
+    await sleep(Math.max(0, LOGIN_SPINNER_MS - elapsed));
+    router.replace(outcome.path);
+    router.refresh();
+  }, [resetAfterFailedSignIn, router]);
+
+  const onDialogAnimationEnd = useCallback(
+    (event: AnimationEvent<HTMLDivElement>) => {
+      if (exitPhase !== "collapsing") return;
+      if (event.animationName !== "loginCollapseUp") return;
+      void completeCollapse();
+    },
+    [completeCollapse, exitPhase],
+  );
+
+  const onEntryAnimationEnd = useCallback((event: AnimationEvent<HTMLDivElement>) => {
+    if (event.animationName === "loginSlideUp") setEntrySettled(true);
+  }, []);
+
+  const onSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (exitBusy) return;
+    setError("");
+    setLoading(true);
+    authOutcomeRef.current = runAuth();
+
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      const outcome = await authOutcomeRef.current;
+      if (!outcome.ok) {
+        resetAfterFailedSignIn(outcome.error);
         return;
       }
-      const from = searchParams.get("from");
-      router.replace(from && from.startsWith("/") ? from : "/");
-      router.refresh();
-    } catch {
-      setError("Sign in failed");
-    } finally {
-      setLoading(false);
+      await finishSuccessfulSignIn(outcome.path);
+      return;
     }
+
+    setExitPhase("collapsing");
+    window.setTimeout(() => {
+      void completeCollapse();
+    }, LOGIN_COLLAPSE_MS + 80);
   };
 
   const logoClass = `login-logo${playAnimations ? " login-logo-enter" : " login-logo-prep"}`;
-  const dialogClass = `login-dialog${playAnimations ? " login-dialog-enter" : " login-dialog-prep"}`;
+  const dialogClass =
+    exitPhase === "collapsing"
+      ? "login-dialog login-dialog-exit"
+      : exitPhase === "spinning"
+        ? "login-dialog login-dialog-hidden"
+        : entrySettled
+          ? "login-dialog login-dialog-settled"
+          : `login-dialog${playAnimations ? " login-dialog-enter" : " login-dialog-prep"}`;
+  const wrapClass = `login-dialog-wrap${exitBusy ? " login-dialog-wrap--busy" : ""}`;
 
   return (
     <div className="login-page">
@@ -148,13 +251,23 @@ function LoginForm() {
           width={loginLogo.width}
           height={loginLogo.height}
         />
-        <div className="login-dialog-wrap">
-          <div className={dialogClass}>
+        <div className={wrapClass}>
+          {exitPhase === "spinning" ? (
+            <div className="login-spinner" role="status" aria-label="Signing in" />
+          ) : null}
+          <div
+            className={dialogClass}
+            onAnimationEnd={(event) => {
+              onEntryAnimationEnd(event);
+              onDialogAnimationEnd(event);
+            }}
+          >
             <LoginCard
               email={email}
               password={password}
               error={error}
               loading={loading}
+              disabled={exitBusy}
               onEmail={setEmail}
               onPassword={setPassword}
               onSubmit={onSubmit}

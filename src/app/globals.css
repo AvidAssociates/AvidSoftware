@@ -325,6 +325,8 @@ select::-ms-expand {
   .avid-glass-pop,
   .login-logo-enter,
   .login-dialog-enter,
+  .login-dialog-exit,
+  .login-spinner::after,
   .tv-rise,
   .tv-bar,
   .tv-progress {
@@ -334,6 +336,9 @@ select::-ms-expand {
   .login-dialog-prep {
     opacity: 1 !important;
     transform: none !important;
+  }
+  .login-dialog-hidden {
+    display: none !important;
   }
   .avid-btn,
   .avid-chip,
@@ -475,6 +480,10 @@ body:has(.login-root) {
   flex-shrink: 0;
 }
 
+.login-dialog-wrap--busy {
+  min-height: 304px;
+}
+
 .login-dialog {
   position: relative;
   z-index: 1;
@@ -496,6 +505,39 @@ body:has(.login-root) {
 
 .login-dialog-enter {
   animation: loginSlideUp 1s cubic-bezier(0.16, 1, 0.3, 1) 1s both;
+}
+
+.login-dialog-settled {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.login-dialog-exit {
+  animation: loginCollapseUp 0.45s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+  pointer-events: none;
+}
+
+.login-dialog-hidden {
+  display: none;
+}
+
+.login-spinner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.login-spinner::after {
+  content: "";
+  width: 38px;
+  height: 38px;
+  border: 3px solid rgba(237, 29, 36, 0.22);
+  border-top-color: #ed1d24;
+  border-radius: 50%;
+  animation: loginSpin 0.65s linear infinite;
 }
 
 .login-form {
@@ -543,6 +585,25 @@ body:has(.login-root) {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes loginCollapseUp {
+  from {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+    transform-origin: center bottom;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-32px) scaleY(0);
+    transform-origin: center bottom;
+  }
+}
+
+@keyframes loginSpin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
