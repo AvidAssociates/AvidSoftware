@@ -1458,9 +1458,9 @@ function ProcessStatusControl({
       }}
     >
       <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, flexShrink: 0 }} />
-      <span style={{ fontSize: 12.5, fontWeight: 700, color }}>
-        {label}
-        {suffix}
+      <span style={{ fontSize: 12.5, fontWeight: 700 }}>
+        <span style={{ color }}>{label}</span>
+        {suffix ? <span style={{ color: t.ink }}>{suffix}</span> : null}
       </span>
     </button>
   );
