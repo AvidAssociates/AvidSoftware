@@ -453,8 +453,8 @@ body:has(.login-root) {
   pointer-events: none;
   opacity: 0;
   background:
-    radial-gradient(ellipse 42% 50% at 0% 50%, rgba(237, 29, 36, 0.16) 0%, transparent 72%),
-    radial-gradient(ellipse 42% 50% at 100% 50%, rgba(237, 29, 36, 0.16) 0%, transparent 72%);
+    radial-gradient(ellipse 48% 42% at 0% 0%, rgba(237, 29, 36, 0.15) 0%, transparent 72%),
+    radial-gradient(ellipse 48% 42% at 100% 100%, rgba(237, 29, 36, 0.15) 0%, transparent 72%);
 }
 
 .login-page--glow::before {
@@ -501,17 +501,16 @@ body:has(.login-root) {
 .login-dialog-wrap::before {
   content: "";
   position: absolute;
-  inset: -6px;
-  border-radius: 26px;
+  inset: -10px;
+  border-radius: 28px;
   pointer-events: none;
   opacity: 0;
   z-index: 0;
   background:
-    radial-gradient(circle at 0% 0%, rgba(237, 29, 36, 0.24) 0%, transparent 62%),
-    radial-gradient(circle at 100% 0%, rgba(237, 29, 36, 0.2) 0%, transparent 62%),
-    radial-gradient(circle at 0% 100%, rgba(237, 29, 36, 0.18) 0%, transparent 62%),
-    radial-gradient(circle at 100% 100%, rgba(237, 29, 36, 0.22) 0%, transparent 62%);
-  filter: blur(28px);
+    radial-gradient(ellipse 115% 105% at 50% 50%, rgba(237, 29, 36, 0.11) 0%, transparent 68%),
+    radial-gradient(circle at 0% 0%, rgba(237, 29, 36, 0.3) 0%, transparent 56%),
+    radial-gradient(circle at 100% 100%, rgba(237, 29, 36, 0.28) 0%, transparent 56%);
+  filter: blur(24px);
 }
 
 .login-page--glow .login-dialog-wrap::before {

@@ -70,7 +70,12 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [playAnimations, setPlayAnimations] = useState(false);
   const [glowActive, setGlowActive] = useState(false);
+  const [logoEpoch, setLogoEpoch] = useState(() => Date.now());
   const glowStarted = useRef(false);
+
+  const restartLogoAnimation = useCallback(() => {
+    setLogoEpoch(Date.now());
+  }, []);
 
   const startGlow = useCallback(() => {
     if (glowStarted.current) return;
@@ -78,16 +83,17 @@ function LoginForm() {
     setGlowActive(true);
   }, []);
 
-  useEffect(() => {
+  const replayEntry = useCallback(() => {
     glowStarted.current = false;
     setPlayAnimations(false);
     setGlowActive(false);
+    restartLogoAnimation();
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced) {
       setPlayAnimations(true);
       startGlow();
-      return;
+      return undefined;
     }
 
     const startId = requestAnimationFrame(() => {
@@ -96,25 +102,28 @@ function LoginForm() {
 
     const glowTimer = window.setTimeout(startGlow, LOGIN_ANIM_DELAY_MS + LOGIN_ANIM_DURATION_MS + 40);
 
+    return () => {
+      cancelAnimationFrame(startId);
+      window.clearTimeout(glowTimer);
+    };
+  }, [restartLogoAnimation, startGlow]);
+
+  useEffect(() => {
+    const cleanup = replayEntry();
+
     const onPageShow = (event: PageTransitionEvent) => {
       if (!event.persisted) return;
-      glowStarted.current = false;
-      setPlayAnimations(false);
-      setGlowActive(false);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setPlayAnimations(true));
-      });
-      window.setTimeout(startGlow, LOGIN_ANIM_DELAY_MS + LOGIN_ANIM_DURATION_MS + 40);
+      cleanup?.();
+      replayEntry();
     };
 
     window.addEventListener("pageshow", onPageShow);
 
     return () => {
-      cancelAnimationFrame(startId);
-      window.clearTimeout(glowTimer);
+      cleanup?.();
       window.removeEventListener("pageshow", onPageShow);
     };
-  }, [startGlow]);
+  }, [replayEntry]);
 
   const onDialogAnimationEnd = useCallback(
     (event: AnimationEvent<HTMLDivElement>) => {
@@ -155,7 +164,8 @@ function LoginForm() {
     <div className={`login-page${glowActive ? " login-page--glow" : ""}`}>
       <div className="login-stack">
         <img
-          src={loginLogo.src}
+          key={logoEpoch}
+          src={`${loginLogo.src}?t=${logoEpoch}`}
           alt="Avid Associates"
           className={logoClass}
           width={loginLogo.width}
