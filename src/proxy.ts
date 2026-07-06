@@ -12,6 +12,7 @@ export function proxy(request: NextRequest) {
   }
 
   if (pathname === "/api/auth/login") return NextResponse.next();
+  if (pathname === "/api/auth/google" || pathname.startsWith("/api/auth/google/")) return NextResponse.next();
 
   if (!session) {
     if (pathname.startsWith("/api/")) {
