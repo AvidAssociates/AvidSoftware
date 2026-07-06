@@ -287,6 +287,28 @@ export async function deleteMeetingLogEntry(id: string, meetingId: string): Prom
   return toEntry(row);
 }
 
+export async function updateMeetingLogDate(
+  id: string,
+  meetingId: string,
+  date: string
+): Promise<Entry | null> {
+  const db = getDb();
+  const [existing] = (await db.sql`
+    SELECT meeting_log FROM pipeline_entries WHERE id = ${id}
+  `) as { meeting_log: MeetingLogEntry[] }[];
+  if (!existing) return null;
+
+  const meetingLog = (existing.meeting_log ?? []).map((m) => (m.id === meetingId ? { ...m, date } : m));
+  if (!meetingLog.some((m) => m.id === meetingId)) return null;
+
+  const [row] = (await db.sql`
+    UPDATE pipeline_entries SET meeting_log = ${JSON.stringify(meetingLog)}
+    WHERE id = ${id}
+    RETURNING *
+  `) as EntryRow[];
+  return toEntry(row);
+}
+
 // ---------------- Roster ----------------
 
 type RosterRow = { id: number; name: string; sort_order: number };
