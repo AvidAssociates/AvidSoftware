@@ -153,20 +153,7 @@ export default function App() {
   }, [t.bg, isDark]);
 
   if (booting || !authUser) {
-    return (
-      <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: t.bg }}>
-        <div
-          style={{
-            width: 26,
-            height: 26,
-            border: `3px solid ${t.border}`,
-            borderTopColor: t.accent,
-            borderRadius: "50%",
-            animation: "spin .8s linear infinite",
-          }}
-        />
-      </div>
-    );
+    return <div style={{ height: "100vh", background: t.bg }} />;
   }
 
   return (
