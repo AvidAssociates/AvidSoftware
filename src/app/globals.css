@@ -556,7 +556,9 @@ select::-ms-expand {
   .avid-row,
   .avid-stage-fill,
   .avid-stage-dot,
-  .avid-expand {
+  .avid-expand,
+  .avid-kanban-card,
+  .avid-kanban-ghost {
     transition: none !important;
   }
 }
@@ -1026,7 +1028,10 @@ body:has(.login-root) {
   display: flex;
   align-items: stretch;
   overflow: hidden;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.15s ease;
 }
 
 .avid-kanban-card--clickable .avid-kanban-card-body {
@@ -1038,19 +1043,49 @@ body:has(.login-root) {
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
 }
 
+/* The card left behind in its column while its "lifted" copy (the ghost,
+   below) follows the pointer -- dimmed so it reads as a placeholder rather
+   than a second, stationary card. */
+.avid-kanban-card--source {
+  opacity: 0.35;
+}
+
 .avid-kanban-card-drag {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 22px;
   flex-shrink: 0;
-  cursor: grab;
   border-right: 1px solid var(--avid-border, #34332f);
   background: rgba(255, 255, 255, 0.02);
 }
 
-.avid-kanban-card-drag:active {
+.avid-kanban-card:active {
   cursor: grabbing;
+}
+
+/* The floating "lifted" copy of a card that follows the pointer during a
+   drag. Position (left/top) is written inline every pointermove with no
+   transition, for 1:1 tracking; only the lift-in/settle-out (scale, shadow,
+   opacity) animates. */
+.avid-kanban-ghost {
+  position: fixed;
+  z-index: 2000;
+  pointer-events: none;
+  border: 1px solid;
+  border-radius: 10px;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  cursor: grabbing;
+  box-shadow: 0 22px 44px rgba(0, 0, 0, 0.38), 0 6px 16px rgba(0, 0, 0, 0.22);
+  transform: scale(1.035) rotate(1.2deg);
+  transition: opacity 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
+}
+.avid-kanban-ghost--releasing {
+  opacity: 0;
+  transform: scale(0.92) rotate(0deg);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
 }
 
 .avid-kanban-card-body {

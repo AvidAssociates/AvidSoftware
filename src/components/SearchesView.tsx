@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { ArrowLeft, GripVertical, Plus, Trash2, X } from "lucide-react";
 import type { CandidateStage, RetainedSearch, SearchCandidate, SearchStage } from "@/lib/types";
 import {
@@ -44,8 +45,29 @@ function KanbanBoard<T extends string, Item extends { id: string; stage: T }>({
   emptyLabel?: string;
   boardLabel?: string;
 }) {
-  const [dragOver, setDragOver] = useState<T | null>(null);
-  const dragItemRef = useRef<Item | null>(null);
+  // Pointer-based dragging (not native HTML5 DnD) so the card can follow the
+  // cursor 1:1 with a real "lift" animation -- native DnD's browser-drawn
+  // ghost can't be smoothly scaled/shadowed like this. A move only "commits"
+  // once the pointer has traveled past a small threshold, so a plain click
+  // (to open a search, or hit the delete icon on a candidate card) still
+  // works without accidentally starting a drag.
+  const [drag, setDrag] = useState<{
+    item: Item;
+    x: number;
+    y: number;
+    offsetX: number;
+    offsetY: number;
+    width: number;
+    height: number;
+    releasing: boolean;
+  } | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<T | null>(null);
+  const dragStateRef = useRef<{ item: Item; startX: number; startY: number; dragging: boolean } | null>(null);
+  const justDraggedRef = useRef(false);
+  const releaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (releaseTimerRef.current) clearTimeout(releaseTimerRef.current);
+  }, []);
 
   const byStage = useMemo(() => {
     const map = new Map<T, Item[]>();
@@ -58,6 +80,78 @@ function KanbanBoard<T extends string, Item extends { id: string; stage: T }>({
     return map;
   }, [items, stages]);
 
+  const stageUnderPoint = (x: number, y: number): T | null => {
+    const el = document.elementFromPoint(x, y);
+    const col = el?.closest<HTMLElement>("[data-kanban-stage]");
+    return (col?.dataset.kanbanStage as T | undefined) ?? null;
+  };
+
+  const endDrag = (dropStage: T | null) => {
+    const pending = dragStateRef.current;
+    dragStateRef.current = null;
+    setDragOverStage(null);
+    if (!pending?.dragging) {
+      setDrag(null);
+      return;
+    }
+    // Only suppress a click that lands in the same synchronous burst as this
+    // pointerup (the "ghost click" some browsers fire on the release
+    // target) -- clearing it on a timeout, rather than waiting for whatever
+    // card gets clicked next, so an unrelated later click on a different
+    // card never gets eaten by a drag that already ended.
+    justDraggedRef.current = true;
+    setTimeout(() => {
+      justDraggedRef.current = false;
+    }, 0);
+    if (dropStage && dropStage !== pending.item.stage) onMove(pending.item, dropStage);
+    // Let the ghost fade/shrink back before unmounting, instead of just
+    // vanishing the instant the pointer lifts.
+    setDrag((d) => (d ? { ...d, releasing: true } : d));
+    if (releaseTimerRef.current) clearTimeout(releaseTimerRef.current);
+    releaseTimerRef.current = setTimeout(() => setDrag(null), 160);
+  };
+
+  const startPointerTracking = (e: ReactPointerEvent<HTMLElement>, item: Item) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const cardEl = e.currentTarget.closest<HTMLElement>(".avid-kanban-card");
+    if (!cardEl) return;
+    dragStateRef.current = { item, startX: e.clientX, startY: e.clientY, dragging: false };
+
+    const onMove_ = (ev: PointerEvent) => {
+      const pending = dragStateRef.current;
+      if (!pending || pending.item.id !== item.id) return;
+      const dx = ev.clientX - pending.startX;
+      const dy = ev.clientY - pending.startY;
+      if (!pending.dragging) {
+        if (Math.hypot(dx, dy) < 6) return;
+        pending.dragging = true;
+        const rect = cardEl.getBoundingClientRect();
+        setDrag({
+          item,
+          x: ev.clientX,
+          y: ev.clientY,
+          offsetX: pending.startX - rect.left,
+          offsetY: pending.startY - rect.top,
+          width: rect.width,
+          height: rect.height,
+          releasing: false,
+        });
+      } else {
+        setDrag((d) => (d ? { ...d, x: ev.clientX, y: ev.clientY } : d));
+      }
+      setDragOverStage(stageUnderPoint(ev.clientX, ev.clientY));
+    };
+    const onUp_ = (ev: PointerEvent) => {
+      window.removeEventListener("pointermove", onMove_);
+      window.removeEventListener("pointerup", onUp_);
+      window.removeEventListener("pointercancel", onUp_);
+      endDrag(stageUnderPoint(ev.clientX, ev.clientY));
+    };
+    window.addEventListener("pointermove", onMove_);
+    window.addEventListener("pointerup", onUp_);
+    window.addEventListener("pointercancel", onUp_);
+  };
+
   return (
     <div>
       {boardLabel ? (
@@ -69,28 +163,16 @@ function KanbanBoard<T extends string, Item extends { id: string; stage: T }>({
         {stages.map((stage) => {
           const columnItems = byStage.get(stage.key) ?? [];
           const color = stageColors[stage.key];
-          const isOver = dragOver === stage.key;
+          const isOver = dragOverStage === stage.key;
           return (
             <div
               key={stage.key}
               className="avid-kanban-column"
+              data-kanban-stage={stage.key}
               style={{
                 background: t.surfaceAlt,
                 borderColor: isOver ? color : t.border,
                 boxShadow: isOver ? `0 0 0 1px ${color}` : undefined,
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(stage.key);
-              }}
-              onDragLeave={() => setDragOver((cur) => (cur === stage.key ? null : cur))}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOver(null);
-                const item = dragItemRef.current;
-                if (!item || item.stage === stage.key) return;
-                onMove(item, stage.key);
-                dragItemRef.current = null;
               }}
             >
               <div className="avid-kanban-column-header" style={{ borderBottomColor: t.border }}>
@@ -106,52 +188,77 @@ function KanbanBoard<T extends string, Item extends { id: string; stage: T }>({
                     {emptyLabel ?? "Drop here"}
                   </div>
                 ) : (
-                  columnItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className={`avid-kanban-card${onCardClick ? " avid-kanban-card--clickable" : ""}`}
-                      style={{ background: t.surface, borderColor: t.border }}
-                    >
+                  columnItems.map((item) => {
+                    const isDragSource = drag?.item.id === item.id;
+                    return (
                       <div
-                        className="avid-kanban-card-drag"
-                        style={{ color: t.mutedSoft }}
-                        draggable
-                        onDragStart={() => {
-                          dragItemRef.current = item;
-                        }}
-                        onDragEnd={() => {
-                          dragItemRef.current = null;
-                        }}
-                        title="Drag to move"
+                        key={item.id}
+                        className={`avid-kanban-card${onCardClick ? " avid-kanban-card--clickable" : ""}${
+                          isDragSource ? " avid-kanban-card--source" : ""
+                        }`}
+                        style={{ background: t.surface, borderColor: t.border, touchAction: "none" }}
+                        onPointerDown={(e) => startPointerTracking(e, item)}
                       >
-                        <GripVertical size={14} />
-                      </div>
-                      <div
-                        className="avid-kanban-card-body"
-                        role={onCardClick ? "button" : undefined}
-                        tabIndex={onCardClick ? 0 : undefined}
-                        onClick={onCardClick ? () => onCardClick(item) : undefined}
-                        onKeyDown={
-                          onCardClick
-                            ? (e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  e.preventDefault();
+                        <div className="avid-kanban-card-drag" style={{ color: t.mutedSoft }} title="Drag to move">
+                          <GripVertical size={14} />
+                        </div>
+                        <div
+                          className="avid-kanban-card-body"
+                          role={onCardClick ? "button" : undefined}
+                          tabIndex={onCardClick ? 0 : undefined}
+                          onClick={
+                            onCardClick
+                              ? () => {
+                                  if (justDraggedRef.current) {
+                                    justDraggedRef.current = false;
+                                    return;
+                                  }
                                   onCardClick(item);
                                 }
-                              }
-                            : undefined
-                        }
-                      >
-                        {renderCard(item)}
+                              : undefined
+                          }
+                          onKeyDown={
+                            onCardClick
+                              ? (e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    onCardClick(item);
+                                  }
+                                }
+                              : undefined
+                          }
+                        >
+                          {renderCard(item)}
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
           );
         })}
       </div>
+      {drag &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className={`avid-kanban-ghost${drag.releasing ? " avid-kanban-ghost--releasing" : ""}`}
+            style={{
+              left: drag.x - drag.offsetX,
+              top: drag.y - drag.offsetY,
+              width: drag.width,
+              background: t.surface,
+              borderColor: t.border,
+            }}
+          >
+            <div className="avid-kanban-card-drag" style={{ color: t.mutedSoft }}>
+              <GripVertical size={14} />
+            </div>
+            <div className="avid-kanban-card-body">{renderCard(drag.item)}</div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
@@ -469,6 +576,7 @@ export default function SearchesView({
                     className="avid-btn"
                     style={{ ...S.iconGhost, padding: 4 }}
                     title="Remove candidate"
+                    onPointerDown={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
                       onDeleteCandidate(activeSearch.id, candidate.id);
