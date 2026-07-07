@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, GripVertical, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { ArrowLeft, ChevronRight, ExternalLink, GripVertical, Plus, Trash2, X } from "lucide-react";
 import type { CandidateStage, RetainedSearch, SearchCandidate, SearchStage } from "@/lib/types";
 import {
   CANDIDATE_PIPELINE,
@@ -18,12 +18,37 @@ import {
 
 type Styles = ReturnType<typeof makeStyles>;
 
+const DRILL_MS = 360;
+
 type PipelineDef<T extends string> = { key: T; label: string };
 type ColorMap<T extends string> = Record<T, string>;
 
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+function TeamAvatars({ team, t }: { team: string[]; t: Theme }) {
+  if (!team.length) return <span className="avid-k-meta">Unassigned</span>;
+  const shown = team.slice(0, 3);
+  const extra = team.length - shown.length;
+  return (
+    <div className="avid-k-avatars">
+      {shown.map((name) => (
+        <span key={name} className="avid-k-avatar" style={{ background: t.accentSoft, color: t.accentText }} title={name}>
+          {initials(name)}
+        </span>
+      ))}
+      {extra > 0 ? <span className="avid-k-avatar avid-k-avatar--more" style={{ color: t.mutedSoft }}>+{extra}</span> : null}
+    </div>
+  );
+}
+
 function KanbanBoard<T extends string, Item extends { id: string; stage: T }>({
   t,
-  S,
   stages,
   stageColors,
   items,
@@ -31,18 +56,15 @@ function KanbanBoard<T extends string, Item extends { id: string; stage: T }>({
   onMove,
   onCardClick,
   emptyLabel,
-  boardLabel,
 }: {
   t: Theme;
-  S: Styles;
   stages: PipelineDef<T>[];
   stageColors: ColorMap<T>;
   items: Item[];
-  renderCard: (item: Item) => ReactNode;
+  renderCard: (item: Item, stageColor: string) => ReactNode;
   onMove: (item: Item, stage: T) => void;
   onCardClick?: (item: Item) => void;
   emptyLabel?: string;
-  boardLabel?: string;
 }) {
   const [dragOver, setDragOver] = useState<T | null>(null);
   const dragItemRef = useRef<Item | null>(null);
@@ -59,122 +81,181 @@ function KanbanBoard<T extends string, Item extends { id: string; stage: T }>({
   }, [items, stages]);
 
   return (
-    <div>
-      {boardLabel ? (
-        <p style={{ margin: "0 0 14px", fontSize: 12.5, fontWeight: 600, color: t.mutedSoft, letterSpacing: 0.2 }}>
-          {boardLabel}
-        </p>
-      ) : null}
-      <div className="avid-kanban-board">
-        {stages.map((stage) => {
-          const columnItems = byStage.get(stage.key) ?? [];
-          const color = stageColors[stage.key];
-          const isOver = dragOver === stage.key;
-          return (
-            <div
-              key={stage.key}
-              className="avid-kanban-column"
-              style={{
-                background: t.surfaceAlt,
-                borderColor: isOver ? color : t.border,
-                boxShadow: isOver ? `0 0 0 1px ${color}` : undefined,
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(stage.key);
-              }}
-              onDragLeave={() => setDragOver((cur) => (cur === stage.key ? null : cur))}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOver(null);
-                const item = dragItemRef.current;
-                if (!item || item.stage === stage.key) return;
-                onMove(item, stage.key);
-                dragItemRef.current = null;
-              }}
-            >
-              <div className="avid-kanban-column-header" style={{ borderBottomColor: t.border }}>
-                <span className="avid-kanban-column-dot" style={{ background: color }} />
-                <span style={{ fontWeight: 700, fontSize: 13, color: t.ink }}>{stage.label}</span>
-                <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 600, color: t.mutedSoft }}>
-                  {columnItems.length}
-                </span>
-              </div>
-              <div className="avid-kanban-column-body">
-                {columnItems.length === 0 ? (
-                  <div className="avid-kanban-drop-hint" style={{ color: t.mutedSoft }}>
-                    {emptyLabel ?? "Drop here"}
-                  </div>
-                ) : (
-                  columnItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className={`avid-kanban-card${onCardClick ? " avid-kanban-card--clickable" : ""}`}
-                      style={{ background: t.surface, borderColor: t.border }}
-                    >
-                      <div
-                        className="avid-kanban-card-drag"
-                        style={{ color: t.mutedSoft }}
-                        draggable
-                        onDragStart={() => {
-                          dragItemRef.current = item;
-                        }}
-                        onDragEnd={() => {
-                          dragItemRef.current = null;
-                        }}
-                        title="Drag to move"
-                      >
-                        <GripVertical size={14} />
-                      </div>
-                      <div
-                        className="avid-kanban-card-body"
-                        role={onCardClick ? "button" : undefined}
-                        tabIndex={onCardClick ? 0 : undefined}
-                        onClick={onCardClick ? () => onCardClick(item) : undefined}
-                        onKeyDown={
-                          onCardClick
-                            ? (e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  e.preventDefault();
-                                  onCardClick(item);
-                                }
-                              }
-                            : undefined
-                        }
-                      >
-                        {renderCard(item)}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+    <div className="avid-kanban-board">
+      {stages.map((stage) => {
+        const columnItems = byStage.get(stage.key) ?? [];
+        const color = stageColors[stage.key];
+        const isOver = dragOver === stage.key;
+        return (
+          <div
+            key={stage.key}
+            className={`avid-kanban-column${isOver ? " avid-kanban-column--over" : ""}`}
+            style={{ "--stage-color": color, borderColor: isOver ? color : t.border, background: t.surfaceAlt } as CSSProperties}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(stage.key);
+            }}
+            onDragLeave={() => setDragOver((cur) => (cur === stage.key ? null : cur))}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(null);
+              const item = dragItemRef.current;
+              if (!item || item.stage === stage.key) return;
+              onMove(item, stage.key);
+              dragItemRef.current = null;
+            }}
+          >
+            <div className="avid-kanban-column-header" style={{ borderBottomColor: t.border }}>
+              <span className="avid-kanban-column-dot" style={{ background: color }} />
+              <span className="avid-k-col-title" style={{ color: t.ink }}>{stage.label}</span>
+              <span className="avid-k-col-count" style={{ background: t.surface, color: t.mutedSoft, borderColor: t.border }}>
+                {columnItems.length}
+              </span>
             </div>
-          );
-        })}
+            <div className="avid-kanban-column-body">
+              {columnItems.length === 0 ? (
+                <div className="avid-kanban-drop-hint" style={{ color: t.mutedSoft, borderColor: t.border }}>
+                  {emptyLabel ?? "Drop here"}
+                </div>
+              ) : (
+                columnItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`avid-kanban-card${onCardClick ? " avid-kanban-card--clickable" : ""}`}
+                    style={{ background: t.surface, borderColor: t.border, "--stage-color": color } as CSSProperties}
+                  >
+                    <div
+                      className="avid-kanban-card-drag"
+                      style={{ color: t.mutedSoft, borderColor: t.border }}
+                      draggable
+                      onDragStart={() => {
+                        dragItemRef.current = item;
+                      }}
+                      onDragEnd={() => {
+                        dragItemRef.current = null;
+                      }}
+                      title="Drag to move"
+                    >
+                      <GripVertical size={13} />
+                    </div>
+                    <div
+                      className="avid-kanban-card-body"
+                      role={onCardClick ? "button" : undefined}
+                      tabIndex={onCardClick ? 0 : undefined}
+                      onClick={onCardClick ? () => onCardClick(item) : undefined}
+                      onKeyDown={
+                        onCardClick
+                          ? (e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                onCardClick(item);
+                              }
+                            }
+                          : undefined
+                      }
+                    >
+                      {renderCard(item, color)}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SearchCard({ search, t, stageColor }: { search: RetainedSearch; t: Theme; stageColor: string }) {
+  const count = search.candidates?.length ?? 0;
+  const meta = [
+    fmtDate(search.date),
+    search.retainerAmount != null ? money(search.retainerAmount) : null,
+    `${count} ${count === 1 ? "candidate" : "candidates"}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <div className="avid-k-card-inner">
+      <div className="avid-k-card-top">
+        <div className="avid-k-card-copy">
+          <div className="avid-k-card-title" style={{ color: t.ink }}>{search.client}</div>
+          <div className="avid-k-card-sub" style={{ color: t.muted }}>{search.role || "Role TBD"}</div>
+        </div>
+        <ChevronRight size={15} className="avid-k-card-chevron" style={{ color: t.mutedSoft }} />
+      </div>
+      <div className="avid-k-card-meta" style={{ color: t.mutedSoft }}>{meta}</div>
+      <div className="avid-k-card-foot">
+        <TeamAvatars team={search.team} t={t} />
+        <span className="avid-k-stage-pill" style={{ background: `${stageColor}22`, color: stageColor }}>
+          {SEARCH_PIPELINE.find((s) => s.key === search.stage)?.label}
+        </span>
       </div>
     </div>
   );
 }
 
-function TeamPills({ team, t }: { team: string[]; t: Theme }) {
-  if (!team.length) return <span style={{ fontSize: 11.5, color: t.mutedSoft }}>Unassigned</span>;
+function CandidateCard({
+  candidate,
+  t,
+  stageColor,
+  onDelete,
+}: {
+  candidate: SearchCandidate;
+  t: Theme;
+  stageColor: string;
+  onDelete: () => void;
+}) {
+  const stageLabel = CANDIDATE_PIPELINE.find((s) => s.key === candidate.stage)?.label ?? candidate.stage;
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-      {team.map((name) => (
-        <span
-          key={name}
-          style={{
-            fontSize: 10.5,
-            fontWeight: 600,
-            padding: "2px 7px",
-            borderRadius: 999,
-            background: t.accentSoft,
-            color: t.accentText,
-          }}
-        >
-          {name}
-        </span>
-      ))}
+    <div className="avid-k-card-inner avid-k-card-inner--person">
+      <div className="avid-k-person-row">
+        {candidate.profileImageUrl ? (
+          <img src={candidate.profileImageUrl} alt="" className="avid-k-person-photo" />
+        ) : (
+          <div className="avid-k-person-photo avid-k-person-photo--fallback" style={{ background: t.accentSoft, color: t.accentText }}>
+            {candidate.name.charAt(0).toUpperCase()}
+          </div>
+        )}
+        <div className="avid-k-person-copy">
+          <div className="avid-k-card-title" style={{ color: t.ink }}>{candidate.name}</div>
+          <div className="avid-k-card-meta avid-k-card-meta--tight" style={{ color: t.mutedSoft }}>
+            <span className="avid-k-stage-pill avid-k-stage-pill--sm" style={{ background: `${stageColor}22`, color: stageColor }}>
+              {stageLabel}
+            </span>
+            <span>Added {fmtDate(candidate.stageHistory[0]?.date ?? "")}</span>
+          </div>
+        </div>
+        <div className="avid-k-person-actions">
+          {candidate.linkedinUrl ? (
+            <a
+              href={candidate.linkedinUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="avid-k-icon-btn"
+              style={{ color: t.mutedSoft }}
+              title="Open LinkedIn"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ExternalLink size={14} />
+            </a>
+          ) : null}
+          <button
+            type="button"
+            className="avid-k-icon-btn avid-k-icon-btn--danger"
+            style={{ color: t.mutedSoft }}
+            title="Remove"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -298,6 +379,61 @@ function SearchFormModal({
   );
 }
 
+function SearchDetailHeader({
+  search,
+  t,
+  S,
+  onBack,
+  onEdit,
+  onDelete,
+}: {
+  search: RetainedSearch;
+  t: Theme;
+  S: Styles;
+  onBack: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const count = search.candidates?.length ?? 0;
+  const stageLabel = SEARCH_PIPELINE.find((s) => s.key === search.stage)?.label ?? search.stage;
+  const stageColor = SEARCH_STAGE_COLOR[search.stage];
+
+  return (
+    <header className="avid-search-detail-header" style={{ borderBottomColor: t.border, background: t.surface }}>
+      <button type="button" className="avid-search-back avid-btn" style={S.segBtn} onClick={onBack}>
+        <ArrowLeft size={15} />
+        <span>Searches</span>
+      </button>
+      <div className="avid-search-detail-main">
+        <h2 className="avid-search-detail-title" style={{ color: t.ink }}>{search.client}</h2>
+        <p className="avid-search-detail-sub" style={{ color: t.muted }}>{search.role || "Role TBD"}</p>
+      </div>
+      <div className="avid-search-detail-chips">
+        <span className="avid-k-detail-chip" style={{ background: `${stageColor}18`, color: stageColor, borderColor: `${stageColor}40` }}>
+          {stageLabel}
+        </span>
+        <span className="avid-k-detail-chip" style={{ background: t.surfaceAlt, color: t.muted, borderColor: t.border }}>
+          {count} candidates
+        </span>
+        {search.retainerAmount != null ? (
+          <span className="avid-k-detail-chip" style={{ background: t.surfaceAlt, color: t.muted, borderColor: t.border }}>
+            {money(search.retainerAmount)}
+          </span>
+        ) : null}
+      </div>
+      <div className="avid-search-detail-actions">
+        <TeamAvatars team={search.team} t={t} />
+        <button type="button" className="avid-btn" style={S.segBtn} onClick={onEdit}>
+          Edit
+        </button>
+        <button type="button" className="avid-btn" style={S.iconGhost} title="Delete search" onClick={onDelete}>
+          <Trash2 size={15} />
+        </button>
+      </div>
+    </header>
+  );
+}
+
 export default function SearchesView({
   searches,
   totalCount,
@@ -328,225 +464,171 @@ export default function SearchesView({
   onMoveCandidate: (searchId: string, candidate: SearchCandidate, stage: CandidateStage) => Promise<void>;
 }) {
   const S = makeStyles(t);
+  const isDark = t.bg === "#000000";
   const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
+  const [displayLayer, setDisplayLayer] = useState<"list" | "detail">("list");
+  const [leavingLayer, setLeavingLayer] = useState<"list" | "detail" | null>(null);
   const [editingSearch, setEditingSearch] = useState<RetainedSearch | null>(null);
   const [newCandidateName, setNewCandidateName] = useState("");
+  const timerRef = useRef<number | null>(null);
 
   const activeSearch = activeSearchId ? searches.find((s) => s.id === activeSearchId) ?? null : null;
 
-  if (activeSearch) {
-    const candidates = activeSearch.candidates ?? [];
-    return (
-      <div style={{ padding: "20px 24px 32px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-          <button className="avid-btn" style={S.segBtn} onClick={() => setActiveSearchId(null)}>
-            <ArrowLeft size={15} /> Back
-          </button>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 800, letterSpacing: -0.5 }}>{activeSearch.client}</h2>
-            <p style={{ margin: "4px 0 0", fontSize: 13.5, color: t.muted }}>
-              {activeSearch.role || "Role TBD"} · Signed {fmtDate(activeSearch.date)}
-              {activeSearch.retainerAmount != null ? ` · ${money(activeSearch.retainerAmount)} retainer` : ""}
-            </p>
-          </div>
-          <TeamPills team={activeSearch.team} t={t} />
-          <button
-            className="avid-btn"
-            style={S.segBtn}
-            onClick={() => {
-              setEditingSearch(activeSearch);
-            }}
-          >
-            Edit search
-          </button>
-          <button
-            className="avid-btn"
-            style={S.iconGhost}
-            title="Delete search"
-            onClick={() => {
-              if (window.confirm(`Delete search for ${activeSearch.client}?`)) {
-                onDeleteSearch(activeSearch.id);
-                setActiveSearchId(null);
-              }
-            }}
-          >
-            <Trash2 size={15} />
-          </button>
-        </div>
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+    };
+  }, []);
 
-        <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-          <input
-            style={{ ...S.input, flex: 1, minWidth: 180 }}
-            placeholder="Add candidate name…"
-            value={newCandidateName}
-            onChange={(e) => setNewCandidateName(e.target.value)}
-            onKeyDown={async (e) => {
-              if (e.key !== "Enter" || !newCandidateName.trim()) return;
-              const candidate: SearchCandidate = {
-                id: uid(),
-                searchId: activeSearch.id,
-                name: newCandidateName.trim(),
-                stage: "presented",
-                stageHistory: [{ stage: "presented", date: todayISO() }],
-                notes: null,
-                addedBy: user,
-                createdAt: new Date().toISOString(),
-                profileImageUrl: null,
-                linkedinUrl: null,
-              };
-              await onSaveCandidate(activeSearch.id, candidate, true);
-              setNewCandidateName("");
-            }}
-          />
-          <button
-            className="avid-btn"
-            style={S.primaryBtn}
-            disabled={!newCandidateName.trim()}
-            onClick={async () => {
-              if (!newCandidateName.trim()) return;
-              const candidate: SearchCandidate = {
-                id: uid(),
-                searchId: activeSearch.id,
-                name: newCandidateName.trim(),
-                stage: "presented",
-                stageHistory: [{ stage: "presented", date: todayISO() }],
-                notes: null,
-                addedBy: user,
-                createdAt: new Date().toISOString(),
-                profileImageUrl: null,
-                linkedinUrl: null,
-              };
-              await onSaveCandidate(activeSearch.id, candidate, true);
-              setNewCandidateName("");
-            }}
-          >
-            <Plus size={15} /> Add candidate
-          </button>
-        </div>
+  const openSearch = (id: string) => {
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    setActiveSearchId(id);
+    setLeavingLayer(displayLayer);
+    setDisplayLayer("detail");
+    timerRef.current = window.setTimeout(() => setLeavingLayer(null), DRILL_MS);
+  };
 
-        <KanbanBoard
-          t={t}
-          S={S}
-          stages={CANDIDATE_PIPELINE}
-          stageColors={CANDIDATE_STAGE_COLOR}
-          items={candidates}
-          boardLabel="Candidate pipeline — drag cards between stages for this search only"
-          emptyLabel="No candidates"
-          onMove={(candidate, stage) => onMoveCandidate(activeSearch.id, candidate, stage)}
-          renderCard={(candidate) => (
-            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              {candidate.profileImageUrl ? (
-                <img
-                  src={candidate.profileImageUrl}
-                  alt=""
-                  style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
-                />
-              ) : (
-                <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "50%",
-                    background: t.accentSoft,
-                    color: t.accentText,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontWeight: 700,
-                    fontSize: 14,
-                    flexShrink: 0,
-                  }}
-                >
-                  {candidate.name.charAt(0).toUpperCase()}
+  const closeSearch = () => {
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    setLeavingLayer(displayLayer);
+    setDisplayLayer("list");
+    timerRef.current = window.setTimeout(() => {
+      setActiveSearchId(null);
+      setLeavingLayer(null);
+    }, DRILL_MS);
+  };
+
+  const addCandidate = async () => {
+    if (!activeSearch || !newCandidateName.trim()) return;
+    const candidate: SearchCandidate = {
+      id: uid(),
+      searchId: activeSearch.id,
+      name: newCandidateName.trim(),
+      stage: "presented",
+      stageHistory: [{ stage: "presented", date: todayISO() }],
+      notes: null,
+      addedBy: user,
+      createdAt: new Date().toISOString(),
+      profileImageUrl: null,
+      linkedinUrl: null,
+    };
+    await onSaveCandidate(activeSearch.id, candidate, true);
+    setNewCandidateName("");
+  };
+
+  const drilling = leavingLayer !== null;
+
+  const listLayerClass = [
+    "avid-search-layer",
+    drilling ? "avid-search-layer--overlay" : "",
+    displayLayer === "list" && leavingLayer === "detail" ? "avid-search-layer--enter-back" : "",
+    displayLayer === "detail" && leavingLayer === "list" ? "avid-search-layer--leave-back" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const detailLayerClass = [
+    "avid-search-layer avid-search-layer--detail",
+    drilling ? "avid-search-layer--overlay" : "",
+    displayLayer === "detail" && leavingLayer === "list" ? "avid-search-layer--enter-forward" : "",
+    displayLayer === "list" && leavingLayer === "detail" ? "avid-search-layer--leave-forward" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const showList = displayLayer === "list" || leavingLayer === "list";
+  const showDetail = (displayLayer === "detail" || leavingLayer === "detail") && activeSearch;
+
+  return (
+    <div className="avid-search-root" data-theme={isDark ? "dark" : "light"}>
+      <div className="avid-search-depth">
+        {showList ? (
+          <div className={listLayerClass}>
+            <div className="avid-search-panel">
+              {searches.length === 0 && totalCount > 0 ? (
+                <div className="avid-search-empty" style={{ color: t.mutedSoft }}>Nothing matches these filters.</div>
+              ) : null}
+
+              <KanbanBoard
+                t={t}
+                stages={SEARCH_PIPELINE}
+                stageColors={SEARCH_STAGE_COLOR}
+                items={searches}
+                emptyLabel="Empty"
+                onMove={(search, stage) => onMoveSearch(search, stage)}
+                onCardClick={(search) => openSearch(search.id)}
+                renderCard={(search, stageColor) => <SearchCard search={search} t={t} stageColor={stageColor} />}
+              />
+
+              {totalCount === 0 ? (
+                <div className="avid-search-empty" style={{ color: t.mutedSoft }}>
+                  No searches yet — use <strong style={{ color: t.ink }}>New</strong> to add one to Signed.
                 </div>
-              )}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>{candidate.name}</div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: 11.5, color: t.mutedSoft }}>Added {fmtDate(candidate.stageHistory[0]?.date ?? "")}</span>
-                  <button
-                    type="button"
-                    className="avid-btn"
-                    style={{ ...S.iconGhost, padding: 4 }}
-                    title="Remove candidate"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDeleteCandidate(activeSearch.id, candidate.id);
-                    }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
+              ) : null}
             </div>
-          )}
-        />
-
-        {candidates.length === 0 ? (
-          <div style={{ ...S.empty, paddingTop: 20, paddingBottom: 0 }}>
-            No candidates yet — add one above, then drag the card across the pipeline.
           </div>
         ) : null}
 
-        {(showNewForm || editingSearch) && (
-          <SearchFormModal
-            S={S}
-            t={t}
-            teamNames={teamNames}
-            user={user}
-            initial={editingSearch ?? undefined}
-            onClose={() => {
-              setEditingSearch(null);
-              onCloseNewForm();
-            }}
-            onSave={async (search) => {
-              await onSaveSearch(search, !editingSearch);
-              setEditingSearch(null);
-              onCloseNewForm();
-            }}
-          />
-        )}
-      </div>
-    );
-  }
+        {showDetail && activeSearch ? (
+          <div className={detailLayerClass}>
+            <div className="avid-search-panel avid-search-panel--detail">
+              <SearchDetailHeader
+                search={activeSearch}
+                t={t}
+                S={S}
+                onBack={closeSearch}
+                onEdit={() => setEditingSearch(activeSearch)}
+                onDelete={() => {
+                  if (window.confirm(`Delete search for ${activeSearch.client}?`)) {
+                    onDeleteSearch(activeSearch.id);
+                    closeSearch();
+                  }
+                }}
+              />
 
-  return (
-    <div style={{ padding: "20px 24px 32px" }}>
-      {searches.length === 0 && totalCount > 0 ? (
-        <div style={{ ...S.empty, paddingBottom: 16 }}>Nothing matches these filters.</div>
-      ) : null}
+              <div className="avid-search-add-bar" style={{ borderBottomColor: t.border }}>
+                <input
+                  className="avid-search-add-input"
+                  style={{ background: t.surfaceAlt, borderColor: t.border, color: t.ink }}
+                  placeholder="Add candidate…"
+                  value={newCandidateName}
+                  onChange={(e) => setNewCandidateName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void addCandidate();
+                  }}
+                />
+                <button type="button" className="avid-btn" style={S.primaryBtn} disabled={!newCandidateName.trim()} onClick={() => void addCandidate()}>
+                  <Plus size={15} />
+                  <span>Add</span>
+                </button>
+              </div>
 
-      <KanbanBoard
-        t={t}
-        S={S}
-        stages={SEARCH_PIPELINE}
-        stageColors={SEARCH_STAGE_COLOR}
-        items={searches}
-        boardLabel="Search pipeline — click a search to open its candidates"
-        emptyLabel="Drop search here"
-        onMove={(search, stage) => onMoveSearch(search, stage)}
-        onCardClick={(search) => setActiveSearchId(search.id)}
-        renderCard={(search) => (
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 14.5, marginBottom: 4, letterSpacing: -0.2 }}>{search.client}</div>
-            <div style={{ fontSize: 13, color: t.muted, marginBottom: 8 }}>{search.role || "Role TBD"}</div>
-            <TeamPills team={search.team} t={t} />
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 11.5, color: t.mutedSoft }}>
-              <span>Signed {fmtDate(search.date)}</span>
-              {search.retainerAmount != null ? <span>{money(search.retainerAmount)}</span> : null}
-            </div>
-            <div style={{ marginTop: 8, fontSize: 11, color: t.accentText, fontWeight: 600 }}>
-              {(search.candidates ?? []).length} candidate{(search.candidates ?? []).length === 1 ? "" : "s"} · Open →
+              <KanbanBoard
+                t={t}
+                stages={CANDIDATE_PIPELINE}
+                stageColors={CANDIDATE_STAGE_COLOR}
+                items={activeSearch.candidates ?? []}
+                emptyLabel="Empty"
+                onMove={(candidate, stage) => onMoveCandidate(activeSearch.id, candidate, stage)}
+                renderCard={(candidate, stageColor) => (
+                  <CandidateCard
+                    candidate={candidate}
+                    t={t}
+                    stageColor={stageColor}
+                    onDelete={() => onDeleteCandidate(activeSearch.id, candidate.id)}
+                  />
+                )}
+              />
+
+              {(activeSearch.candidates ?? []).length === 0 ? (
+                <div className="avid-search-empty avid-search-empty--inline" style={{ color: t.mutedSoft }}>
+                  No candidates yet — add one above or import from LinkedIn.
+                </div>
+              ) : null}
             </div>
           </div>
-        )}
-      />
-
-      {totalCount === 0 ? (
-        <div style={{ ...S.empty, paddingTop: 20, paddingBottom: 0 }}>
-          No searches yet — click <strong>New</strong> to add a retained search to the Signed column.
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       {(showNewForm || editingSearch) && (
         <SearchFormModal
