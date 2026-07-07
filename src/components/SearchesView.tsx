@@ -391,6 +391,8 @@ export default function SearchesView({
                 notes: null,
                 addedBy: user,
                 createdAt: new Date().toISOString(),
+                profileImageUrl: null,
+                linkedinUrl: null,
               };
               await onSaveCandidate(activeSearch.id, candidate, true);
               setNewCandidateName("");
@@ -411,6 +413,8 @@ export default function SearchesView({
                 notes: null,
                 addedBy: user,
                 createdAt: new Date().toISOString(),
+                profileImageUrl: null,
+                linkedinUrl: null,
               };
               await onSaveCandidate(activeSearch.id, candidate, true);
               setNewCandidateName("");
@@ -430,22 +434,49 @@ export default function SearchesView({
           emptyLabel="No candidates"
           onMove={(candidate, stage) => onMoveCandidate(activeSearch.id, candidate, stage)}
           renderCard={(candidate) => (
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>{candidate.name}</div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 11.5, color: t.mutedSoft }}>Added {fmtDate(candidate.stageHistory[0]?.date ?? "")}</span>
-                <button
-                  type="button"
-                  className="avid-btn"
-                  style={{ ...S.iconGhost, padding: 4 }}
-                  title="Remove candidate"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteCandidate(activeSearch.id, candidate.id);
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+              {candidate.profileImageUrl ? (
+                <img
+                  src={candidate.profileImageUrl}
+                  alt=""
+                  style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: "50%",
+                    background: t.accentSoft,
+                    color: t.accentText,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontWeight: 700,
+                    fontSize: 14,
+                    flexShrink: 0,
                   }}
                 >
-                  <Trash2 size={13} />
-                </button>
+                  {candidate.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>{candidate.name}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 11.5, color: t.mutedSoft }}>Added {fmtDate(candidate.stageHistory[0]?.date ?? "")}</span>
+                  <button
+                    type="button"
+                    className="avid-btn"
+                    style={{ ...S.iconGhost, padding: 4 }}
+                    title="Remove candidate"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteCandidate(activeSearch.id, candidate.id);
+                    }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               </div>
             </div>
           )}

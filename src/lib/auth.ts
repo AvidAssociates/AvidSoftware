@@ -94,6 +94,40 @@ export async function getSessionUser(): Promise<AuthUser | null> {
   return getUserBySession(sessionId);
 }
 
+const EXTENSION_TOKEN_DAYS = 90;
+
+export async function createExtensionToken(userId: string) {
+  const db = getDb();
+  const id = createHash("sha256").update(randomBytes(32)).digest("hex").slice(0, 48);
+  const d = new Date();
+  d.setDate(d.getDate() + EXTENSION_TOKEN_DAYS);
+  const expiresAt = d.toISOString();
+  await db.sql`
+    INSERT INTO extension_tokens (id, user_id, expires_at) VALUES (${id}, ${userId}, ${expiresAt})
+  `;
+  return { id, expiresAt };
+}
+
+export async function getUserByExtensionToken(token: string): Promise<AuthUser | null> {
+  const db = getDb();
+  const [row] = (await db.sql`
+    SELECT t.id, t.expires_at, u.id AS user_id, u.email, u.display_name
+    FROM extension_tokens t
+    JOIN users u ON u.id = t.user_id
+    WHERE t.id = ${token}
+  `) as { id: string; expires_at: string; user_id: string; email: string; display_name: string }[];
+  if (!row) return null;
+  if (isExpired(row.expires_at)) {
+    await db.sql`DELETE FROM extension_tokens WHERE id = ${row.id}`;
+    return null;
+  }
+  return { id: row.user_id, email: row.email, displayName: row.display_name };
+}
+
+export async function deleteExtensionToken(token: string) {
+  await getDb().sql`DELETE FROM extension_tokens WHERE id = ${token}`;
+}
+
 export function sessionCookieOptions(expiresAt: string) {
   return {
     httpOnly: true,

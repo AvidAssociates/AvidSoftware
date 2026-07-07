@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Avid Search</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Avid Search</h1>
+        <p>Connect to your Avid dashboard, then use <strong>Add to Search</strong> on LinkedIn profiles.</p>
+      </header>
+
+      <label for="apiUrl">API URL</label>
+      <input id="apiUrl" type="url" placeholder="https://your-app.vercel.app" />
+
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="username" />
+
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" />
+
+      <div id="status" class="status"></div>
+
+      <div class="actions">
+        <button type="button" id="signOut" class="ghost" hidden>Sign out</button>
+        <button type="button" id="signIn" class="primary">Sign in</button>
+      </div>
+
+      <p class="hint">Open any LinkedIn profile (<code>/in/…</code>) and click the red <strong>Add to Search</strong> button.</p>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>

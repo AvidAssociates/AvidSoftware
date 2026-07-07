@@ -20,6 +20,8 @@ export async function POST(request: Request, { params }: Params) {
     notes: body.notes,
     addedBy: body.addedBy,
     stageDate: body.stageDate,
+    profileImageUrl: body.profileImageUrl,
+    linkedinUrl: body.linkedinUrl,
   });
   return NextResponse.json(candidate, { status: 201 });
 }

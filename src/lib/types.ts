@@ -127,6 +127,8 @@ export type SearchCandidate = {
   notes: string | null;
   addedBy: string | null;
   createdAt: string;
+  profileImageUrl: string | null;
+  linkedinUrl: string | null;
 };
 
 export type RosterMember = {

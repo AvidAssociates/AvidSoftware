@@ -720,6 +720,8 @@ type CandidateRow = {
   notes: string | null;
   added_by: string | null;
   created_at: string;
+  profile_image_url: string | null;
+  linkedin_url: string | null;
 };
 
 function toSearch(row: SearchRow, candidates: SearchCandidate[] = []): RetainedSearch {
@@ -749,6 +751,8 @@ function toCandidate(row: CandidateRow): SearchCandidate {
     notes: row.notes,
     addedBy: row.added_by,
     createdAt: row.created_at,
+    profileImageUrl: row.profile_image_url,
+    linkedinUrl: row.linkedin_url,
   };
 }
 
@@ -885,13 +889,15 @@ export async function createSearchCandidate(input: {
   notes?: string | null;
   addedBy?: string | null;
   stageDate?: string;
+  profileImageUrl?: string | null;
+  linkedinUrl?: string | null;
 }): Promise<SearchCandidate> {
   const db = getDb();
   const stage = input.stage ?? "presented";
   const stageDate = input.stageDate ?? todayISO();
   const history: CandidateStageEvent[] = [{ stage, date: stageDate }];
   const [row] = (await db.sql`
-    INSERT INTO search_candidates (id, search_id, name, stage, stage_history, notes, added_by)
+    INSERT INTO search_candidates (id, search_id, name, stage, stage_history, notes, added_by, profile_image_url, linkedin_url)
     VALUES (
       ${input.id},
       ${input.searchId},
@@ -899,7 +905,9 @@ export async function createSearchCandidate(input: {
       ${stage},
       ${JSON.stringify(history)},
       ${input.notes ?? null},
-      ${input.addedBy ?? null}
+      ${input.addedBy ?? null},
+      ${input.profileImageUrl ?? null},
+      ${input.linkedinUrl ?? null}
     )
     RETURNING *
   `) as CandidateRow[];
@@ -913,6 +921,8 @@ export async function updateSearchCandidate(
     stage: CandidateStage;
     notes?: string | null;
     stageDate?: string;
+    profileImageUrl?: string | null;
+    linkedinUrl?: string | null;
   }
 ): Promise<SearchCandidate> {
   const db = getDb();
@@ -923,12 +933,16 @@ export async function updateSearchCandidate(
     input.stage !== existing.stage
       ? mergeCandidateStageHistory(existing.stage_history ?? [], input.stage, stageDate)
       : (existing.stage_history ?? []);
+  const profileImageUrl = input.profileImageUrl !== undefined ? input.profileImageUrl : existing.profile_image_url;
+  const linkedinUrl = input.linkedinUrl !== undefined ? input.linkedinUrl : existing.linkedin_url;
   const [row] = (await db.sql`
     UPDATE search_candidates SET
       name = ${input.name},
       stage = ${input.stage},
       stage_history = ${JSON.stringify(history)},
-      notes = ${input.notes ?? null}
+      notes = ${input.notes ?? null},
+      profile_image_url = ${profileImageUrl},
+      linkedin_url = ${linkedinUrl}
     WHERE id = ${id}
     RETURNING *
   `) as CandidateRow[];
