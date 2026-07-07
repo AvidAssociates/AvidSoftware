@@ -556,7 +556,9 @@ select::-ms-expand {
   .avid-row,
   .avid-stage-fill,
   .avid-stage-dot,
-  .avid-expand {
+  .avid-expand,
+  .avid-kanban-card,
+  .avid-kanban-ghost {
     transition: none !important;
   }
 }
@@ -1259,7 +1261,10 @@ body:has(.login-root) {
   align-items: stretch;
   overflow: hidden;
   position: relative;
-  transition: transform 0.18s var(--avid-search-ease), box-shadow 0.18s ease, border-color 0.18s ease;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 0.18s var(--avid-search-ease), box-shadow 0.18s ease, border-color 0.18s ease, opacity 0.15s ease;
 }
 
 .avid-kanban-card::before {
@@ -1283,6 +1288,13 @@ body:has(.login-root) {
   border-color: color-mix(in srgb, var(--stage-color) 40%, transparent);
 }
 
+/* The card left behind in its column while its "lifted" copy (the ghost,
+   below) follows the pointer -- dimmed so it reads as a placeholder rather
+   than a second, stationary card. */
+.avid-kanban-card--source {
+  opacity: 0.35;
+}
+
 .avid-kanban-card-drag {
   display: flex;
   align-items: center;
@@ -1300,9 +1312,44 @@ body:has(.login-root) {
   opacity: 0.55;
 }
 
-.avid-kanban-card-drag:active {
+.avid-kanban-card:active {
   cursor: grabbing;
   opacity: 1;
+}
+
+/* The floating "lifted" copy of a card that follows the pointer during a
+   drag. Position (left/top) is written inline every pointermove with no
+   transition, for 1:1 tracking; only the lift-in/settle-out (scale, shadow,
+   opacity) animates. */
+.avid-kanban-ghost {
+  position: fixed;
+  z-index: 2000;
+  pointer-events: none;
+  border: 1px solid;
+  border-radius: 12px;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  cursor: grabbing;
+  box-shadow: 0 22px 44px rgba(0, 0, 0, 0.38), 0 6px 16px rgba(0, 0, 0, 0.22);
+  transform: scale(1.035) rotate(1.2deg);
+  transition: opacity 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.avid-kanban-ghost::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--stage-color);
+  opacity: 0.85;
+}
+.avid-kanban-ghost--releasing {
+  opacity: 0;
+  transform: scale(0.92) rotate(0deg);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
 }
 
 .avid-kanban-card-body {
