@@ -1,5 +1,6 @@
 import { getDb } from "./db";
 import { uid } from "./ui";
+import { normalizeSearchStage, resolveAutoSearchStage } from "./search-stale";
 import { Billing, BillingCollectionLogEntry, BillingCollectionStage, CandidateStage, CandidateStageEvent, Entry, EntryMutationResult, MeetingLogEntry, ProductionGoals, RetainedSearch, Retainer, RosterMember, SearchCandidate, SearchStage, SearchStageEvent, StageEvent } from "./types";
 
 type EntryRow = {
@@ -725,14 +726,19 @@ type CandidateRow = {
 };
 
 function toSearch(row: SearchRow, candidates: SearchCandidate[] = []): RetainedSearch {
+  const stage = normalizeSearchStage(row.stage);
+  const stageHistory = (row.stage_history ?? []).map((ev) => ({
+    ...ev,
+    stage: normalizeSearchStage(ev.stage),
+  }));
   return {
     id: row.id,
     date: row.date,
     client: row.client,
     role: row.role,
     team: row.team ?? [],
-    stage: row.stage as SearchStage,
-    stageHistory: row.stage_history ?? [],
+    stage,
+    stageHistory,
     retainerAmount: row.retainer_amount === null ? null : Number(row.retainer_amount),
     notes: row.notes,
     addedBy: row.added_by,
@@ -776,6 +782,33 @@ function mergeCandidateStageHistory(
   return [...existing, { stage, date: stageDate }];
 }
 
+async function syncSearchStaleIfNeeded(search: RetainedSearch): Promise<RetainedSearch> {
+  const candidates = search.candidates ?? [];
+  const today = todayISO();
+  const target = resolveAutoSearchStage(search, candidates, today);
+  if (search.stage === target) return search;
+  return updateSearch(search.id, {
+    date: search.date,
+    client: search.client,
+    role: search.role,
+    team: search.team,
+    stage: target,
+    retainerAmount: search.retainerAmount,
+    notes: search.notes,
+    stageDate: today,
+  });
+}
+
+async function syncSearchStaleById(searchId: string): Promise<void> {
+  const db = getDb();
+  const [row] = (await db.sql`SELECT * FROM retained_searches WHERE id = ${searchId}`) as SearchRow[];
+  if (!row) return;
+  const candidateRows = (await db.sql`
+    SELECT * FROM search_candidates WHERE search_id = ${searchId} ORDER BY created_at DESC
+  `) as CandidateRow[];
+  await syncSearchStaleIfNeeded(toSearch(row, candidateRows.map(toCandidate)));
+}
+
 export async function listSearches(): Promise<RetainedSearch[]> {
   const db = getDb();
   const searchRows = (await db.sql`
@@ -790,7 +823,7 @@ export async function listSearches(): Promise<RetainedSearch[]> {
     list.push(toCandidate(row));
     bySearch.set(row.search_id, list);
   }
-  return searchRows.map((row) => toSearch(row, bySearch.get(row.id) ?? []));
+  return Promise.all(searchRows.map((row) => syncSearchStaleIfNeeded(toSearch(row, bySearch.get(row.id) ?? []))));
 }
 
 export async function getSearch(id: string): Promise<RetainedSearch | null> {
@@ -800,7 +833,7 @@ export async function getSearch(id: string): Promise<RetainedSearch | null> {
   const candidateRows = (await db.sql`
     SELECT * FROM search_candidates WHERE search_id = ${id} ORDER BY created_at DESC
   `) as CandidateRow[];
-  return toSearch(row, candidateRows.map(toCandidate));
+  return syncSearchStaleIfNeeded(toSearch(row, candidateRows.map(toCandidate)));
 }
 
 export async function createSearch(input: {
@@ -815,7 +848,7 @@ export async function createSearch(input: {
   addedBy?: string | null;
 }): Promise<RetainedSearch> {
   const db = getDb();
-  const stage = input.stage ?? "signed";
+  const stage = input.stage ?? "sourcing";
   const history: SearchStageEvent[] = [{ stage, date: input.date }];
   const [row] = (await db.sql`
     INSERT INTO retained_searches (id, date, client, role, team, stage, stage_history, retainer_amount, notes, added_by)
@@ -911,7 +944,9 @@ export async function createSearchCandidate(input: {
     )
     RETURNING *
   `) as CandidateRow[];
-  return toCandidate(row);
+  const candidate = toCandidate(row);
+  await syncSearchStaleById(input.searchId);
+  return candidate;
 }
 
 export async function updateSearchCandidate(
@@ -946,12 +981,16 @@ export async function updateSearchCandidate(
     WHERE id = ${id}
     RETURNING *
   `) as CandidateRow[];
-  return toCandidate(row);
+  const candidate = toCandidate(row);
+  await syncSearchStaleById(existing.search_id);
+  return candidate;
 }
 
 export async function deleteSearchCandidate(id: string): Promise<void> {
   const db = getDb();
+  const [existing] = (await db.sql`SELECT search_id FROM search_candidates WHERE id = ${id}`) as { search_id: string }[];
   await db.sql`DELETE FROM search_candidates WHERE id = ${id}`;
+  if (existing?.search_id) await syncSearchStaleById(existing.search_id);
 }
 
 // ---------------- Retainers ----------------

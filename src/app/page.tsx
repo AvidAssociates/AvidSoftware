@@ -634,11 +634,12 @@ function Dashboard({
   }, [monthEntries]);
 
   const searchStats = useMemo(() => {
-    const active = monthSearches.filter((s) => s.stage !== "filled");
+    const active = monthSearches.filter((s) => s.stage !== "placed" && s.stage !== "stale");
     return {
       total: monthSearches.length,
       active: active.length,
-      filled: monthSearches.filter((s) => s.stage === "filled").length,
+      placed: monthSearches.filter((s) => s.stage === "placed").length,
+      stale: monthSearches.filter((s) => s.stage === "stale").length,
       candidates: monthSearches.reduce((sum, s) => sum + (s.candidates?.length ?? 0), 0),
     };
   }, [monthSearches]);
@@ -757,7 +758,8 @@ function Dashboard({
             <div className="avid-hero-stats" style={S.heroStatsRow}>
               <HeroStat S={S} label="Total" value={String(searchStats.total)} />
               <HeroStat S={S} label="Active" value={String(searchStats.active)} color={SEARCH_STAGE_COLOR.interviewing} />
-              <HeroStat S={S} label="Filled" value={String(searchStats.filled)} color={SEARCH_STAGE_COLOR.filled} />
+              <HeroStat S={S} label="Placed" value={String(searchStats.placed)} color={SEARCH_STAGE_COLOR.placed} />
+              <HeroStat S={S} label="Stale" value={String(searchStats.stale)} color={SEARCH_STAGE_COLOR.stale} />
               <HeroStat S={S} label="Candidates" value={String(searchStats.candidates)} color={t.accent} />
             </div>
             <div />

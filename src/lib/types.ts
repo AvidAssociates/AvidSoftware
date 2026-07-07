@@ -89,7 +89,7 @@ export type Retainer = {
   amount: number | null;
 };
 
-export type SearchStage = "signed" | "sourcing" | "interviewing" | "filled";
+export type SearchStage = "sourcing" | "interviewing" | "placed" | "stale";
 
 export type SearchStageEvent = {
   stage: SearchStage;

@@ -16,6 +16,7 @@ import {
   todayISO,
   uid,
 } from "@/lib/ui";
+import { daysSince, lastCandidateInterviewDate, SEARCH_STALE_DAYS } from "@/lib/search-stale";
 
 type Styles = ReturnType<typeof makeStyles>;
 
@@ -266,6 +267,9 @@ function KanbanBoard<T extends string, Item extends { id: string; stage: T }>({
 
 function SearchCard({ search, t, stageColor }: { search: RetainedSearch; t: Theme; stageColor: string }) {
   const count = search.candidates?.length ?? 0;
+  const today = todayISO();
+  const lastInterview = lastCandidateInterviewDate(search.candidates ?? [], search.date);
+  const idleDays = daysSince(lastInterview, today);
   const meta = [
     fmtDate(search.date),
     search.retainerAmount != null ? money(search.retainerAmount) : null,
@@ -284,6 +288,15 @@ function SearchCard({ search, t, stageColor }: { search: RetainedSearch; t: Them
         <ChevronRight size={15} className="avid-k-card-chevron" style={{ color: t.mutedSoft }} />
       </div>
       <div className="avid-k-card-meta" style={{ color: t.mutedSoft }}>{meta}</div>
+      {search.stage === "stale" ? (
+        <div className="avid-k-stale-hint" style={{ color: t.mutedSoft }}>
+          No interview activity in {idleDays} days
+        </div>
+      ) : idleDays > SEARCH_STALE_DAYS - 7 && search.stage !== "placed" ? (
+        <div className="avid-k-stale-hint" style={{ color: t.mutedSoft }}>
+          Interview idle {idleDays}d — stale at {SEARCH_STALE_DAYS}d
+        </div>
+      ) : null}
       <div className="avid-k-card-foot">
         <TeamAvatars team={search.team} t={t} />
         <span className="avid-k-stage-pill" style={{ background: `${stageColor}22`, color: stageColor }}>
@@ -399,8 +412,8 @@ function SearchFormModal({
       client: client.trim(),
       role: role.trim() || null,
       team,
-      stage: initial?.stage ?? "signed",
-      stageHistory: initial?.stageHistory ?? [{ stage: "signed", date }],
+      stage: initial?.stage ?? "sourcing",
+      stageHistory: initial?.stageHistory ?? [{ stage: "sourcing", date }],
       retainerAmount: retainerAmount ? Number(retainerAmount) : null,
       notes: notes.trim() || null,
       addedBy: initial?.addedBy ?? user,
@@ -661,7 +674,7 @@ export default function SearchesView({
 
               {totalCount === 0 ? (
                 <div className="avid-search-empty" style={{ color: t.mutedSoft }}>
-                  No searches yet — use <strong style={{ color: t.ink }}>New</strong> to add one to Signed.
+                  No searches yet — use <strong style={{ color: t.ink }}>New</strong> to add one to Sourcing.
                 </div>
               ) : null}
             </div>

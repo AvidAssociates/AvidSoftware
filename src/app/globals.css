@@ -1443,6 +1443,12 @@ body:has(.login-root) {
   margin-top: 4px;
 }
 
+.avid-k-stale-hint {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
 .avid-k-card-foot {
   display: flex;
   align-items: center;

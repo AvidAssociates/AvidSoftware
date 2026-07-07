@@ -21,16 +21,16 @@ export const BILLING_COLLECTION: { key: BillingCollectionStage; label: string; c
 ];
 
 export const SEARCH_PIPELINE: { key: SearchStage; label: string }[] = [
-  { key: "signed", label: "Signed" },
   { key: "sourcing", label: "Sourcing" },
   { key: "interviewing", label: "Interviewing" },
-  { key: "filled", label: "Filled" },
+  { key: "placed", label: "Placed" },
+  { key: "stale", label: "Stale" },
 ];
 export const SEARCH_STAGE_COLOR: Record<SearchStage, string> = {
-  signed: STAGE_COLOR.offer,
   sourcing: STAGE_COLOR.sent,
   interviewing: STAGE_COLOR.interview,
-  filled: STAGE_COLOR.placed,
+  placed: STAGE_COLOR.placed,
+  stale: "#6E6A62",
 };
 
 export const CANDIDATE_PIPELINE: { key: CandidateStage; label: string }[] = [
