@@ -1438,6 +1438,8 @@ body:has(.login-root) {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  position: relative;
+  padding-bottom: 26px;
 }
 
 .avid-k-card-headrow {
@@ -1585,19 +1587,27 @@ body:has(.login-root) {
 .avid-k-card-foot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   margin-top: 2px;
 }
 
-.avid-k-card-foot .avid-k-card-chevron {
+.avid-k-card-fee-corner {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.avid-k-card-fee-corner .avid-k-card-chevron {
   flex-shrink: 0;
   opacity: 0;
   transform: translateX(-4px);
   transition: opacity 0.18s ease, transform 0.18s var(--avid-search-ease);
 }
 
-.avid-kanban-card--clickable:hover .avid-k-card-foot .avid-k-card-chevron {
+.avid-kanban-card--clickable:hover .avid-k-card-fee-corner .avid-k-card-chevron {
   opacity: 1;
   transform: translateX(0);
 }

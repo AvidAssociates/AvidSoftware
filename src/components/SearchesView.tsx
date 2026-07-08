@@ -292,7 +292,6 @@ function InlineSearchCard({
   autoFocusClient?: boolean;
   onUpdate: (patch: Partial<Pick<RetainedSearch, "client" | "role" | "retainerAmount">>) => void;
 }) {
-  const count = search.candidates?.length ?? 0;
   const today = todayISO();
   const lastInterview = lastCandidateInterviewDate(search.candidates ?? [], search.date);
   const idleDays = daysSince(lastInterview, today);
@@ -376,9 +375,6 @@ function InlineSearchCard({
         onPointerDown={stopCardNav}
         onClick={stopCardNav}
       />
-      <div className="avid-k-card-meta" style={{ color: t.mutedSoft }}>
-        {count} {count === 1 ? "candidate" : "candidates"}
-      </div>
       {search.stage === "stale" ? (
         <div className="avid-k-stale-hint" style={{ color: t.mutedSoft }}>
           No interview activity in {idleDays} days
@@ -390,6 +386,8 @@ function InlineSearchCard({
       ) : null}
       <div className="avid-k-card-foot">
         <TeamAvatars team={search.team} t={t} />
+      </div>
+      <div className="avid-k-card-fee-corner">
         {feeEditing ? (
           <input
             className="avid-k-fee-input"
