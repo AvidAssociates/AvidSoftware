@@ -1166,7 +1166,8 @@ select::-ms-expand {
   .fee-log-panel--morph .fee-log-value-to,
   .tv-rise,
   .tv-bar,
-  .tv-progress {
+  .tv-progress,
+  .tv-ambient {
     animation: none !important;
   }
   .login-logo-prep,
