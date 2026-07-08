@@ -542,7 +542,8 @@ function Dashboard({
       );
     }
   };
-  const moveSearchCandidate = async (searchId: string, candidate: SearchCandidate, stage: CandidateStage) => {
+  const moveSearchCandidate = async (searchId: string, candidate: SearchCandidate, stage: CandidateStage, stageDate?: string) => {
+    const date = stageDate ?? todayISO();
     const optimistic = { ...candidate, stage };
     setSearches((prev) =>
       prev.map((s) => {
@@ -555,7 +556,7 @@ function Dashboard({
     );
     const res = await send(`/api/searches/${searchId}/candidates/${candidate.id}`, "PUT", {
       ...optimistic,
-      stageDate: todayISO(),
+      stageDate: date,
     });
     if (res.ok) {
       const saved = (await res.json()) as SearchCandidate;
@@ -569,6 +570,40 @@ function Dashboard({
         })
       );
     }
+  };
+  const patchSearchCandidate = (searchId: string, candidate: SearchCandidate) => {
+    setSearches((prev) =>
+      prev.map((s) => {
+        if (s.id !== searchId) return s;
+        return {
+          ...s,
+          candidates: (s.candidates ?? []).map((c) => (c.id === candidate.id ? candidate : c)),
+        };
+      })
+    );
+  };
+  const logSearchCandidateActivity = async (
+    searchId: string,
+    candidateId: string,
+    type: string,
+    round: number,
+    date: string
+  ) => {
+    const res = await send(`/api/searches/${searchId}/candidates/${candidateId}/activity`, "PATCH", { type, round, date });
+    if (res.ok) patchSearchCandidate(searchId, (await res.json()) as SearchCandidate);
+  };
+  const deleteSearchCandidateActivity = async (searchId: string, candidateId: string, activityId: string) => {
+    const res = await send(`/api/searches/${searchId}/candidates/${candidateId}/activity/${activityId}`, "DELETE");
+    if (res.ok) patchSearchCandidate(searchId, (await res.json()) as SearchCandidate);
+  };
+  const updateSearchCandidateActivityDate = async (
+    searchId: string,
+    candidateId: string,
+    activityId: string,
+    date: string
+  ) => {
+    const res = await send(`/api/searches/${searchId}/candidates/${candidateId}/activity/${activityId}`, "PATCH", { date });
+    if (res.ok) patchSearchCandidate(searchId, (await res.json()) as SearchCandidate);
   };
   const deleteSearchCandidate = async (searchId: string, candidateId: string) => {
     setSearches((prev) =>
@@ -920,6 +955,9 @@ function Dashboard({
             onSaveCandidate={saveSearchCandidate}
             onDeleteCandidate={deleteSearchCandidate}
             onMoveCandidate={moveSearchCandidate}
+            onLogCandidateActivity={logSearchCandidateActivity}
+            onDeleteCandidateActivity={deleteSearchCandidateActivity}
+            onUpdateCandidateActivityDate={updateSearchCandidateActivityDate}
           />
         ) : (
           <TableSlidePanels

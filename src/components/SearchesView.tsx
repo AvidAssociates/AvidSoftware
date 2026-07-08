@@ -22,6 +22,7 @@ import CandidateDetailPanel from "@/components/CandidateDetailPanel";
 type Styles = ReturnType<typeof makeStyles>;
 
 const DRILL_MS = 360;
+const OFFER_EXIT_MS = 340;
 type NavLayer = "list" | "detail" | "candidate";
 
 type PipelineDef<T extends string> = { key: T; label: string };
@@ -637,6 +638,9 @@ export default function SearchesView({
   onSaveCandidate,
   onDeleteCandidate,
   onMoveCandidate,
+  onLogCandidateActivity,
+  onDeleteCandidateActivity,
+  onUpdateCandidateActivityDate,
 }: {
   searches: RetainedSearch[];
   totalCount: number;
@@ -650,7 +654,10 @@ export default function SearchesView({
   onMoveSearch: (search: RetainedSearch, stage: SearchStage) => Promise<void>;
   onSaveCandidate: (searchId: string, candidate: SearchCandidate, isNew: boolean) => Promise<void>;
   onDeleteCandidate: (searchId: string, candidateId: string) => Promise<void>;
-  onMoveCandidate: (searchId: string, candidate: SearchCandidate, stage: CandidateStage) => Promise<void>;
+  onMoveCandidate: (searchId: string, candidate: SearchCandidate, stage: CandidateStage, stageDate?: string) => Promise<void>;
+  onLogCandidateActivity: (searchId: string, candidateId: string, type: string, round: number, date: string) => Promise<void>;
+  onDeleteCandidateActivity: (searchId: string, candidateId: string, activityId: string) => Promise<void>;
+  onUpdateCandidateActivityDate: (searchId: string, candidateId: string, activityId: string, date: string) => Promise<void>;
 }) {
   const S = makeStyles(t);
   const isDark = t.bg === "#000000";
@@ -664,6 +671,8 @@ export default function SearchesView({
   const [newCandidateName, setNewCandidateName] = useState("");
   const [newCandidateIds, setNewCandidateIds] = useState<Set<string>>(() => new Set());
   const [newSearchIds, setNewSearchIds] = useState<Set<string>>(() => new Set());
+  const [pendingOfferCandidateId, setPendingOfferCandidateId] = useState<string | null>(null);
+  const [offerLogExiting, setOfferLogExiting] = useState(false);
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -718,10 +727,40 @@ export default function SearchesView({
   };
 
   const closeCandidate = () => {
+    setPendingOfferCandidateId(null);
+    setOfferLogExiting(false);
     drillTo("detail");
     timerRef.current = window.setTimeout(() => {
       setActiveCandidateId(null);
     }, DRILL_MS);
+  };
+
+  const needsOfferLog = (candidate: SearchCandidate, stage: CandidateStage) =>
+    candidate.stage === "interview" && stage === "offer";
+
+  const requestCandidateStage = (candidate: SearchCandidate, stage: CandidateStage) => {
+    if (!activeSearch) return;
+    if (needsOfferLog(candidate, stage)) {
+      setPendingOfferCandidateId(candidate.id);
+      setOfferLogExiting(false);
+      if (activeCandidateId !== candidate.id) openCandidate(candidate.id);
+      return;
+    }
+    void onMoveCandidate(activeSearch.id, candidate, stage);
+  };
+
+  const cancelOfferLog = () => {
+    if (offerLogExiting) return;
+    setPendingOfferCandidateId(null);
+  };
+
+  const confirmOfferLog = async (date: string) => {
+    if (!activeSearch || !activeCandidate || offerLogExiting) return;
+    setOfferLogExiting(true);
+    await new Promise<void>((resolve) => window.setTimeout(resolve, OFFER_EXIT_MS));
+    await onMoveCandidate(activeSearch.id, activeCandidate, "offer", date);
+    setPendingOfferCandidateId(null);
+    setOfferLogExiting(false);
   };
 
   const saveSearchDetail = async (patch: { client: string; role: string | null; team: string[] }) => {
@@ -751,6 +790,7 @@ export default function SearchesView({
       linkedinUrl: null,
       email: null,
       phone: null,
+      activityLog: [],
     };
     await onSaveCandidate(activeSearch.id, candidate, true);
     setNewCandidateIds((prev) => new Set(prev).add(candidate.id));
@@ -934,7 +974,7 @@ export default function SearchesView({
                   emptyLabel="Drop here"
                   tall
                   newItemIds={newCandidateIds}
-                  onMove={(candidate, stage) => onMoveCandidate(activeSearch.id, candidate, stage)}
+                  onMove={(candidate, stage) => requestCandidateStage(candidate, stage)}
                   onCardClick={(candidate) => openCandidate(candidate.id)}
                   columnFooter={(columnItems) => (
                     <div className="avid-c-col-foot">
@@ -966,15 +1006,28 @@ export default function SearchesView({
                 t={t}
                 S={S}
                 saving={savingCandidate}
+                pendingOffer={pendingOfferCandidateId === activeCandidate.id}
+                offerLogExiting={offerLogExiting}
                 onBack={closeCandidate}
                 onSave={(patch) => void updateCandidate(patch)}
-                onMoveStage={(stage) => void onMoveCandidate(activeSearch.id, { ...activeCandidate, stage }, stage)}
+                onMoveStage={(stage) => requestCandidateStage(activeCandidate, stage)}
                 onDelete={() => {
                   if (window.confirm(`Remove ${activeCandidate.name} from this search?`)) {
                     onDeleteCandidate(activeSearch.id, activeCandidate.id);
                     closeCandidate();
                   }
                 }}
+                onLogActivity={(type, round, date) =>
+                  void onLogCandidateActivity(activeSearch.id, activeCandidate.id, type, round, date)
+                }
+                onDeleteActivity={(activityId) =>
+                  void onDeleteCandidateActivity(activeSearch.id, activeCandidate.id, activityId)
+                }
+                onUpdateActivityDate={(activityId, date) =>
+                  void onUpdateCandidateActivityDate(activeSearch.id, activeCandidate.id, activityId, date)
+                }
+                onConfirmOffer={(date) => void confirmOfferLog(date)}
+                onCancelOffer={cancelOfferLog}
               />
             </div>
           </div>

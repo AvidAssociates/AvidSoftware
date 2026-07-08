@@ -1667,6 +1667,9 @@ body:has(.login-root) {
 
 .avid-cd-col--center {
   background: transparent;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .avid-cd-tabs {
@@ -1759,6 +1762,239 @@ body:has(.login-root) {
   flex-shrink: 0;
 }
 
+.avid-cd-center-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.avid-cd-center-body--offer {
+  scroll-padding-bottom: 180px;
+}
+
+.avid-cd-activity-log {
+  padding: 14px 20px 12px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+  flex-shrink: 0;
+}
+
+.avid-cd-activity-log-head {
+  margin-bottom: 8px;
+}
+
+.avid-cd-activity-log-title {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.avid-cd-activity-log-empty {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.avid-cd-activity-log-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.avid-cd-activity-log-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.avid-cd-activity-log-label {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.avid-cd-activity-log-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.avid-cd-activity-log-date {
+  border: 1px solid;
+  border-radius: 8px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.avid-cd-activity-log-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  padding: 2px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.avid-cd-activity-log-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid;
+}
+
+.avid-cd-activity-log-compose-row {
+  display: flex;
+  gap: 8px;
+}
+
+.avid-cd-activity-log-select,
+.avid-cd-activity-log-round {
+  min-width: 0;
+}
+
+.avid-cd-activity-log-round {
+  width: 56px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.avid-cd-activity-log-add {
+  text-align: center;
+  padding: 8px 10px !important;
+  font-size: 12.5px !important;
+}
+
+.avid-offer-sheet {
+  position: sticky;
+  bottom: 0;
+  margin-top: auto;
+  z-index: 5;
+  border-top: 1px solid;
+  border-radius: 16px 16px 0 0;
+  overflow: hidden;
+  animation: avidOfferSheetIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: center bottom;
+}
+
+.avid-offer-sheet--exit {
+  animation: avidOfferSheetOut 0.34s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+}
+
+.avid-offer-sheet-accent {
+  height: 3px;
+  width: 100%;
+}
+
+.avid-offer-sheet-inner {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px 20px;
+  padding: 16px 20px 18px;
+  align-items: end;
+  position: relative;
+}
+
+.avid-offer-sheet-eyebrow {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.avid-offer-sheet-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.25px;
+  line-height: 1.25;
+}
+
+.avid-offer-sheet-sub {
+  margin: 5px 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  max-width: 36ch;
+}
+
+.avid-offer-sheet-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 220px;
+}
+
+.avid-offer-sheet-date-wrap {
+  gap: 6px !important;
+}
+
+.avid-offer-sheet-date {
+  width: 100%;
+}
+
+.avid-offer-sheet-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.avid-offer-sheet-confirm {
+  flex: 1;
+  justify-content: center;
+  font-weight: 700 !important;
+}
+
+.avid-offer-sheet-dismiss {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  border: none;
+  background: transparent;
+  padding: 4px;
+  cursor: pointer;
+  border-radius: 8px;
+  display: inline-flex;
+}
+
+@keyframes avidOfferSheetIn {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes avidOfferSheetOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+
 .avid-cd-center-title {
   margin: 0;
   font-size: 14px;
@@ -1775,7 +2011,7 @@ body:has(.login-root) {
 
 .avid-cd-activity {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: visible;
   padding: 18px 20px 24px;
 }
 
@@ -2486,6 +2722,15 @@ body:has(.login-root) {
     grid-template-rows: auto auto;
   }
 
+  .avid-offer-sheet-inner {
+    grid-template-columns: 1fr;
+    padding: 14px 16px 16px;
+  }
+
+  .avid-offer-sheet-controls {
+    min-width: 0;
+  }
+
   .avid-cd-header > .avid-btn:last-child {
     grid-column: 2;
     grid-row: 1;
@@ -2536,7 +2781,9 @@ body:has(.login-root) {
   .avid-search-layer--enter-forward,
   .avid-search-layer--leave-forward,
   .avid-search-layer--enter-back,
-  .avid-search-layer--leave-back {
+  .avid-search-layer--leave-back,
+  .avid-offer-sheet,
+  .avid-offer-sheet--exit {
     animation: none !important;
   }
 
