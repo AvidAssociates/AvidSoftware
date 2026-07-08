@@ -277,7 +277,7 @@ function Dashboard({
   const [view, setView] = useState<"searches" | "sendouts" | "billings" | "report" | "leaderboard">("sendouts");
   const [showEntryForm, setShowEntryForm] = useState(false);
   const [showBillingForm, setShowBillingForm] = useState(false);
-  const [showSearchForm, setShowSearchForm] = useState(false);
+  const [focusSearchId, setFocusSearchId] = useState<string | null>(null);
   const [editingBilling, setEditingBilling] = useState<Billing | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [tvOpen, setTvOpen] = useState(false);
@@ -493,6 +493,25 @@ function Dashboard({
     applySearch(search);
     const res = await send(isNew ? "/api/searches" : `/api/searches/${search.id}`, isNew ? "POST" : "PUT", search);
     if (res.ok) applySearch(await res.json());
+  };
+  const createEmptySearch = async () => {
+    const date = todayISO();
+    const search: RetainedSearch = {
+      id: uid(),
+      date,
+      client: "New client",
+      role: null,
+      team: [user],
+      stage: "sourcing",
+      stageHistory: [{ stage: "sourcing", date }],
+      retainerAmount: null,
+      notes: null,
+      addedBy: user,
+      createdAt: new Date().toISOString(),
+      candidates: [],
+    };
+    setFocusSearchId(search.id);
+    await saveSearch(search, true);
   };
   const moveSearch = async (search: RetainedSearch, stage: SearchStage) => {
     const optimistic = { ...search, stage };
@@ -860,7 +879,7 @@ function Dashboard({
               className="avid-btn" style={S.primaryBtn}
               onClick={() => {
                 if (view === "searches") {
-                  setShowSearchForm((v) => !v);
+                  void createEmptySearch();
                 } else if (view === "sendouts") {
                   // Toggles the inline new-send-out row at the top of the
                   // table -- clicking again slides it back away (cancel).
@@ -902,8 +921,8 @@ function Dashboard({
             t={t}
             teamNames={teamNames}
             user={user}
-            showNewForm={showSearchForm}
-            onCloseNewForm={() => setShowSearchForm(false)}
+            focusSearchId={focusSearchId}
+            onFocusSearchDone={() => setFocusSearchId(null)}
             onSaveSearch={(search, isNew) => saveSearch(search, isNew)}
             onDeleteSearch={deleteSearch}
             onMoveSearch={moveSearch}

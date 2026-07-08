@@ -1192,6 +1192,11 @@ body:has(.login-root) {
   scroll-snap-type: x proximity;
 }
 
+.avid-kanban-board--tall {
+  align-items: stretch;
+  min-height: calc(100vh - 220px);
+}
+
 .avid-search-panel--detail .avid-kanban-board {
   padding-top: 16px;
 }
@@ -1204,6 +1209,11 @@ body:has(.login-root) {
   flex-direction: column;
   transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
   scroll-snap-align: start;
+}
+
+.avid-kanban-column--tall {
+  min-height: calc(100vh - 240px);
+  max-height: calc(100vh - 200px);
 }
 
 .avid-kanban-column--over {
@@ -1252,6 +1262,50 @@ body:has(.login-root) {
   gap: 8px;
   padding: 10px;
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.avid-kanban-column-footer {
+  padding: 10px 12px 12px;
+  border-top: 1px solid;
+  flex-shrink: 0;
+}
+
+.avid-k-col-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.avid-k-col-total-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.avid-k-col-total-value {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.avid-kanban-card--enter {
+  animation: avidCardEnter 0.45s var(--avid-search-ease) both;
+}
+
+@keyframes avidCardEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 .avid-kanban-card {
@@ -1383,7 +1437,86 @@ body:has(.login-root) {
 .avid-k-card-inner {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+}
+
+.avid-k-card-headrow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.avid-k-card-date {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.avid-k-inline {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  outline: none;
+  border-radius: 4px;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.avid-k-inline--title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  line-height: 1.25;
+}
+
+.avid-k-inline--sub {
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.avid-k-inline:focus {
+  box-shadow: 0 0 0 2px rgba(140, 146, 240, 0.35);
+}
+
+.avid-k-fee-btn {
+  flex-shrink: 0;
+  border: 1px solid;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -0.1px;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.avid-k-fee-btn:hover {
+  filter: brightness(1.05);
+}
+
+.avid-k-fee-input {
+  flex-shrink: 0;
+  width: 72px;
+  border: 1px solid;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+  outline: none;
+  font-variant-numeric: tabular-nums;
 }
 
 .avid-k-card-top {
@@ -1454,6 +1587,19 @@ body:has(.login-root) {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  margin-top: 2px;
+}
+
+.avid-k-card-foot .avid-k-card-chevron {
+  flex-shrink: 0;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 0.18s ease, transform 0.18s var(--avid-search-ease);
+}
+
+.avid-kanban-card--clickable:hover .avid-k-card-foot .avid-k-card-chevron {
+  opacity: 1;
+  transform: translateX(0);
 }
 
 .avid-k-stage-pill {

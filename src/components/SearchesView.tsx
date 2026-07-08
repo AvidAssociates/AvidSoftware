@@ -58,6 +58,9 @@ function KanbanBoard<T extends string, Item extends { id: string; stage: T }>({
   onMove,
   onCardClick,
   emptyLabel,
+  columnFooter,
+  newItemIds,
+  tall,
 }: {
   t: Theme;
   stages: PipelineDef<T>[];
@@ -67,6 +70,9 @@ function KanbanBoard<T extends string, Item extends { id: string; stage: T }>({
   onMove: (item: Item, stage: T) => void;
   onCardClick?: (item: Item) => void;
   emptyLabel?: string;
+  columnFooter?: (columnItems: Item[]) => ReactNode;
+  newItemIds?: Set<string>;
+  tall?: boolean;
 }) {
   const [drag, setDrag] = useState<{
     item: Item;
@@ -165,7 +171,7 @@ function KanbanBoard<T extends string, Item extends { id: string; stage: T }>({
 
   return (
     <>
-      <div className="avid-kanban-board">
+      <div className={`avid-kanban-board${tall ? " avid-kanban-board--tall" : ""}`}>
         {stages.map((stage) => {
           const columnItems = byStage.get(stage.key) ?? [];
           const color = stageColors[stage.key];
@@ -173,7 +179,7 @@ function KanbanBoard<T extends string, Item extends { id: string; stage: T }>({
           return (
             <div
               key={stage.key}
-              className={`avid-kanban-column${isOver ? " avid-kanban-column--over" : ""}`}
+              className={`avid-kanban-column${tall ? " avid-kanban-column--tall" : ""}${isOver ? " avid-kanban-column--over" : ""}`}
               data-kanban-stage={stage.key}
               style={{ "--stage-color": color, borderColor: isOver ? color : t.border, background: t.surfaceAlt } as CSSProperties}
             >
@@ -193,10 +199,11 @@ function KanbanBoard<T extends string, Item extends { id: string; stage: T }>({
                   columnItems.map((item) => {
                     const itemColor = stageColors[item.stage];
                     const isDragSource = drag?.item.id === item.id;
+                    const isNew = newItemIds?.has(item.id);
                     return (
                       <div
                         key={item.id}
-                        className={`avid-kanban-card${onCardClick ? " avid-kanban-card--clickable" : ""}${isDragSource ? " avid-kanban-card--source" : ""}`}
+                        className={`avid-kanban-card${onCardClick ? " avid-kanban-card--clickable" : ""}${isDragSource ? " avid-kanban-card--source" : ""}${isNew ? " avid-kanban-card--enter" : ""}`}
                         style={{ background: t.surface, borderColor: t.border, touchAction: "none", "--stage-color": itemColor } as CSSProperties}
                         onPointerDown={(e) => startPointerTracking(e, item)}
                       >
@@ -236,6 +243,11 @@ function KanbanBoard<T extends string, Item extends { id: string; stage: T }>({
                   })
                 )}
               </div>
+              {columnFooter ? (
+                <div className="avid-kanban-column-footer" style={{ borderTopColor: t.border, background: t.surface }}>
+                  {columnFooter(columnItems)}
+                </div>
+              ) : null}
             </div>
           );
         })}
@@ -265,29 +277,108 @@ function KanbanBoard<T extends string, Item extends { id: string; stage: T }>({
   );
 }
 
-function SearchCard({ search, t, stageColor }: { search: RetainedSearch; t: Theme; stageColor: string }) {
+function stopCardNav(e: React.PointerEvent | React.MouseEvent | React.KeyboardEvent) {
+  e.stopPropagation();
+}
+
+function InlineSearchCard({
+  search,
+  t,
+  autoFocusClient,
+  onUpdate,
+}: {
+  search: RetainedSearch;
+  t: Theme;
+  autoFocusClient?: boolean;
+  onUpdate: (patch: Partial<Pick<RetainedSearch, "client" | "role" | "retainerAmount">>) => void;
+}) {
   const count = search.candidates?.length ?? 0;
   const today = todayISO();
   const lastInterview = lastCandidateInterviewDate(search.candidates ?? [], search.date);
   const idleDays = daysSince(lastInterview, today);
-  const meta = [
-    fmtDate(search.date),
-    search.retainerAmount != null ? money(search.retainerAmount) : null,
-    `${count} ${count === 1 ? "candidate" : "candidates"}`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const clientRef = useRef<HTMLInputElement>(null);
+  const [client, setClient] = useState(search.client);
+  const [role, setRole] = useState(search.role ?? "");
+  const [feeEditing, setFeeEditing] = useState(false);
+  const [feeDraft, setFeeDraft] = useState(search.retainerAmount != null ? String(search.retainerAmount) : "");
+
+  useEffect(() => setClient(search.client), [search.client]);
+  useEffect(() => setRole(search.role ?? ""), [search.role]);
+  useEffect(() => {
+    setFeeDraft(search.retainerAmount != null ? String(search.retainerAmount) : "");
+  }, [search.retainerAmount]);
+
+  useEffect(() => {
+    if (!autoFocusClient) return;
+    const tmr = window.setTimeout(() => {
+      clientRef.current?.focus();
+      clientRef.current?.select();
+    }, 80);
+    return () => window.clearTimeout(tmr);
+  }, [autoFocusClient]);
+
+  const commitClient = () => {
+    const next = client.trim() || "New client";
+    if (next !== search.client) onUpdate({ client: next });
+    else if (client !== search.client) setClient(search.client);
+  };
+
+  const commitRole = () => {
+    const next = role.trim() || null;
+    if (next !== (search.role ?? "")) onUpdate({ role: next });
+  };
+
+  const commitFee = () => {
+    setFeeEditing(false);
+    const parsed = feeDraft.trim() ? Number(feeDraft.replace(/[^\d]/g, "")) : null;
+    const current = search.retainerAmount ?? null;
+    if (parsed !== current) onUpdate({ retainerAmount: parsed });
+    else setFeeDraft(current != null ? String(current) : "");
+  };
 
   return (
     <div className="avid-k-card-inner">
-      <div className="avid-k-card-top">
-        <div className="avid-k-card-copy">
-          <div className="avid-k-card-title" style={{ color: t.ink }}>{search.client}</div>
-          <div className="avid-k-card-sub" style={{ color: t.muted }}>{search.role || "Role TBD"}</div>
-        </div>
-        <ChevronRight size={15} className="avid-k-card-chevron" style={{ color: t.mutedSoft }} />
+      <div className="avid-k-card-headrow">
+        <input
+          ref={clientRef}
+          className="avid-k-inline avid-k-inline--title"
+          style={{ color: t.ink }}
+          value={client}
+          placeholder="Client"
+          onChange={(e) => setClient(e.target.value)}
+          onBlur={commitClient}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commitClient();
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          onPointerDown={stopCardNav}
+          onClick={stopCardNav}
+        />
+        <span className="avid-k-card-date" style={{ color: t.mutedSoft }}>{fmtDate(search.date)}</span>
       </div>
-      <div className="avid-k-card-meta" style={{ color: t.mutedSoft }}>{meta}</div>
+      <input
+        className="avid-k-inline avid-k-inline--sub"
+        style={{ color: t.muted }}
+        value={role}
+        placeholder="Role"
+        onChange={(e) => setRole(e.target.value)}
+        onBlur={commitRole}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commitRole();
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        onPointerDown={stopCardNav}
+        onClick={stopCardNav}
+      />
+      <div className="avid-k-card-meta" style={{ color: t.mutedSoft }}>
+        {count} {count === 1 ? "candidate" : "candidates"}
+      </div>
       {search.stage === "stale" ? (
         <div className="avid-k-stale-hint" style={{ color: t.mutedSoft }}>
           No interview activity in {idleDays} days
@@ -299,26 +390,62 @@ function SearchCard({ search, t, stageColor }: { search: RetainedSearch; t: Them
       ) : null}
       <div className="avid-k-card-foot">
         <TeamAvatars team={search.team} t={t} />
-        <span className="avid-k-stage-pill" style={{ background: `${stageColor}22`, color: stageColor }}>
-          {SEARCH_PIPELINE.find((s) => s.key === search.stage)?.label}
-        </span>
+        {feeEditing ? (
+          <input
+            className="avid-k-fee-input"
+            style={{ background: t.surfaceAlt, borderColor: t.border, color: t.ink }}
+            inputMode="numeric"
+            autoFocus
+            value={feeDraft}
+            placeholder="0"
+            onChange={(e) => setFeeDraft(e.target.value.replace(/[^\d]/g, ""))}
+            onBlur={commitFee}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitFee();
+              }
+              if (e.key === "Escape") {
+                setFeeEditing(false);
+                setFeeDraft(search.retainerAmount != null ? String(search.retainerAmount) : "");
+              }
+            }}
+            onPointerDown={stopCardNav}
+            onClick={stopCardNav}
+          />
+        ) : (
+          <button
+            type="button"
+            className="avid-k-fee-btn"
+            style={{ background: t.surfaceAlt, borderColor: t.border, color: search.retainerAmount != null ? t.ink : t.mutedSoft }}
+            onPointerDown={stopCardNav}
+            onClick={(e) => {
+              stopCardNav(e);
+              setFeeEditing(true);
+            }}
+          >
+            {search.retainerAmount != null ? money(search.retainerAmount) : "Est. fee"}
+          </button>
+        )}
+        <ChevronRight size={15} className="avid-k-card-chevron" style={{ color: t.mutedSoft }} />
       </div>
     </div>
   );
 }
 
+function pipelineColumnTotal(searches: RetainedSearch[]) {
+  return searches.reduce((sum, s) => sum + (s.retainerAmount ?? 0), 0);
+}
+
 function CandidateCard({
   candidate,
   t,
-  stageColor,
   onDelete,
 }: {
   candidate: SearchCandidate;
   t: Theme;
-  stageColor: string;
   onDelete: () => void;
 }) {
-  const stageLabel = CANDIDATE_PIPELINE.find((s) => s.key === candidate.stage)?.label ?? candidate.stage;
   return (
     <div className="avid-k-card-inner avid-k-card-inner--person">
       <div className="avid-k-person-row">
@@ -332,9 +459,6 @@ function CandidateCard({
         <div className="avid-k-person-copy">
           <div className="avid-k-card-title" style={{ color: t.ink }}>{candidate.name}</div>
           <div className="avid-k-card-meta avid-k-card-meta--tight" style={{ color: t.mutedSoft }}>
-            <span className="avid-k-stage-pill avid-k-stage-pill--sm" style={{ background: `${stageColor}22`, color: stageColor }}>
-              {stageLabel}
-            </span>
             <span>Added {fmtDate(candidate.stageHistory[0]?.date ?? "")}</span>
           </div>
         </div>
@@ -552,8 +676,8 @@ export default function SearchesView({
   t,
   teamNames,
   user,
-  showNewForm,
-  onCloseNewForm,
+  focusSearchId,
+  onFocusSearchDone,
   onSaveSearch,
   onDeleteSearch,
   onMoveSearch,
@@ -566,8 +690,8 @@ export default function SearchesView({
   t: Theme;
   teamNames: string[];
   user: string;
-  showNewForm: boolean;
-  onCloseNewForm: () => void;
+  focusSearchId: string | null;
+  onFocusSearchDone: () => void;
   onSaveSearch: (search: RetainedSearch, isNew: boolean) => Promise<void>;
   onDeleteSearch: (id: string) => Promise<void>;
   onMoveSearch: (search: RetainedSearch, stage: SearchStage) => Promise<void>;
@@ -582,7 +706,26 @@ export default function SearchesView({
   const [leavingLayer, setLeavingLayer] = useState<"list" | "detail" | null>(null);
   const [editingSearch, setEditingSearch] = useState<RetainedSearch | null>(null);
   const [newCandidateName, setNewCandidateName] = useState("");
+  const [newSearchIds, setNewSearchIds] = useState<Set<string>>(() => new Set());
   const timerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!focusSearchId) return;
+    setNewSearchIds((prev) => new Set(prev).add(focusSearchId));
+    const tmr = window.setTimeout(() => {
+      setNewSearchIds((prev) => {
+        const next = new Set(prev);
+        next.delete(focusSearchId);
+        return next;
+      });
+      onFocusSearchDone();
+    }, 600);
+    return () => window.clearTimeout(tmr);
+  }, [focusSearchId, onFocusSearchDone]);
+
+  const patchSearch = async (search: RetainedSearch, patch: Partial<Pick<RetainedSearch, "client" | "role" | "retainerAmount">>) => {
+    await onSaveSearch({ ...search, ...patch }, false);
+  };
 
   const activeSearch = activeSearchId ? searches.find((s) => s.id === activeSearchId) ?? null : null;
 
@@ -667,9 +810,27 @@ export default function SearchesView({
                 stageColors={SEARCH_STAGE_COLOR}
                 items={searches}
                 emptyLabel="Empty"
+                tall
+                newItemIds={newSearchIds}
                 onMove={(search, stage) => onMoveSearch(search, stage)}
                 onCardClick={(search) => openSearch(search.id)}
-                renderCard={(search, stageColor) => <SearchCard search={search} t={t} stageColor={stageColor} />}
+                columnFooter={(columnItems) => {
+                  const total = pipelineColumnTotal(columnItems);
+                  return (
+                    <div className="avid-k-col-total">
+                      <span className="avid-k-col-total-label" style={{ color: t.mutedSoft }}>Pipeline</span>
+                      <span className="avid-k-col-total-value" style={{ color: t.ink }}>{money(total)}</span>
+                    </div>
+                  );
+                }}
+                renderCard={(search) => (
+                  <InlineSearchCard
+                    search={search}
+                    t={t}
+                    autoFocusClient={search.id === focusSearchId}
+                    onUpdate={(patch) => void patchSearch(search, patch)}
+                  />
+                )}
               />
 
               {totalCount === 0 ? (
@@ -722,11 +883,10 @@ export default function SearchesView({
                 items={activeSearch.candidates ?? []}
                 emptyLabel="Empty"
                 onMove={(candidate, stage) => onMoveCandidate(activeSearch.id, candidate, stage)}
-                renderCard={(candidate, stageColor) => (
+                renderCard={(candidate) => (
                   <CandidateCard
                     candidate={candidate}
                     t={t}
-                    stageColor={stageColor}
                     onDelete={() => onDeleteCandidate(activeSearch.id, candidate.id)}
                   />
                 )}
@@ -742,21 +902,17 @@ export default function SearchesView({
         ) : null}
       </div>
 
-      {(showNewForm || editingSearch) && (
+      {editingSearch && (
         <SearchFormModal
           S={S}
           t={t}
           teamNames={teamNames}
           user={user}
-          initial={editingSearch ?? undefined}
-          onClose={() => {
-            setEditingSearch(null);
-            onCloseNewForm();
-          }}
+          initial={editingSearch}
+          onClose={() => setEditingSearch(null)}
           onSave={async (search) => {
-            await onSaveSearch(search, !editingSearch);
+            await onSaveSearch(search, false);
             setEditingSearch(null);
-            onCloseNewForm();
           }}
         />
       )}
