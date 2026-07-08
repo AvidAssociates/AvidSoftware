@@ -2,9 +2,6 @@
 
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { ArrowLeft, Mail, Phone, Trash2 } from "lucide-react";
-import CandidateActivityPanel from "@/components/CandidateActivityPanel";
-import OfferLogSheet from "@/components/OfferLogSheet";
-import { candidateActivityLabel } from "@/lib/candidate-activity";
 import type { CandidateStage, RetainedSearch, SearchCandidate } from "@/lib/types";
 import {
   CANDIDATE_PIPELINE,
@@ -60,15 +57,6 @@ function buildActivity(candidate: SearchCandidate, search: RetainedSearch): Acti
       color: CANDIDATE_STAGE_COLOR[ev.stage],
     });
   }
-  for (const entry of candidate.activityLog ?? []) {
-    if (entry.type === "Offer" || entry.type === "Placed") continue;
-    items.push({
-      id: `log-${entry.id}`,
-      date: entry.date,
-      label: `Logged ${candidateActivityLabel(entry.type, entry.round)}`,
-      color: CANDIDATE_STAGE_COLOR.interview,
-    });
-  }
   return items.sort((a, b) => b.date.localeCompare(a.date) || a.label.localeCompare(b.label));
 }
 
@@ -109,34 +97,20 @@ export default function CandidateDetailPanel({
   t,
   S,
   saving,
-  pendingOffer,
-  offerLogExiting,
   onBack,
   onSave,
   onMoveStage,
   onDelete,
-  onLogActivity,
-  onDeleteActivity,
-  onUpdateActivityDate,
-  onConfirmOffer,
-  onCancelOffer,
 }: {
   candidate: SearchCandidate;
   search: RetainedSearch;
   t: Theme;
   S: Styles;
   saving: boolean;
-  pendingOffer: boolean;
-  offerLogExiting: boolean;
   onBack: () => void;
   onSave: (patch: Partial<SearchCandidate>) => void;
   onMoveStage: (stage: CandidateStage) => void;
   onDelete: () => void;
-  onLogActivity: (type: string, round: number, date: string) => void;
-  onDeleteActivity: (activityId: string) => void;
-  onUpdateActivityDate: (activityId: string, date: string) => void;
-  onConfirmOffer: (date: string) => void;
-  onCancelOffer: () => void;
 }) {
   const stageColor = CANDIDATE_STAGE_COLOR[candidate.stage];
   const stageLabel = CANDIDATE_PIPELINE.find((s) => s.key === candidate.stage)?.label ?? candidate.stage;
@@ -171,8 +145,6 @@ export default function CandidateDetailPanel({
   const saveNotes = () => {
     onSave({ notes: notes.trim() || null });
   };
-
-  const showActivityLog = candidate.stage === "interview" || (candidate.activityLog?.length ?? 0) > 0 || pendingOffer;
 
   return (
     <div className="avid-candidate-detail">
@@ -330,48 +302,26 @@ export default function CandidateDetailPanel({
             <h3 className="avid-cd-center-title" style={{ color: t.ink }}>Activity</h3>
             <span className="avid-cd-center-sub" style={{ color: t.mutedSoft }}>{activity.length} events</span>
           </div>
-          <div className={`avid-cd-center-body${pendingOffer ? " avid-cd-center-body--offer" : ""}`}>
-            {showActivityLog ? (
-              <CandidateActivityPanel
-                candidate={candidate}
-                t={t}
-                S={S}
-                onLog={onLogActivity}
-                onDelete={onDeleteActivity}
-                onUpdateDate={onUpdateActivityDate}
-              />
-            ) : null}
-            <div className="avid-cd-activity">
-              {activity.length === 0 ? (
-                <div className="avid-cd-empty" style={{ color: t.mutedSoft }}>No activity yet.</div>
-              ) : (
-                activity.map((item, i) => (
-                  <div key={item.id} className="avid-cd-activity-item" style={{ animationDelay: `${i * 40}ms` }}>
-                    <div className="avid-cd-activity-rail">
-                      <span className="avid-cd-activity-dot" style={{ background: item.color, boxShadow: `0 0 0 3px ${item.color}22` }} />
-                      {i < activity.length - 1 ? <span className="avid-cd-activity-line" style={{ background: t.border }} /> : null}
-                    </div>
-                    <div className="avid-cd-activity-body">
-                      <div className="avid-cd-activity-top">
-                        <span className="avid-cd-activity-label" style={{ color: t.ink }}>{item.label}</span>
-                        <span className="avid-cd-activity-date" style={{ color: t.mutedSoft }}>{fmtDate(item.date)}</span>
-                      </div>
-                      {item.detail ? <p className="avid-cd-activity-detail" style={{ color: t.muted }}>{item.detail}</p> : null}
-                    </div>
+          <div className="avid-cd-activity">
+            {activity.length === 0 ? (
+              <div className="avid-cd-empty" style={{ color: t.mutedSoft }}>No activity yet.</div>
+            ) : (
+              activity.map((item, i) => (
+                <div key={item.id} className="avid-cd-activity-item" style={{ animationDelay: `${i * 40}ms` }}>
+                  <div className="avid-cd-activity-rail">
+                    <span className="avid-cd-activity-dot" style={{ background: item.color, boxShadow: `0 0 0 3px ${item.color}22` }} />
+                    {i < activity.length - 1 ? <span className="avid-cd-activity-line" style={{ background: t.border }} /> : null}
                   </div>
-                ))
-              )}
-            </div>
-            {pendingOffer ? (
-              <OfferLogSheet
-                candidateName={candidate.name}
-                t={t}
-                S={S}
-                exiting={offerLogExiting}
-                onConfirm={onConfirmOffer}
-                onCancel={onCancelOffer}
-              />
-            ) : null}
+                  <div className="avid-cd-activity-body">
+                    <div className="avid-cd-activity-top">
+                      <span className="avid-cd-activity-label" style={{ color: t.ink }}>{item.label}</span>
+                      <span className="avid-cd-activity-date" style={{ color: t.mutedSoft }}>{fmtDate(item.date)}</span>
+                    </div>
+                    {item.detail ? <p className="avid-cd-activity-detail" style={{ color: t.muted }}>{item.detail}</p> : null}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </main>
 

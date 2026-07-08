@@ -126,7 +126,6 @@ export type SearchCandidate = {
   phone: string | null;
   stage: CandidateStage;
   stageHistory: CandidateStageEvent[];
-  activityLog: MeetingLogEntry[];
   notes: string | null;
   addedBy: string | null;
   createdAt: string;

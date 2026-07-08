@@ -688,7 +688,6 @@ type CandidateRow = {
   name: string;
   stage: string;
   stage_history: CandidateStageEvent[];
-  activity_log: MeetingLogEntry[];
   notes: string | null;
   added_by: string | null;
   created_at: string;
@@ -727,7 +726,6 @@ function toCandidate(row: CandidateRow): SearchCandidate {
     name: row.name,
     stage: row.stage as CandidateStage,
     stageHistory: row.stage_history ?? [],
-    activityLog: row.activity_log ?? [],
     notes: row.notes,
     addedBy: row.added_by,
     createdAt: row.created_at,
@@ -907,18 +905,14 @@ export async function createSearchCandidate(input: {
   const stage = input.stage ?? "presented";
   const stageDate = input.stageDate ?? todayISO();
   const history: CandidateStageEvent[] = [{ stage, date: stageDate }];
-  const activityLog: MeetingLogEntry[] = [];
-  if (stage === "offer" || stage === "placed") activityLog.push(activityEntry("Offer", 0, stageDate));
-  if (stage === "placed") activityLog.push(activityEntry("Placed", 0, stageDate));
   const [row] = (await db.sql`
-    INSERT INTO search_candidates (id, search_id, name, stage, stage_history, activity_log, notes, added_by, profile_image_url, linkedin_url, email, phone)
+    INSERT INTO search_candidates (id, search_id, name, stage, stage_history, notes, added_by, profile_image_url, linkedin_url, email, phone)
     VALUES (
       ${input.id},
       ${input.searchId},
       ${input.name},
       ${stage},
       ${JSON.stringify(history)},
-      ${JSON.stringify(activityLog)},
       ${input.notes ?? null},
       ${input.addedBy ?? null},
       ${input.profileImageUrl ?? null},
@@ -958,19 +952,11 @@ export async function updateSearchCandidate(
   const linkedinUrl = input.linkedinUrl !== undefined ? input.linkedinUrl : existing.linkedin_url;
   const email = input.email !== undefined ? input.email : existing.email;
   const phone = input.phone !== undefined ? input.phone : existing.phone;
-  let activityLog = existing.activity_log ?? [];
-  if (input.stage === "offer" && existing.stage !== "offer") {
-    activityLog = [...activityLog, activityEntry("Offer", 0, stageDate)];
-  }
-  if (input.stage === "placed" && existing.stage !== "placed") {
-    activityLog = [...activityLog, activityEntry("Placed", 0, stageDate)];
-  }
   const [row] = (await db.sql`
     UPDATE search_candidates SET
       name = ${input.name},
       stage = ${input.stage},
       stage_history = ${JSON.stringify(history)},
-      activity_log = ${JSON.stringify(activityLog)},
       notes = ${input.notes ?? null},
       profile_image_url = ${profileImageUrl},
       linkedin_url = ${linkedinUrl},
@@ -989,61 +975,6 @@ export async function deleteSearchCandidate(id: string): Promise<void> {
   const [existing] = (await db.sql`SELECT search_id FROM search_candidates WHERE id = ${id}`) as { search_id: string }[];
   await db.sql`DELETE FROM search_candidates WHERE id = ${id}`;
   if (existing?.search_id) await syncSearchStaleById(existing.search_id);
-}
-
-export async function logCandidateActivity(
-  id: string,
-  type: string,
-  round: number,
-  date: string
-): Promise<SearchCandidate | null> {
-  const db = getDb();
-  const [existing] = (await db.sql`SELECT * FROM search_candidates WHERE id = ${id}`) as CandidateRow[];
-  if (!existing) return null;
-  const activityLog = [...(existing.activity_log ?? []), activityEntry(type, round, date)];
-  const [row] = (await db.sql`
-    UPDATE search_candidates SET activity_log = ${JSON.stringify(activityLog)}
-    WHERE id = ${id}
-    RETURNING *
-  `) as CandidateRow[];
-  const candidate = toCandidate(row);
-  await syncSearchStaleById(existing.search_id);
-  return candidate;
-}
-
-export async function deleteCandidateActivityEntry(id: string, activityId: string): Promise<SearchCandidate | null> {
-  const db = getDb();
-  const [existing] = (await db.sql`SELECT * FROM search_candidates WHERE id = ${id}`) as CandidateRow[];
-  if (!existing) return null;
-  const activityLog = (existing.activity_log ?? []).filter((m) => m.id !== activityId);
-  const [row] = (await db.sql`
-    UPDATE search_candidates SET activity_log = ${JSON.stringify(activityLog)}
-    WHERE id = ${id}
-    RETURNING *
-  `) as CandidateRow[];
-  const candidate = toCandidate(row);
-  await syncSearchStaleById(existing.search_id);
-  return candidate;
-}
-
-export async function updateCandidateActivityDate(
-  id: string,
-  activityId: string,
-  date: string
-): Promise<SearchCandidate | null> {
-  const db = getDb();
-  const [existing] = (await db.sql`SELECT * FROM search_candidates WHERE id = ${id}`) as CandidateRow[];
-  if (!existing) return null;
-  const activityLog = (existing.activity_log ?? []).map((m) => (m.id === activityId ? { ...m, date } : m));
-  if (!activityLog.some((m) => m.id === activityId)) return null;
-  const [row] = (await db.sql`
-    UPDATE search_candidates SET activity_log = ${JSON.stringify(activityLog)}
-    WHERE id = ${id}
-    RETURNING *
-  `) as CandidateRow[];
-  const candidate = toCandidate(row);
-  await syncSearchStaleById(existing.search_id);
-  return candidate;
 }
 
 // ---------------- Retainers ----------------
