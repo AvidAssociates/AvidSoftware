@@ -438,13 +438,18 @@ function Dashboard({
     if (res.ok) applyEntry(await res.json());
   };
   const deleteMeeting = async (entry: Entry, meetingId: string) => {
+    const deleted = entry.meetingLog.find((m) => m.id === meetingId);
     const meetingLog = entry.meetingLog.filter((m) => m.id !== meetingId);
-    const last = meetingLog[meetingLog.length - 1];
+    const lastMeeting = [...meetingLog].reverse().find((m) => m.type !== "Offer" && m.type !== "Placed");
+    let stage = entry.stage;
+    if (deleted?.type === "Offer" && entry.stage === "offer") stage = "interview";
+    if (deleted?.type === "Placed" && entry.stage === "placed") stage = "offer";
     const optimistic = {
       ...entry,
       meetingLog,
-      interviewType: last?.type ?? entry.interviewType,
-      round: last?.round ?? entry.round,
+      stage,
+      interviewType: lastMeeting?.type ?? entry.interviewType,
+      round: lastMeeting?.round ?? entry.round,
     };
     applyEntry(optimistic);
     const res = await send(`/api/entries/${entry.id}/meeting-log/${meetingId}`, "DELETE");
@@ -1810,6 +1815,7 @@ function RowExpandedPanel({
 // next meeting while still in Interview. Each entry can be deleted (logged
 // by mistake); the date defaults to today and only opens a picker if
 // clicked.
+const ACTIVITY_COMPOSE_DELAY_MS = 520;
 const ACTIVITY_COMPOSE_EXIT_MS = 380;
 
 function ActivityLogPanel({
@@ -1842,13 +1848,22 @@ function ActivityLogPanel({
       return;
     }
     if (!composeShown || composeExiting) return;
-    setComposeExiting(true);
-    const timer = window.setTimeout(() => {
+
+    const delayTimer = window.setTimeout(() => {
+      setComposeExiting(true);
+    }, ACTIVITY_COMPOSE_DELAY_MS);
+
+    return () => window.clearTimeout(delayTimer);
+  }, [canCompose, composeShown, composeExiting]);
+
+  useEffect(() => {
+    if (!composeExiting) return;
+    const exitTimer = window.setTimeout(() => {
       setComposeShown(false);
       setComposeExiting(false);
     }, ACTIVITY_COMPOSE_EXIT_MS);
-    return () => window.clearTimeout(timer);
-  }, [canCompose, composeShown, composeExiting]);
+    return () => window.clearTimeout(exitTimer);
+  }, [composeExiting]);
 
   return (
     <div className="avid-activity-log">
@@ -1888,17 +1903,15 @@ function ActivityLogPanel({
                     minWidth: 0,
                   }}
                 />
-                {m.type !== "Offer" && m.type !== "Placed" ? (
-                  <button
-                    type="button"
-                    className="avid-btn"
-                    onClick={() => onDelete(m.id)}
-                    title="Remove this entry"
-                    style={{ border: "none", background: "none", padding: 2, cursor: "pointer", color: t.mutedSoft, display: "flex" }}
-                  >
-                    <X size={12} />
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  className="avid-btn"
+                  onClick={() => onDelete(m.id)}
+                  title="Remove this entry"
+                  style={{ border: "none", background: "none", padding: 2, cursor: "pointer", color: t.mutedSoft, display: "flex" }}
+                >
+                  <X size={12} />
+                </button>
               </div>
             </div>
           ))}

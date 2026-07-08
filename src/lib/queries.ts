@@ -241,17 +241,25 @@ export async function logMeeting(
 export async function deleteMeetingLogEntry(id: string, meetingId: string): Promise<Entry | null> {
   const db = getDb();
   const [existing] = (await db.sql`
-    SELECT meeting_log, interview_type, round FROM pipeline_entries WHERE id = ${id}
-  `) as { meeting_log: MeetingLogEntry[]; interview_type: string; round: number }[];
+    SELECT stage, meeting_log, interview_type, round FROM pipeline_entries WHERE id = ${id}
+  `) as { stage: string; meeting_log: MeetingLogEntry[]; interview_type: string; round: number }[];
   if (!existing) return null;
 
+  const deleted = (existing.meeting_log ?? []).find((m) => m.id === meetingId);
   const meetingLog = (existing.meeting_log ?? []).filter((m) => m.id !== meetingId);
-  const last = meetingLog[meetingLog.length - 1];
-  const interviewType = last?.type ?? existing.interview_type;
-  const round = last?.round ?? existing.round;
+  const lastMeeting = [...meetingLog].reverse().find((m) => m.type !== "Offer" && m.type !== "Placed");
+  const interviewType = lastMeeting?.type ?? existing.interview_type;
+  const round = lastMeeting?.round ?? existing.round;
+  let stage = existing.stage;
+  if (deleted?.type === "Offer" && existing.stage === "offer") stage = "interview";
+  if (deleted?.type === "Placed" && existing.stage === "placed") stage = "offer";
 
   const [row] = (await db.sql`
-    UPDATE pipeline_entries SET meeting_log = ${JSON.stringify(meetingLog)}, interview_type = ${interviewType}, round = ${round}
+    UPDATE pipeline_entries SET
+      meeting_log = ${JSON.stringify(meetingLog)},
+      interview_type = ${interviewType},
+      round = ${round},
+      stage = ${stage}
     WHERE id = ${id}
     RETURNING *
   `) as EntryRow[];
