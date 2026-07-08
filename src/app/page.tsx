@@ -701,7 +701,15 @@ function Dashboard({
   }, [monthEntries]);
 
   if (tvOpen) {
-    return <TVMode entries={entries} billings={billings} roster={teamNames} onExit={() => setTvOpen(false)} />;
+    return (
+      <TVMode
+        entries={entries}
+        billings={billings}
+        roster={teamNames}
+        goals={billingsGoals}
+        onExit={() => setTvOpen(false)}
+      />
+    );
   }
 
   return (
