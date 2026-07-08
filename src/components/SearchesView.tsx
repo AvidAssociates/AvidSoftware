@@ -17,10 +17,12 @@ import {
   uid,
 } from "@/lib/ui";
 import { daysSince, lastCandidateInterviewDate, SEARCH_STALE_DAYS } from "@/lib/search-stale";
+import CandidateDetailPanel from "@/components/CandidateDetailPanel";
 
 type Styles = ReturnType<typeof makeStyles>;
 
 const DRILL_MS = 360;
+type NavLayer = "list" | "detail" | "candidate";
 
 type PipelineDef<T extends string> = { key: T; label: string };
 type ColorMap<T extends string> = Record<T, string>;
@@ -653,10 +655,12 @@ export default function SearchesView({
   const S = makeStyles(t);
   const isDark = t.bg === "#000000";
   const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
-  const [displayLayer, setDisplayLayer] = useState<"list" | "detail">("list");
-  const [leavingLayer, setLeavingLayer] = useState<"list" | "detail" | null>(null);
+  const [activeCandidateId, setActiveCandidateId] = useState<string | null>(null);
+  const [displayLayer, setDisplayLayer] = useState<NavLayer>("list");
+  const [leavingLayer, setLeavingLayer] = useState<NavLayer | null>(null);
   const [detailEditing, setDetailEditing] = useState(false);
   const [savingDetail, setSavingDetail] = useState(false);
+  const [savingCandidate, setSavingCandidate] = useState(false);
   const [newCandidateName, setNewCandidateName] = useState("");
   const [newCandidateIds, setNewCandidateIds] = useState<Set<string>>(() => new Set());
   const [newSearchIds, setNewSearchIds] = useState<Set<string>>(() => new Set());
@@ -681,30 +685,42 @@ export default function SearchesView({
   }, [focusSearchId, onFocusSearchDone]);
 
   const activeSearch = activeSearchId ? searches.find((s) => s.id === activeSearchId) ?? null : null;
+  const activeCandidate = activeCandidateId
+    ? activeSearch?.candidates?.find((c) => c.id === activeCandidateId) ?? null
+    : null;
 
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) window.clearTimeout(timerRef.current);
-    };
-  }, []);
-
-  const openSearch = (id: string) => {
+  const drillTo = (next: NavLayer) => {
     if (timerRef.current) window.clearTimeout(timerRef.current);
-    setActiveSearchId(id);
-    setDetailEditing(false);
     setLeavingLayer(displayLayer);
-    setDisplayLayer("detail");
+    setDisplayLayer(next);
     timerRef.current = window.setTimeout(() => setLeavingLayer(null), DRILL_MS);
   };
 
-  const closeSearch = () => {
-    if (timerRef.current) window.clearTimeout(timerRef.current);
-    setLeavingLayer(displayLayer);
-    setDisplayLayer("list");
+  const openSearch = (id: string) => {
+    setActiveSearchId(id);
+    setActiveCandidateId(null);
     setDetailEditing(false);
+    drillTo("detail");
+  };
+
+  const closeSearch = () => {
+    setDetailEditing(false);
+    setActiveCandidateId(null);
+    drillTo("list");
     timerRef.current = window.setTimeout(() => {
       setActiveSearchId(null);
-      setLeavingLayer(null);
+    }, DRILL_MS);
+  };
+
+  const openCandidate = (id: string) => {
+    setActiveCandidateId(id);
+    drillTo("candidate");
+  };
+
+  const closeCandidate = () => {
+    drillTo("detail");
+    timerRef.current = window.setTimeout(() => {
+      setActiveCandidateId(null);
     }, DRILL_MS);
   };
 
@@ -733,6 +749,8 @@ export default function SearchesView({
       createdAt: new Date().toISOString(),
       profileImageUrl: null,
       linkedinUrl: null,
+      email: null,
+      phone: null,
     };
     await onSaveCandidate(activeSearch.id, candidate, true);
     setNewCandidateIds((prev) => new Set(prev).add(candidate.id));
@@ -746,7 +764,21 @@ export default function SearchesView({
     setNewCandidateName("");
   };
 
+  const updateCandidate = async (patch: Partial<SearchCandidate>) => {
+    if (!activeSearch || !activeCandidate) return;
+    setSavingCandidate(true);
+    const next = { ...activeCandidate, ...patch };
+    await onSaveCandidate(activeSearch.id, next, false);
+    setSavingCandidate(false);
+  };
+
   const candidates = activeSearch?.candidates ?? [];
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+    };
+  }, []);
 
   const drilling = leavingLayer !== null;
 
@@ -754,7 +786,9 @@ export default function SearchesView({
     "avid-search-layer",
     drilling ? "avid-search-layer--overlay" : "",
     displayLayer === "list" && leavingLayer === "detail" ? "avid-search-layer--enter-back" : "",
+    displayLayer === "list" && leavingLayer === "candidate" ? "avid-search-layer--enter-back" : "",
     displayLayer === "detail" && leavingLayer === "list" ? "avid-search-layer--leave-back" : "",
+    displayLayer === "candidate" && leavingLayer === "list" ? "avid-search-layer--leave-back" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -763,13 +797,28 @@ export default function SearchesView({
     "avid-search-layer avid-search-layer--detail",
     drilling ? "avid-search-layer--overlay" : "",
     displayLayer === "detail" && leavingLayer === "list" ? "avid-search-layer--enter-forward" : "",
+    displayLayer === "detail" && leavingLayer === "candidate" ? "avid-search-layer--enter-back" : "",
+    displayLayer === "candidate" && leavingLayer === "detail" ? "avid-search-layer--leave-back" : "",
     displayLayer === "list" && leavingLayer === "detail" ? "avid-search-layer--leave-forward" : "",
+    displayLayer === "candidate" && leavingLayer === "list" ? "avid-search-layer--leave-forward" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const candidateLayerClass = [
+    "avid-search-layer avid-search-layer--candidate",
+    drilling ? "avid-search-layer--overlay" : "",
+    displayLayer === "candidate" && leavingLayer === "detail" ? "avid-search-layer--enter-forward" : "",
+    displayLayer === "detail" && leavingLayer === "candidate" ? "avid-search-layer--leave-forward" : "",
   ]
     .filter(Boolean)
     .join(" ");
 
   const showList = displayLayer === "list" || leavingLayer === "list";
-  const showDetail = (displayLayer === "detail" || leavingLayer === "detail") && activeSearch;
+  const showDetail =
+    (displayLayer === "detail" || leavingLayer === "detail" || displayLayer === "candidate" || leavingLayer === "candidate") &&
+    activeSearch;
+  const showCandidate = (displayLayer === "candidate" || leavingLayer === "candidate") && activeSearch && activeCandidate;
 
   return (
     <div className="avid-search-root" data-theme={isDark ? "dark" : "light"}>
@@ -886,6 +935,7 @@ export default function SearchesView({
                   tall
                   newItemIds={newCandidateIds}
                   onMove={(candidate, stage) => onMoveCandidate(activeSearch.id, candidate, stage)}
+                  onCardClick={(candidate) => openCandidate(candidate.id)}
                   columnFooter={(columnItems) => (
                     <div className="avid-c-col-foot">
                       <span className="avid-c-col-foot-label" style={{ color: t.mutedSoft }}>
@@ -903,6 +953,29 @@ export default function SearchesView({
                   )}
                 />
               </section>
+            </div>
+          </div>
+        ) : null}
+
+        {showCandidate ? (
+          <div className={candidateLayerClass}>
+            <div className="avid-search-panel avid-search-panel--candidate">
+              <CandidateDetailPanel
+                candidate={activeCandidate}
+                search={activeSearch}
+                t={t}
+                S={S}
+                saving={savingCandidate}
+                onBack={closeCandidate}
+                onSave={(patch) => void updateCandidate(patch)}
+                onMoveStage={(stage) => void onMoveCandidate(activeSearch.id, { ...activeCandidate, stage }, stage)}
+                onDelete={() => {
+                  if (window.confirm(`Remove ${activeCandidate.name} from this search?`)) {
+                    onDeleteCandidate(activeSearch.id, activeCandidate.id);
+                    closeCandidate();
+                  }
+                }}
+              />
             </div>
           </div>
         ) : null}

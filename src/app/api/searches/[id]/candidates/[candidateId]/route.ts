@@ -17,6 +17,10 @@ export async function PUT(request: Request, { params }: Params) {
     stage: body.stage,
     notes: body.notes,
     stageDate: body.stageDate,
+    profileImageUrl: body.profileImageUrl,
+    linkedinUrl: body.linkedinUrl,
+    email: body.email,
+    phone: body.phone,
   });
   return NextResponse.json(candidate);
 }

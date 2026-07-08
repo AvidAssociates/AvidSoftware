@@ -693,6 +693,8 @@ type CandidateRow = {
   created_at: string;
   profile_image_url: string | null;
   linkedin_url: string | null;
+  email: string | null;
+  phone: string | null;
 };
 
 function toSearch(row: SearchRow, candidates: SearchCandidate[] = []): RetainedSearch {
@@ -729,6 +731,8 @@ function toCandidate(row: CandidateRow): SearchCandidate {
     createdAt: row.created_at,
     profileImageUrl: row.profile_image_url,
     linkedinUrl: row.linkedin_url,
+    email: row.email,
+    phone: row.phone,
   };
 }
 
@@ -894,13 +898,15 @@ export async function createSearchCandidate(input: {
   stageDate?: string;
   profileImageUrl?: string | null;
   linkedinUrl?: string | null;
+  email?: string | null;
+  phone?: string | null;
 }): Promise<SearchCandidate> {
   const db = getDb();
   const stage = input.stage ?? "presented";
   const stageDate = input.stageDate ?? todayISO();
   const history: CandidateStageEvent[] = [{ stage, date: stageDate }];
   const [row] = (await db.sql`
-    INSERT INTO search_candidates (id, search_id, name, stage, stage_history, notes, added_by, profile_image_url, linkedin_url)
+    INSERT INTO search_candidates (id, search_id, name, stage, stage_history, notes, added_by, profile_image_url, linkedin_url, email, phone)
     VALUES (
       ${input.id},
       ${input.searchId},
@@ -910,7 +916,9 @@ export async function createSearchCandidate(input: {
       ${input.notes ?? null},
       ${input.addedBy ?? null},
       ${input.profileImageUrl ?? null},
-      ${input.linkedinUrl ?? null}
+      ${input.linkedinUrl ?? null},
+      ${input.email ?? null},
+      ${input.phone ?? null}
     )
     RETURNING *
   `) as CandidateRow[];
@@ -928,6 +936,8 @@ export async function updateSearchCandidate(
     stageDate?: string;
     profileImageUrl?: string | null;
     linkedinUrl?: string | null;
+    email?: string | null;
+    phone?: string | null;
   }
 ): Promise<SearchCandidate> {
   const db = getDb();
@@ -940,6 +950,8 @@ export async function updateSearchCandidate(
       : (existing.stage_history ?? []);
   const profileImageUrl = input.profileImageUrl !== undefined ? input.profileImageUrl : existing.profile_image_url;
   const linkedinUrl = input.linkedinUrl !== undefined ? input.linkedinUrl : existing.linkedin_url;
+  const email = input.email !== undefined ? input.email : existing.email;
+  const phone = input.phone !== undefined ? input.phone : existing.phone;
   const [row] = (await db.sql`
     UPDATE search_candidates SET
       name = ${input.name},
@@ -947,7 +959,9 @@ export async function updateSearchCandidate(
       stage_history = ${JSON.stringify(history)},
       notes = ${input.notes ?? null},
       profile_image_url = ${profileImageUrl},
-      linkedin_url = ${linkedinUrl}
+      linkedin_url = ${linkedinUrl},
+      email = ${email},
+      phone = ${phone}
     WHERE id = ${id}
     RETURNING *
   `) as CandidateRow[];

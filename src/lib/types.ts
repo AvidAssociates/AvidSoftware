@@ -122,6 +122,8 @@ export type SearchCandidate = {
   id: string;
   searchId: string;
   name: string;
+  email: string | null;
+  phone: string | null;
   stage: CandidateStage;
   stageHistory: CandidateStageEvent[];
   notes: string | null;

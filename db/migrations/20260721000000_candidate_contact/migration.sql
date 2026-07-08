@@ -1,0 +1,2 @@
+ALTER TABLE search_candidates ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE search_candidates ADD COLUMN IF NOT EXISTS phone TEXT;
