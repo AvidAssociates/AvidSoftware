@@ -375,49 +375,106 @@ function pipelineColumnTotal(searches: RetainedSearch[]) {
   return searches.reduce((sum, s) => sum + (s.retainerAmount ?? 0), 0);
 }
 
+function candidateStageDate(candidate: SearchCandidate): string {
+  for (let i = candidate.stageHistory.length - 1; i >= 0; i--) {
+    if (candidate.stageHistory[i]?.stage === candidate.stage) return candidate.stageHistory[i].date;
+  }
+  return candidate.stageHistory[0]?.date ?? "";
+}
+
+function CandidatePipelineStats({
+  candidates,
+  t,
+}: {
+  candidates: SearchCandidate[];
+  t: Theme;
+}) {
+  const counts = useMemo(() => {
+    const map: Record<CandidateStage, number> = { presented: 0, interview: 0, offer: 0, placed: 0 };
+    for (const c of candidates) map[c.stage] += 1;
+    return map;
+  }, [candidates]);
+
+  return (
+    <div className="avid-candidate-stats">
+      {CANDIDATE_PIPELINE.map((stage) => {
+        const color = CANDIDATE_STAGE_COLOR[stage.key];
+        const count = counts[stage.key];
+        return (
+          <div
+            key={stage.key}
+            className="avid-candidate-stat"
+            style={{ background: t.surfaceAlt, borderColor: t.border, "--stat-color": color } as CSSProperties}
+          >
+            <span className="avid-candidate-stat-value" style={{ color: count > 0 ? t.ink : t.mutedSoft }}>{count}</span>
+            <span className="avid-candidate-stat-label" style={{ color: t.mutedSoft }}>{stage.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function CandidateCard({
   candidate,
   t,
+  stageColor,
   onDelete,
 }: {
   candidate: SearchCandidate;
   t: Theme;
+  stageColor: string;
   onDelete: () => void;
 }) {
+  const today = todayISO();
+  const added = candidate.stageHistory[0]?.date ?? "";
+  const inStageSince = candidateStageDate(candidate);
+  const daysInStage = inStageSince ? daysSince(inStageSince, today) : 0;
+
   return (
-    <div className="avid-k-card-inner avid-k-card-inner--person">
-      <div className="avid-k-person-row">
-        {candidate.profileImageUrl ? (
-          <img src={candidate.profileImageUrl} alt="" className="avid-k-person-photo" />
-        ) : (
-          <div className="avid-k-person-photo avid-k-person-photo--fallback" style={{ background: t.accentSoft, color: t.accentText }}>
-            {candidate.name.charAt(0).toUpperCase()}
-          </div>
-        )}
-        <div className="avid-k-person-copy">
-          <div className="avid-k-card-title" style={{ color: t.ink }}>{candidate.name}</div>
-          <div className="avid-k-card-meta avid-k-card-meta--tight" style={{ color: t.mutedSoft }}>
-            <span>Added {fmtDate(candidate.stageHistory[0]?.date ?? "")}</span>
+    <div className="avid-c-card">
+      <div className="avid-c-card-head">
+        <div className="avid-c-card-photo-wrap" style={{ "--ring-color": stageColor } as CSSProperties}>
+          {candidate.profileImageUrl ? (
+            <img src={candidate.profileImageUrl} alt="" className="avid-c-card-photo" />
+          ) : (
+            <div className="avid-c-card-photo avid-c-card-photo--fallback" style={{ background: t.accentSoft, color: t.accentText }}>
+              {initials(candidate.name)}
+            </div>
+          )}
+        </div>
+        <div className="avid-c-card-copy">
+          <div className="avid-c-card-name" style={{ color: t.ink }}>{candidate.name}</div>
+          <div className="avid-c-card-stage" style={{ color: stageColor }}>
+            {daysInStage > 0 ? `${daysInStage}d in stage` : "New"}
           </div>
         </div>
-        <div className="avid-k-person-actions">
+        <span className="avid-c-card-date" style={{ color: t.mutedSoft }} title="Entered this stage">
+          {fmtDate(inStageSince)}
+        </span>
+      </div>
+      <div className="avid-c-card-foot" style={{ borderTopColor: t.border }}>
+        <span className="avid-c-card-added" style={{ color: t.mutedSoft }}>
+          Added {fmtDate(added)}
+        </span>
+        <div className="avid-c-card-actions">
           {candidate.linkedinUrl ? (
             <a
               href={candidate.linkedinUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="avid-k-icon-btn"
+              className="avid-c-card-action"
               style={{ color: t.mutedSoft }}
-              title="Open LinkedIn"
+              title="LinkedIn"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             >
-              <ExternalLink size={14} />
+              <ExternalLink size={13} />
             </a>
           ) : null}
           <button
             type="button"
-            className="avid-k-icon-btn avid-k-icon-btn--danger"
+            className="avid-c-card-action avid-c-card-action--danger"
             style={{ color: t.mutedSoft }}
             title="Remove"
             onPointerDown={(e) => e.stopPropagation()}
@@ -426,7 +483,7 @@ function CandidateCard({
               onDelete();
             }}
           >
-            <Trash2 size={14} />
+            <Trash2 size={13} />
           </button>
         </div>
       </div>
@@ -601,6 +658,7 @@ export default function SearchesView({
   const [detailEditing, setDetailEditing] = useState(false);
   const [savingDetail, setSavingDetail] = useState(false);
   const [newCandidateName, setNewCandidateName] = useState("");
+  const [newCandidateIds, setNewCandidateIds] = useState<Set<string>>(() => new Set());
   const [newSearchIds, setNewSearchIds] = useState<Set<string>>(() => new Set());
   const timerRef = useRef<number | null>(null);
 
@@ -677,8 +735,18 @@ export default function SearchesView({
       linkedinUrl: null,
     };
     await onSaveCandidate(activeSearch.id, candidate, true);
+    setNewCandidateIds((prev) => new Set(prev).add(candidate.id));
+    window.setTimeout(() => {
+      setNewCandidateIds((prev) => {
+        const next = new Set(prev);
+        next.delete(candidate.id);
+        return next;
+      });
+    }, 600);
     setNewCandidateName("");
   };
+
+  const candidates = activeSearch?.candidates ?? [];
 
   const drilling = leavingLayer !== null;
 
@@ -771,44 +839,70 @@ export default function SearchesView({
                 }}
               />
 
-              <div className="avid-search-add-bar" style={{ borderBottomColor: t.border }}>
-                <input
-                  className="avid-search-add-input"
-                  style={{ background: t.surfaceAlt, borderColor: t.border, color: t.ink }}
-                  placeholder="Add candidate…"
-                  value={newCandidateName}
-                  onChange={(e) => setNewCandidateName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void addCandidate();
-                  }}
-                />
-                <button type="button" className="avid-btn" style={S.primaryBtn} disabled={!newCandidateName.trim()} onClick={() => void addCandidate()}>
-                  <Plus size={15} />
-                  <span>Add</span>
-                </button>
-              </div>
-
-              <KanbanBoard
-                t={t}
-                stages={CANDIDATE_PIPELINE}
-                stageColors={CANDIDATE_STAGE_COLOR}
-                items={activeSearch.candidates ?? []}
-                emptyLabel="Empty"
-                onMove={(candidate, stage) => onMoveCandidate(activeSearch.id, candidate, stage)}
-                renderCard={(candidate) => (
-                  <CandidateCard
-                    candidate={candidate}
-                    t={t}
-                    onDelete={() => onDeleteCandidate(activeSearch.id, candidate.id)}
-                  />
-                )}
-              />
-
-              {(activeSearch.candidates ?? []).length === 0 ? (
-                <div className="avid-search-empty avid-search-empty--inline" style={{ color: t.mutedSoft }}>
-                  No candidates yet — add one above or import from LinkedIn.
+              <section className="avid-candidate-pipeline">
+                <div className="avid-candidate-pipeline-head" style={{ borderBottomColor: t.border }}>
+                  <div className="avid-candidate-pipeline-title-wrap">
+                    <h3 className="avid-candidate-pipeline-title" style={{ color: t.ink }}>Candidates</h3>
+                    <p className="avid-candidate-pipeline-sub" style={{ color: t.mutedSoft }}>
+                      {candidates.length === 0
+                        ? "Add someone below or import from LinkedIn"
+                        : `${candidates.length} in pipeline · drag to advance`}
+                    </p>
+                  </div>
+                  <CandidatePipelineStats candidates={candidates} t={t} />
                 </div>
-              ) : null}
+
+                <div className="avid-candidate-compose" style={{ borderBottomColor: t.border, background: t.surface }}>
+                  <div className="avid-candidate-compose-field" style={{ background: t.surfaceAlt, borderColor: t.border }}>
+                    <Plus size={16} style={{ color: t.mutedSoft, flexShrink: 0 }} />
+                    <input
+                      className="avid-candidate-compose-input"
+                      style={{ color: t.ink }}
+                      placeholder="Name…"
+                      value={newCandidateName}
+                      onChange={(e) => setNewCandidateName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void addCandidate();
+                      }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="avid-btn avid-candidate-compose-btn"
+                    style={S.primaryBtn}
+                    disabled={!newCandidateName.trim()}
+                    onClick={() => void addCandidate()}
+                  >
+                    Add
+                  </button>
+                </div>
+
+                <KanbanBoard
+                  t={t}
+                  stages={CANDIDATE_PIPELINE}
+                  stageColors={CANDIDATE_STAGE_COLOR}
+                  items={candidates}
+                  emptyLabel="Drop here"
+                  tall
+                  newItemIds={newCandidateIds}
+                  onMove={(candidate, stage) => onMoveCandidate(activeSearch.id, candidate, stage)}
+                  columnFooter={(columnItems) => (
+                    <div className="avid-c-col-foot">
+                      <span className="avid-c-col-foot-label" style={{ color: t.mutedSoft }}>
+                        {columnItems.length === 1 ? "1 candidate" : `${columnItems.length} candidates`}
+                      </span>
+                    </div>
+                  )}
+                  renderCard={(candidate, stageColor) => (
+                    <CandidateCard
+                      candidate={candidate}
+                      t={t}
+                      stageColor={stageColor}
+                      onDelete={() => onDeleteCandidate(activeSearch.id, candidate.id)}
+                    />
+                  )}
+                />
+              </section>
             </div>
           </div>
         ) : null}
