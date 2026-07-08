@@ -1817,6 +1817,7 @@ function RowExpandedPanel({
 // clicked.
 const ACTIVITY_COMPOSE_DELAY_MS = 520;
 const ACTIVITY_COMPOSE_EXIT_MS = 380;
+const ACTIVITY_ROW_ENTER_MS = 380;
 
 function ActivityLogPanel({
   S,
@@ -1840,6 +1841,35 @@ function ActivityLogPanel({
   const canCompose = entry.stage === "interview" && !entry.declined;
   const [composeShown, setComposeShown] = useState(canCompose);
   const [composeExiting, setComposeExiting] = useState(false);
+  const panelEntryIdRef = useRef(entry.id);
+  const seenLogIdsRef = useRef<Set<string>>(new Set(entry.meetingLog.map((m) => m.id)));
+  const [enteringLogIds, setEnteringLogIds] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    if (panelEntryIdRef.current !== entry.id) {
+      panelEntryIdRef.current = entry.id;
+      seenLogIdsRef.current = new Set(entry.meetingLog.map((m) => m.id));
+      setEnteringLogIds(new Set());
+      return;
+    }
+
+    const fresh = entry.meetingLog.filter((m) => !seenLogIdsRef.current.has(m.id));
+    if (fresh.length === 0) return;
+
+    for (const m of fresh) seenLogIdsRef.current.add(m.id);
+    const freshIds = new Set(fresh.map((m) => m.id));
+    setEnteringLogIds((prev) => new Set([...prev, ...freshIds]));
+
+    const timer = window.setTimeout(() => {
+      setEnteringLogIds((prev) => {
+        const next = new Set(prev);
+        for (const id of freshIds) next.delete(id);
+        return next;
+      });
+    }, ACTIVITY_ROW_ENTER_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [entry.id, entry.meetingLog]);
 
   useEffect(() => {
     if (canCompose) {
@@ -1883,38 +1913,42 @@ function ActivityLogPanel({
         <div style={{ fontSize: 12, color: t.mutedSoft, marginBottom: 10 }}>Nothing logged yet.</div>
       ) : (
         <div className="avid-activity-log-list">
-          {entry.meetingLog.map((m) => (
-            <div
-              key={m.id}
-              className={`avid-activity-log-row${m.type === "Offer" || m.type === "Placed" ? " avid-activity-log-row--stage" : ""}`}
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0" }}
-            >
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: t.ink }}>{activityLabel(m.type, m.round)}</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <GlassDatePicker
-                  value={m.date}
-                  onChange={(iso) => onUpdateDate(m.id, iso)}
-                  triggerStyle={{
-                    ...S.input,
-                    padding: "2px 7px",
-                    fontSize: 12,
-                    color: t.muted,
-                    fontVariantNumeric: "tabular-nums",
-                    minWidth: 0,
-                  }}
-                />
-                <button
-                  type="button"
-                  className="avid-btn"
-                  onClick={() => onDelete(m.id)}
-                  title="Remove this entry"
-                  style={{ border: "none", background: "none", padding: 2, cursor: "pointer", color: t.mutedSoft, display: "flex" }}
+          {entry.meetingLog.map((m) => {
+            const isEntering = enteringLogIds.has(m.id);
+            return (
+              <div key={m.id} className="avid-activity-log-row">
+                <span
+                  className={`avid-activity-log-label${isEntering ? " avid-activity-log-label--enter" : ""}`}
+                  style={{ color: t.ink }}
                 >
-                  <X size={12} />
-                </button>
+                  {activityLabel(m.type, m.round)}
+                </span>
+                <div className={`avid-activity-log-actions${isEntering ? " avid-activity-log-actions--enter" : ""}`}>
+                  <GlassDatePicker
+                    value={m.date}
+                    onChange={(iso) => onUpdateDate(m.id, iso)}
+                    triggerStyle={{
+                      ...S.input,
+                      padding: "2px 7px",
+                      fontSize: 12,
+                      color: t.muted,
+                      fontVariantNumeric: "tabular-nums",
+                      minWidth: 0,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="avid-btn"
+                    onClick={() => onDelete(m.id)}
+                    title="Remove this entry"
+                    style={{ border: "none", background: "none", padding: 2, cursor: "pointer", color: t.mutedSoft, display: "flex" }}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
       {composeShown ? (
