@@ -457,15 +457,6 @@ function Dashboard({
     const res = await send(isNew ? "/api/billings" : `/api/billings/${billing.id}`, isNew ? "POST" : "PUT", billing);
     if (res.ok) applyBilling(await res.json());
   };
-  const saveEntryFee = async (entry: Entry, salary: number, feePercent: number) => {
-    const linked = billings.find((b) => b.entryId === entry.id);
-    if (!linked) return;
-    const amount = Math.round((salary * feePercent) / 100);
-    const updated: Billing = { ...linked, salary, feePercent, amount };
-    applyBilling(updated);
-    const res = await send(`/api/billings/${linked.id}`, "PUT", updated);
-    if (res.ok) applyBilling(await res.json());
-  };
   const deleteBilling = async (id: string) => {
     setBillings((prev) => prev.filter((b) => b.id !== id));
     await send(`/api/billings/${id}`, "DELETE");
@@ -980,8 +971,6 @@ function Dashboard({
                       onLogMeeting={(type, round, date) => logMeeting(e, type, round, date)}
                       onDeleteMeeting={(meetingId) => deleteMeeting(e, meetingId)}
                       onUpdateMeetingDate={(meetingId, date) => updateMeetingDate(e, meetingId, date)}
-                      linkedBilling={billings.find((b) => b.entryId === e.id) ?? null}
-                      onSaveEntryFee={(salary, feePercent) => saveEntryFee(e, salary, feePercent)}
                     />
                   ))
                 )}
@@ -1143,8 +1132,6 @@ function EntryRow({
   onLogMeeting,
   onDeleteMeeting,
   onUpdateMeetingDate,
-  linkedBilling,
-  onSaveEntryFee,
 }: {
   S: Styles;
   t: Theme;
@@ -1159,19 +1146,7 @@ function EntryRow({
   onLogMeeting: (type: string, round: number, date: string) => void;
   onDeleteMeeting: (meetingId: string) => void;
   onUpdateMeetingDate: (meetingId: string, date: string) => void;
-  linkedBilling: Billing | null;
-  onSaveEntryFee: (salary: number, feePercent: number) => void;
 }) {
-  const [feeMorphToken, setFeeMorphToken] = useState(0);
-  const hadPlacedStageRef = useRef(entry.stage === "placed");
-
-  useEffect(() => {
-    const isPlaced = entry.stage === "placed" && !entry.declined;
-    if (isPlaced && !hadPlacedStageRef.current) {
-      setFeeMorphToken((n) => n + 1);
-    }
-    hadPlacedStageRef.current = isPlaced;
-  }, [entry.stage, entry.declined]);
   // Status and Edit are two separate things: Status expands the pipeline
   // tracker + activity log (view only, nothing editable). Edit turns the
   // row's own cells into editable fields in place and shows a Save bar --
@@ -1313,9 +1288,6 @@ function EntryRow({
           onLogMeeting={onLogMeeting}
           onDeleteMeeting={onDeleteMeeting}
           onUpdateMeetingDate={onUpdateMeetingDate}
-          linkedBilling={linkedBilling}
-          onSaveEntryFee={onSaveEntryFee}
-          feeMorphToken={feeMorphToken}
         />
         <ConfirmDeleteDialog
           S={S}
@@ -1379,9 +1351,6 @@ function EntryRow({
         onLogMeeting={onLogMeeting}
         onDeleteMeeting={onDeleteMeeting}
         onUpdateMeetingDate={onUpdateMeetingDate}
-        linkedBilling={linkedBilling}
-        onSaveEntryFee={onSaveEntryFee}
-        feeMorphToken={feeMorphToken}
       />
       <ConfirmDeleteDialog
         S={S}
@@ -1694,9 +1663,6 @@ function RowExpandedPanel({
   onLogMeeting,
   onDeleteMeeting,
   onUpdateMeetingDate,
-  linkedBilling,
-  onSaveEntryFee,
-  feeMorphToken,
 }: {
   S: Styles;
   t: Theme;
@@ -1715,9 +1681,6 @@ function RowExpandedPanel({
   onLogMeeting: (type: string, round: number, date: string) => void;
   onDeleteMeeting: (meetingId: string) => void;
   onUpdateMeetingDate: (meetingId: string, date: string) => void;
-  linkedBilling: Billing | null;
-  onSaveEntryFee: (salary: number, feePercent: number) => void;
-  feeMorphToken: number;
 }) {
   return (
     <div className="avid-expand" style={{ gridTemplateRows: statusOpen || editOpen ? "1fr" : "0fr" }}>
@@ -1828,24 +1791,9 @@ function RowExpandedPanel({
                   />
                 </div>
               )}
-              {entry.stage === "placed" && !entry.declined && (
-                <div style={{ width: "100%", maxWidth: 380 }}>
-                  <FeeLogPanel
-                    S={S}
-                    t={t}
-                    entry={entry}
-                    billing={linkedBilling}
-                    morphKey={feeMorphToken}
-                    onSaveFee={onSaveEntryFee}
-                    onDone={onCloseStatus}
-                  />
-                </div>
-              )}
-              {entry.stage !== "placed" && (
-                <button type="button" className="avid-btn" style={{ ...S.ghostBtn, alignSelf: "flex-end" }} onClick={onCloseStatus}>
-                  Done
-                </button>
-              )}
+              <button type="button" className="avid-btn" style={{ ...S.ghostBtn, alignSelf: "flex-end" }} onClick={onCloseStatus}>
+                Done
+              </button>
             </>
           )}
         </div>
@@ -1968,170 +1916,6 @@ function ActivityLogPanel({
           </button>
         </div>
       )}
-    </div>
-  );
-}
-
-const FEE_LOG_MORPH_MS = 480;
-
-function feeMorphSources(meetingLog: MeetingLogEntry[]): [MeetingLogEntry | null, MeetingLogEntry | null] {
-  const withoutPlaced = meetingLog.filter((m) => m.type !== "Placed");
-  const offer = withoutPlaced.find((m) => m.type === "Offer");
-  const interviews = withoutPlaced.filter((m) => m.type !== "Offer");
-  const first = interviews[0] ?? withoutPlaced[0] ?? null;
-  const second = offer ?? withoutPlaced[1] ?? null;
-  return [first, second];
-}
-
-function FeeLogPanel({
-  S,
-  t,
-  entry,
-  billing,
-  morphKey,
-  onSaveFee,
-  onDone,
-}: {
-  S: Styles;
-  t: Theme;
-  entry: Entry;
-  billing: Billing | null;
-  morphKey: number;
-  onSaveFee: (salary: number, feePercent: number) => void;
-  onDone: () => void;
-}) {
-  const [morphing, setMorphing] = useState(morphKey > 0);
-  const [salary, setSalary] = useState(() => billing?.salary ?? 0);
-  const [feePercent, setFeePercent] = useState(() => billing?.feePercent ?? 0);
-  const [srcA, srcB] = feeMorphSources(entry.meetingLog);
-
-  useEffect(() => {
-    setSalary(billing?.salary ?? 0);
-    setFeePercent(billing?.feePercent ?? 0);
-  }, [billing?.salary, billing?.feePercent, billing?.id]);
-
-  useEffect(() => {
-    if (morphKey <= 0) {
-      setMorphing(false);
-      return;
-    }
-    setMorphing(true);
-    const timer = window.setTimeout(() => setMorphing(false), FEE_LOG_MORPH_MS);
-    return () => window.clearTimeout(timer);
-  }, [morphKey]);
-
-  const valueBoxStyle: CSSProperties = {
-    ...S.input,
-    padding: "2px 7px",
-    fontSize: 12,
-    color: t.muted,
-    fontVariantNumeric: "tabular-nums",
-    minWidth: 0,
-    width: "100%",
-    textAlign: "center",
-    boxSizing: "border-box",
-  };
-
-  const rows = [
-    {
-      toLabel: "Salary",
-      fromLabel: srcA ? activityLabel(srcA.type, srcA.round) : "—",
-      fromDate: srcA?.date ?? entry.date,
-      value: (
-        <input
-          className="fee-log-value-to"
-          type="text"
-          inputMode="numeric"
-          style={valueBoxStyle}
-          value={salary ? salary.toLocaleString("en-US") : ""}
-          onChange={(e) => setSalary(Number(e.target.value.replace(/[^\d]/g, "")) || 0)}
-          placeholder="75,000"
-          aria-label="Salary"
-        />
-      ),
-    },
-    {
-      toLabel: "Fee",
-      fromLabel: srcB ? activityLabel(srcB.type, srcB.round) : "Offer",
-      fromDate: srcB?.date ?? entry.date,
-      value: (
-        <div className="fee-log-value-to" style={{ position: "relative", width: "100%" }}>
-          <input
-            type="number"
-            min={0}
-            max={100}
-            step={0.5}
-            style={{ ...valueBoxStyle, paddingRight: 18 }}
-            value={feePercent || ""}
-            onChange={(e) => setFeePercent(Number(e.target.value))}
-            placeholder="25"
-            aria-label="Fee percent"
-          />
-          <span
-            style={{
-              position: "absolute",
-              right: 7,
-              top: "50%",
-              transform: "translateY(-50%)",
-              fontSize: 11,
-              color: t.mutedSoft,
-              pointerEvents: "none",
-            }}
-          >
-            %
-          </span>
-        </div>
-      ),
-    },
-  ];
-
-  const canSave = salary > 0 && feePercent > 0;
-
-  return (
-    <div className={`fee-log-panel${morphing ? " fee-log-panel--morph" : ""}`}>
-      <div className="fee-log-heading">
-        <span className="fee-log-heading-from">Activity log</span>
-        <span className="fee-log-heading-to">Fee log</span>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 10 }}>
-        {rows.map((row) => (
-          <div
-            key={row.toLabel}
-            className="fee-log-row"
-            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0", gap: 8 }}
-          >
-            <div className="fee-log-label-slot">
-              <span className="fee-log-label-from" style={{ fontSize: 12.5, fontWeight: 600, color: t.ink }}>
-                {row.fromLabel}
-              </span>
-              <span className="fee-log-label-to" style={{ fontSize: 12.5, fontWeight: 600, color: t.ink }}>
-                {row.toLabel}
-              </span>
-            </div>
-            <div className="fee-log-value-slot" style={{ width: 72, flexShrink: 0 }}>
-              <span className="fee-log-value-from" style={valueBoxStyle}>
-                {fmtDate(row.fromDate)}
-              </span>
-              {row.value}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="fee-log-done-row">
-        <button
-          type="button"
-          className="avid-btn"
-          style={{ ...S.ghostBtn, padding: "8px 28px", fontSize: 12.5, opacity: canSave ? 1 : 0.5 }}
-          disabled={!canSave}
-          onClick={() => {
-            if (!canSave) return;
-            onSaveFee(salary, feePercent);
-            onDone();
-          }}
-        >
-          Done
-        </button>
-      </div>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { ArrowLeft, ChevronRight, ExternalLink, GripVertical, Plus, Trash2, X } from "lucide-react";
+import { ArrowLeft, ChevronRight, ExternalLink, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import type { CandidateStage, RetainedSearch, SearchCandidate, SearchStage } from "@/lib/types";
 import {
   CANDIDATE_PIPELINE,
@@ -281,100 +281,40 @@ function stopCardNav(e: React.PointerEvent | React.MouseEvent | React.KeyboardEv
   e.stopPropagation();
 }
 
-function InlineSearchCard({
+function SearchCard({
   search,
   t,
-  autoFocusClient,
-  onUpdate,
+  onUpdateFee,
 }: {
   search: RetainedSearch;
   t: Theme;
-  autoFocusClient?: boolean;
-  onUpdate: (patch: Partial<Pick<RetainedSearch, "client" | "role" | "retainerAmount">>) => void;
+  onUpdateFee: (amount: number | null) => void;
 }) {
   const today = todayISO();
   const lastInterview = lastCandidateInterviewDate(search.candidates ?? [], search.date);
   const idleDays = daysSince(lastInterview, today);
-  const clientRef = useRef<HTMLInputElement>(null);
-  const [client, setClient] = useState(search.client);
-  const [role, setRole] = useState(search.role ?? "");
   const [feeEditing, setFeeEditing] = useState(false);
   const [feeDraft, setFeeDraft] = useState(search.retainerAmount != null ? String(search.retainerAmount) : "");
 
-  useEffect(() => setClient(search.client), [search.client]);
-  useEffect(() => setRole(search.role ?? ""), [search.role]);
   useEffect(() => {
     setFeeDraft(search.retainerAmount != null ? String(search.retainerAmount) : "");
   }, [search.retainerAmount]);
-
-  useEffect(() => {
-    if (!autoFocusClient) return;
-    const tmr = window.setTimeout(() => {
-      clientRef.current?.focus();
-      clientRef.current?.select();
-    }, 80);
-    return () => window.clearTimeout(tmr);
-  }, [autoFocusClient]);
-
-  const commitClient = () => {
-    const next = client.trim() || "New client";
-    if (next !== search.client) onUpdate({ client: next });
-    else if (client !== search.client) setClient(search.client);
-  };
-
-  const commitRole = () => {
-    const next = role.trim() || null;
-    if (next !== (search.role ?? "")) onUpdate({ role: next });
-  };
 
   const commitFee = () => {
     setFeeEditing(false);
     const parsed = feeDraft.trim() ? Number(feeDraft.replace(/[^\d]/g, "")) : null;
     const current = search.retainerAmount ?? null;
-    if (parsed !== current) onUpdate({ retainerAmount: parsed });
+    if (parsed !== current) onUpdateFee(parsed);
     else setFeeDraft(current != null ? String(current) : "");
   };
 
   return (
     <div className="avid-k-card-inner">
       <div className="avid-k-card-headrow">
-        <input
-          ref={clientRef}
-          className="avid-k-inline avid-k-inline--title"
-          style={{ color: t.ink }}
-          value={client}
-          placeholder="Client"
-          onChange={(e) => setClient(e.target.value)}
-          onBlur={commitClient}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              commitClient();
-              (e.target as HTMLInputElement).blur();
-            }
-          }}
-          onPointerDown={stopCardNav}
-          onClick={stopCardNav}
-        />
+        <div className="avid-k-card-title" style={{ color: t.ink }}>{search.client}</div>
         <span className="avid-k-card-date" style={{ color: t.mutedSoft }}>{fmtDate(search.date)}</span>
       </div>
-      <input
-        className="avid-k-inline avid-k-inline--sub"
-        style={{ color: t.muted }}
-        value={role}
-        placeholder="Role"
-        onChange={(e) => setRole(e.target.value)}
-        onBlur={commitRole}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            commitRole();
-            (e.target as HTMLInputElement).blur();
-          }
-        }}
-        onPointerDown={stopCardNav}
-        onClick={stopCardNav}
-      />
+      <div className="avid-k-card-sub" style={{ color: t.muted }}>{search.role || "Role TBD"}</div>
       {search.stage === "stale" ? (
         <div className="avid-k-stale-hint" style={{ color: t.mutedSoft }}>
           No interview activity in {idleDays} days
@@ -494,94 +434,71 @@ function CandidateCard({
   );
 }
 
-function SearchFormModal({
-  S,
+function SearchDetailHeader({
+  search,
   t,
+  S,
   teamNames,
-  user,
-  initial,
+  editing,
+  saving,
+  onBack,
+  onToggleEdit,
+  onDelete,
   onSave,
-  onClose,
 }: {
-  S: Styles;
+  search: RetainedSearch;
   t: Theme;
+  S: Styles;
   teamNames: string[];
-  user: string;
-  initial?: RetainedSearch;
-  onSave: (search: RetainedSearch) => Promise<void>;
-  onClose: () => void;
+  editing: boolean;
+  saving: boolean;
+  onBack: () => void;
+  onToggleEdit: () => void;
+  onDelete: () => void;
+  onSave: (patch: { client: string; role: string | null; team: string[] }) => void;
 }) {
-  const [client, setClient] = useState(initial?.client ?? "");
-  const [role, setRole] = useState(initial?.role ?? "");
-  const [date, setDate] = useState(initial?.date ?? todayISO());
-  const [team, setTeam] = useState<string[]>(initial?.team?.length ? initial.team : [user]);
-  const [retainerAmount, setRetainerAmount] = useState(
-    initial?.retainerAmount != null ? String(initial.retainerAmount) : ""
-  );
-  const [notes, setNotes] = useState(initial?.notes ?? "");
-  const [saving, setSaving] = useState(false);
+  const count = search.candidates?.length ?? 0;
+  const stageLabel = SEARCH_PIPELINE.find((s) => s.key === search.stage)?.label ?? search.stage;
+  const stageColor = SEARCH_STAGE_COLOR[search.stage];
+  const [client, setClient] = useState(search.client);
+  const [role, setRole] = useState(search.role ?? "");
+  const [team, setTeam] = useState<string[]>(search.team);
+
+  useEffect(() => {
+    if (!editing) return;
+    setClient(search.client);
+    setRole(search.role ?? "");
+    setTeam(search.team);
+  }, [editing, search.client, search.role, search.team]);
 
   const toggleTeam = (name: string) => {
     setTeam((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
   };
 
-  const submit = async () => {
-    if (!client.trim()) return;
-    setSaving(true);
-    const search: RetainedSearch = {
-      id: initial?.id ?? uid(),
-      date,
-      client: client.trim(),
-      role: role.trim() || null,
-      team,
-      stage: initial?.stage ?? "sourcing",
-      stageHistory: initial?.stageHistory ?? [{ stage: "sourcing", date }],
-      retainerAmount: retainerAmount ? Number(retainerAmount) : null,
-      notes: notes.trim() || null,
-      addedBy: initial?.addedBy ?? user,
-      createdAt: initial?.createdAt ?? new Date().toISOString(),
-      candidates: initial?.candidates ?? [],
-    };
-    await onSave(search);
-    setSaving(false);
-    onClose();
-  };
+  const canSave = client.trim().length > 0 && team.length > 0;
 
   return (
-    <div style={S.modalOverlay} onClick={onClose}>
-      <div style={S.modal} className="avid-glass-pop" onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{initial ? "Edit Search" : "New Search"}</h3>
-          <button className="avid-btn" style={S.iconGhost} onClick={onClose}>
-            <X size={16} />
-          </button>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <label style={S.fieldLabel}>
-            Client
-            <input style={S.input} value={client} onChange={(e) => setClient(e.target.value)} />
-          </label>
-          <label style={S.fieldLabel}>
-            Role
-            <input style={S.input} value={role} onChange={(e) => setRole(e.target.value)} />
-          </label>
-          <label style={S.fieldLabel}>
-            Signed date
-            <input style={S.input} type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </label>
-          <label style={S.fieldLabel}>
-            Retainer
-            <input
-              style={S.input}
-              inputMode="numeric"
-              value={retainerAmount}
-              onChange={(e) => setRetainerAmount(e.target.value.replace(/[^\d]/g, ""))}
-              placeholder="Optional"
-            />
-          </label>
-          <div>
+    <header className="avid-search-detail-header" style={{ borderBottomColor: t.border, background: t.surface }}>
+      <button type="button" className="avid-search-back avid-btn" style={S.segBtn} onClick={onBack}>
+        <ArrowLeft size={15} />
+        <span>Searches</span>
+      </button>
+
+      {editing ? (
+        <div className="avid-search-detail-edit">
+          <div className="avid-search-edit-grid">
+            <label className="avid-search-edit-field" style={S.fieldLabel}>
+              Company
+              <input className="avid-search-edit-input" style={S.input} value={client} onChange={(e) => setClient(e.target.value)} placeholder="Client company" />
+            </label>
+            <label className="avid-search-edit-field" style={S.fieldLabel}>
+              Role
+              <input className="avid-search-edit-input" style={S.input} value={role} onChange={(e) => setRole(e.target.value)} placeholder="e.g. Account Manager" />
+            </label>
+          </div>
+          <div className="avid-search-edit-team">
             <div style={{ ...S.fieldLabel, marginBottom: 8 }}>Team</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            <div className="avid-search-edit-team-btns">
               {teamNames.map((name) => (
                 <button
                   key={name}
@@ -595,70 +512,49 @@ function SearchFormModal({
               ))}
             </div>
           </div>
-          <label style={S.fieldLabel}>
-            Notes
-            <textarea style={{ ...S.input, minHeight: 72, resize: "vertical" }} value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </label>
+          <div className="avid-search-edit-actions">
+            <button type="button" className="avid-btn" style={S.segBtn} onClick={onToggleEdit} disabled={saving}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="avid-btn"
+              style={S.primaryBtn}
+              disabled={!canSave || saving}
+              onClick={() => onSave({ client: client.trim(), role: role.trim() || null, team })}
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
         </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
-          <button className="avid-btn" style={S.segBtn} onClick={onClose}>
-            Cancel
-          </button>
-          <button className="avid-btn" style={S.primaryBtn} disabled={saving || !client.trim()} onClick={submit}>
-            {saving ? "Saving…" : initial ? "Save" : "Create"}
-          </button>
+      ) : (
+        <div className="avid-search-detail-view">
+          <div className="avid-search-detail-main">
+            <h2 className="avid-search-detail-title" style={{ color: t.ink }}>{search.client}</h2>
+            <p className="avid-search-detail-sub" style={{ color: t.muted }}>{search.role || "Role TBD"}</p>
+          </div>
+          <div className="avid-search-detail-chips">
+            <span className="avid-k-detail-chip" style={{ background: `${stageColor}18`, color: stageColor, borderColor: `${stageColor}40` }}>
+              {stageLabel}
+            </span>
+            <span className="avid-k-detail-chip" style={{ background: t.surfaceAlt, color: t.muted, borderColor: t.border }}>
+              {count} candidates
+            </span>
+            {search.retainerAmount != null ? (
+              <span className="avid-k-detail-chip" style={{ background: t.surfaceAlt, color: t.muted, borderColor: t.border }}>
+                {money(search.retainerAmount)}
+              </span>
+            ) : null}
+          </div>
+          <div className="avid-search-detail-actions">
+            <TeamAvatars team={search.team} t={t} />
+          </div>
         </div>
-      </div>
-    </div>
-  );
-}
+      )}
 
-function SearchDetailHeader({
-  search,
-  t,
-  S,
-  onBack,
-  onEdit,
-  onDelete,
-}: {
-  search: RetainedSearch;
-  t: Theme;
-  S: Styles;
-  onBack: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const count = search.candidates?.length ?? 0;
-  const stageLabel = SEARCH_PIPELINE.find((s) => s.key === search.stage)?.label ?? search.stage;
-  const stageColor = SEARCH_STAGE_COLOR[search.stage];
-
-  return (
-    <header className="avid-search-detail-header" style={{ borderBottomColor: t.border, background: t.surface }}>
-      <button type="button" className="avid-search-back avid-btn" style={S.segBtn} onClick={onBack}>
-        <ArrowLeft size={15} />
-        <span>Searches</span>
-      </button>
-      <div className="avid-search-detail-main">
-        <h2 className="avid-search-detail-title" style={{ color: t.ink }}>{search.client}</h2>
-        <p className="avid-search-detail-sub" style={{ color: t.muted }}>{search.role || "Role TBD"}</p>
-      </div>
-      <div className="avid-search-detail-chips">
-        <span className="avid-k-detail-chip" style={{ background: `${stageColor}18`, color: stageColor, borderColor: `${stageColor}40` }}>
-          {stageLabel}
-        </span>
-        <span className="avid-k-detail-chip" style={{ background: t.surfaceAlt, color: t.muted, borderColor: t.border }}>
-          {count} candidates
-        </span>
-        {search.retainerAmount != null ? (
-          <span className="avid-k-detail-chip" style={{ background: t.surfaceAlt, color: t.muted, borderColor: t.border }}>
-            {money(search.retainerAmount)}
-          </span>
-        ) : null}
-      </div>
-      <div className="avid-search-detail-actions">
-        <TeamAvatars team={search.team} t={t} />
-        <button type="button" className="avid-btn" style={S.segBtn} onClick={onEdit}>
-          Edit
+      <div className="avid-search-detail-toolbar">
+        <button type="button" className="avid-btn" style={S.iconGhost} title={editing ? "Close editor" : "Edit search"} onClick={onToggleEdit}>
+          <Pencil size={15} />
         </button>
         <button type="button" className="avid-btn" style={S.iconGhost} title="Delete search" onClick={onDelete}>
           <Trash2 size={15} />
@@ -702,7 +598,8 @@ export default function SearchesView({
   const [activeSearchId, setActiveSearchId] = useState<string | null>(null);
   const [displayLayer, setDisplayLayer] = useState<"list" | "detail">("list");
   const [leavingLayer, setLeavingLayer] = useState<"list" | "detail" | null>(null);
-  const [editingSearch, setEditingSearch] = useState<RetainedSearch | null>(null);
+  const [detailEditing, setDetailEditing] = useState(false);
+  const [savingDetail, setSavingDetail] = useState(false);
   const [newCandidateName, setNewCandidateName] = useState("");
   const [newSearchIds, setNewSearchIds] = useState<Set<string>>(() => new Set());
   const timerRef = useRef<number | null>(null);
@@ -710,6 +607,10 @@ export default function SearchesView({
   useEffect(() => {
     if (!focusSearchId) return;
     setNewSearchIds((prev) => new Set(prev).add(focusSearchId));
+    setActiveSearchId(focusSearchId);
+    setLeavingLayer(null);
+    setDisplayLayer("detail");
+    setDetailEditing(true);
     const tmr = window.setTimeout(() => {
       setNewSearchIds((prev) => {
         const next = new Set(prev);
@@ -720,10 +621,6 @@ export default function SearchesView({
     }, 600);
     return () => window.clearTimeout(tmr);
   }, [focusSearchId, onFocusSearchDone]);
-
-  const patchSearch = async (search: RetainedSearch, patch: Partial<Pick<RetainedSearch, "client" | "role" | "retainerAmount">>) => {
-    await onSaveSearch({ ...search, ...patch }, false);
-  };
 
   const activeSearch = activeSearchId ? searches.find((s) => s.id === activeSearchId) ?? null : null;
 
@@ -736,6 +633,7 @@ export default function SearchesView({
   const openSearch = (id: string) => {
     if (timerRef.current) window.clearTimeout(timerRef.current);
     setActiveSearchId(id);
+    setDetailEditing(false);
     setLeavingLayer(displayLayer);
     setDisplayLayer("detail");
     timerRef.current = window.setTimeout(() => setLeavingLayer(null), DRILL_MS);
@@ -745,10 +643,23 @@ export default function SearchesView({
     if (timerRef.current) window.clearTimeout(timerRef.current);
     setLeavingLayer(displayLayer);
     setDisplayLayer("list");
+    setDetailEditing(false);
     timerRef.current = window.setTimeout(() => {
       setActiveSearchId(null);
       setLeavingLayer(null);
     }, DRILL_MS);
+  };
+
+  const saveSearchDetail = async (patch: { client: string; role: string | null; team: string[] }) => {
+    if (!activeSearch) return;
+    setSavingDetail(true);
+    await onSaveSearch({ ...activeSearch, ...patch }, false);
+    setSavingDetail(false);
+    setDetailEditing(false);
+  };
+
+  const updateSearchFee = async (search: RetainedSearch, retainerAmount: number | null) => {
+    await onSaveSearch({ ...search, retainerAmount }, false);
   };
 
   const addCandidate = async () => {
@@ -822,11 +733,10 @@ export default function SearchesView({
                   );
                 }}
                 renderCard={(search) => (
-                  <InlineSearchCard
+                  <SearchCard
                     search={search}
                     t={t}
-                    autoFocusClient={search.id === focusSearchId}
-                    onUpdate={(patch) => void patchSearch(search, patch)}
+                    onUpdateFee={(retainerAmount) => void updateSearchFee(search, retainerAmount)}
                   />
                 )}
               />
@@ -847,8 +757,12 @@ export default function SearchesView({
                 search={activeSearch}
                 t={t}
                 S={S}
+                teamNames={teamNames}
+                editing={detailEditing}
+                saving={savingDetail}
                 onBack={closeSearch}
-                onEdit={() => setEditingSearch(activeSearch)}
+                onToggleEdit={() => setDetailEditing((v) => !v)}
+                onSave={(patch) => void saveSearchDetail(patch)}
                 onDelete={() => {
                   if (window.confirm(`Delete search for ${activeSearch.client}?`)) {
                     onDeleteSearch(activeSearch.id);
@@ -899,21 +813,6 @@ export default function SearchesView({
           </div>
         ) : null}
       </div>
-
-      {editingSearch && (
-        <SearchFormModal
-          S={S}
-          t={t}
-          teamNames={teamNames}
-          user={user}
-          initial={editingSearch}
-          onClose={() => setEditingSearch(null)}
-          onSave={async (search) => {
-            await onSaveSearch(search, false);
-            setEditingSearch(null);
-          }}
-        />
-      )}
     </div>
   );
 }

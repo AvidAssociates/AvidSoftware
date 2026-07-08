@@ -112,17 +112,6 @@ export async function createEntry(input: {
     RETURNING *
   `) as EntryRow[];
   const entry = toEntry(row);
-  if (isEffectivelyPlaced(input)) {
-    const billing = await syncBillingForPlacedEntry(input.id, {
-      date: todayISO(),
-      team: input.team,
-      company: input.company,
-      candidate: input.candidate,
-      role: input.role,
-      addedBy: input.addedBy,
-    });
-    return { entry, billing };
-  }
   return { entry };
 }
 
@@ -205,27 +194,8 @@ export async function updateEntry(
   `) as EntryRow[];
   const entry = toEntry(row);
   const wasPlaced = existing.stage === "placed";
-  const justMarkedPlaced = !wasPlaced && isEffectivelyPlaced(input);
-  const billingDate = justMarkedPlaced
-    ? newStageDate
-    : placedDateFromHistory(history, newStageDate);
 
-  if (isEffectivelyPlaced(input)) {
-    const billing = await syncBillingForPlacedEntry(
-      id,
-      {
-        date: billingDate,
-        team: input.team,
-        company: input.company,
-        candidate: input.candidate,
-        role: input.role,
-      },
-      { updateDate: justMarkedPlaced }
-    );
-    return { entry, billing };
-  }
-
-  if (wasPlaced) {
+  if (wasPlaced && !isEffectivelyPlaced(input)) {
     const billingDeletedId = (await removeAutoBillingForEntry(id)) ?? undefined;
     return billingDeletedId ? { entry, billingDeletedId } : { entry };
   }
