@@ -206,6 +206,58 @@ select::-ms-expand {
   overflow: hidden;
 }
 
+/* Send-outs activity log: meeting compose slides down when leaving Interview. */
+.avid-activity-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.avid-activity-log-row--stage {
+  animation: avidActivityStageIn 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.avid-activity-compose-wrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  border-top: 1px solid;
+  transition: grid-template-rows 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.avid-activity-compose-wrap > * {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.avid-activity-compose-wrap--exit {
+  grid-template-rows: 0fr;
+}
+
+.avid-activity-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  transition: transform 0.38s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.34s ease;
+}
+
+.avid-activity-compose-wrap--exit .avid-activity-compose {
+  transform: translateY(18px);
+  opacity: 0;
+}
+
+@keyframes avidActivityStageIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Send-Outs ↔ Billings slide (toolbar stays put). */
 .avid-table-stage,
 .avid-hero .avid-table-stage {
@@ -557,6 +609,12 @@ select::-ms-expand {
   .avid-stage-fill,
   .avid-stage-dot,
   .avid-expand,
+  .avid-activity-compose-wrap,
+  .avid-activity-compose,
+  .avid-activity-log-row--stage {
+    transition: none !important;
+    animation: none !important;
+  }
   .avid-kanban-card,
   .avid-kanban-ghost {
     transition: none !important;

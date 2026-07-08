@@ -402,13 +402,17 @@ function Dashboard({
     if (res.ok) applyEntryMutation(await res.json());
   };
   const advanceStage = async (entry: Entry, stage: Stage) => {
-    const optimistic = { ...entry, stage, declined: false };
+    const stageDate = todayISO();
+    let meetingLog = entry.meetingLog;
+    if (stage === "offer" && entry.stage !== "offer") {
+      meetingLog = [...meetingLog, { id: uid(), type: "Offer", round: 0, date: stageDate }];
+    }
+    if (stage === "placed" && entry.stage !== "placed") {
+      meetingLog = [...meetingLog, { id: uid(), type: "Placed", round: 0, date: stageDate }];
+    }
+    const optimistic = { ...entry, stage, declined: false, meetingLog };
     applyEntry(optimistic);
-    // stageDate is the browser's own local calendar date -- the server has
-    // no idea what timezone the user is in, so it can't be trusted to stamp
-    // "today" on a newly-reached stage itself (it would use its own clock,
-    // which disagrees with the user's local date for part of the day).
-    const res = await send(`/api/entries/${entry.id}`, "PUT", { ...optimistic, stageDate: todayISO() });
+    const res = await send(`/api/entries/${entry.id}`, "PUT", { ...optimistic, stageDate });
     if (res.ok) applyEntryMutation(await res.json());
   };
   const deleteEntry = async (id: string) => {
@@ -1783,7 +1787,6 @@ function RowExpandedPanel({
                   <ActivityLogPanel
                     S={S}
                     t={t}
-                    key={entry.meetingLog.length}
                     entry={entry}
                     onLog={onLogMeeting}
                     onDelete={onDeleteMeeting}
@@ -1807,6 +1810,8 @@ function RowExpandedPanel({
 // next meeting while still in Interview. Each entry can be deleted (logged
 // by mistake); the date defaults to today and only opens a picker if
 // clicked.
+const ACTIVITY_COMPOSE_EXIT_MS = 380;
+
 function ActivityLogPanel({
   S,
   t,
@@ -1822,14 +1827,31 @@ function ActivityLogPanel({
   onDelete: (meetingId: string) => void;
   onUpdateDate: (meetingId: string, date: string) => void;
 }) {
-  const lastMeeting = [...entry.meetingLog].reverse().find((m) => m.type !== "Offer");
+  const lastMeeting = [...entry.meetingLog].reverse().find((m) => m.type !== "Offer" && m.type !== "Placed");
   const [draftType, setDraftType] = useState(lastMeeting?.type || "Phone");
   const [draftRound, setDraftRound] = useState(() => nextRoundForType(entry, draftType));
   const [draftDate, setDraftDate] = useState(todayISO());
-  const canAdd = entry.stage === "interview" && !entry.declined;
+  const canCompose = entry.stage === "interview" && !entry.declined;
+  const [composeShown, setComposeShown] = useState(canCompose);
+  const [composeExiting, setComposeExiting] = useState(false);
+
+  useEffect(() => {
+    if (canCompose) {
+      setComposeShown(true);
+      setComposeExiting(false);
+      return;
+    }
+    if (!composeShown || composeExiting) return;
+    setComposeExiting(true);
+    const timer = window.setTimeout(() => {
+      setComposeShown(false);
+      setComposeExiting(false);
+    }, ACTIVITY_COMPOSE_EXIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [canCompose, composeShown, composeExiting]);
 
   return (
-    <div>
+    <div className="avid-activity-log">
       <div
         style={{
           fontSize: 10.5,
@@ -1845,10 +1867,11 @@ function ActivityLogPanel({
       {entry.meetingLog.length === 0 ? (
         <div style={{ fontSize: 12, color: t.mutedSoft, marginBottom: 10 }}>Nothing logged yet.</div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 10 }}>
+        <div className="avid-activity-log-list">
           {entry.meetingLog.map((m) => (
             <div
               key={m.id}
+              className={`avid-activity-log-row${m.type === "Offer" || m.type === "Placed" ? " avid-activity-log-row--stage" : ""}`}
               style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 0" }}
             >
               <span style={{ fontSize: 12.5, fontWeight: 600, color: t.ink }}>{activityLabel(m.type, m.round)}</span>
@@ -1865,57 +1888,64 @@ function ActivityLogPanel({
                     minWidth: 0,
                   }}
                 />
-                <button
-                  type="button"
-                  className="avid-btn"
-                  onClick={() => onDelete(m.id)}
-                  title="Remove this entry"
-                  style={{ border: "none", background: "none", padding: 2, cursor: "pointer", color: t.mutedSoft, display: "flex" }}
-                >
-                  <X size={12} />
-                </button>
+                {m.type !== "Offer" && m.type !== "Placed" ? (
+                  <button
+                    type="button"
+                    className="avid-btn"
+                    onClick={() => onDelete(m.id)}
+                    title="Remove this entry"
+                    style={{ border: "none", background: "none", padding: 2, cursor: "pointer", color: t.mutedSoft, display: "flex" }}
+                  >
+                    <X size={12} />
+                  </button>
+                ) : null}
               </div>
             </div>
           ))}
         </div>
       )}
-      {canAdd && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: 10, borderTop: `1px solid ${t.border}` }}>
-          {/* Type and date share the row's width equally with centered
-              text; the round number sits between them in a roomier box. */}
-          <div style={{ display: "flex", gap: 10 }}>
-            <GlassSelect
-              value={draftType}
-              options={INTERVIEW_TYPES}
-              onChange={(type) => {
-                setDraftType(type);
-                setDraftRound(nextRoundForType(entry, type));
-              }}
-              triggerStyle={{ ...S.input, flex: "1 1 0", minWidth: 0, padding: "7px 9px", fontSize: 12.5, textAlign: "center" }}
-            />
-            <input
-              type="number"
-              min="1"
-              value={draftRound}
-              onChange={(e) => setDraftRound(Number(e.target.value))}
-              style={{ ...S.input, width: 64, padding: "7px 9px", fontSize: 12.5, textAlign: "center" }}
-            />
-            <GlassDatePicker
-              value={draftDate}
-              onChange={setDraftDate}
-              triggerStyle={{ ...S.input, flex: "1 1 0", minWidth: 0, padding: "7px 9px", fontSize: 12.5, textAlign: "center" }}
-            />
+      {composeShown ? (
+        <div
+          className={`avid-activity-compose-wrap${composeExiting ? " avid-activity-compose-wrap--exit" : ""}`}
+          style={{ borderTopColor: t.border }}
+        >
+          <div>
+            <div className="avid-activity-compose" style={{ borderTopColor: t.border }}>
+              <div style={{ display: "flex", gap: 10 }}>
+                <GlassSelect
+                  value={draftType}
+                  options={INTERVIEW_TYPES}
+                  onChange={(type) => {
+                    setDraftType(type);
+                    setDraftRound(nextRoundForType(entry, type));
+                  }}
+                  triggerStyle={{ ...S.input, flex: "1 1 0", minWidth: 0, padding: "7px 9px", fontSize: 12.5, textAlign: "center" }}
+                />
+                <input
+                  type="number"
+                  min="1"
+                  value={draftRound}
+                  onChange={(e) => setDraftRound(Number(e.target.value))}
+                  style={{ ...S.input, width: 64, padding: "7px 9px", fontSize: 12.5, textAlign: "center" }}
+                />
+                <GlassDatePicker
+                  value={draftDate}
+                  onChange={setDraftDate}
+                  triggerStyle={{ ...S.input, flex: "1 1 0", minWidth: 0, padding: "7px 9px", fontSize: 12.5, textAlign: "center" }}
+                />
+              </div>
+              <button
+                type="button"
+                className="avid-btn"
+                style={{ ...S.ghostBtn, textAlign: "center" as const, padding: "8px 10px", fontSize: 12.5 }}
+                onClick={() => onLog(draftType, draftRound, draftDate)}
+              >
+                + Log meeting
+              </button>
+            </div>
           </div>
-          <button
-            type="button"
-            className="avid-btn"
-            style={{ ...S.ghostBtn, textAlign: "center" as const, padding: "8px 10px", fontSize: 12.5 }}
-            onClick={() => onLog(draftType, draftRound, draftDate)}
-          >
-            + Log meeting
-          </button>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
