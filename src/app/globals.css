@@ -231,7 +231,6 @@ select::-ms-expand {
   width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
   overflow: visible;
 }
 
@@ -246,21 +245,9 @@ select::-ms-expand {
 
 .avid-status-activity-log {
   flex-shrink: 0;
-  min-width: 0;
-}
-
-.avid-status-activity-log .avid-activity-log-label {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.avid-status-activity-log .avid-activity-log-actions {
-  flex-shrink: 0;
 }
 
 .avid-stage-progress-shell {
-  align-self: center;
   overflow: visible;
   flex-shrink: 0;
 }

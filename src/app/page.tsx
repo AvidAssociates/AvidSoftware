@@ -1665,19 +1665,6 @@ function statusTrackLayout(large: boolean | undefined, isMobile: boolean) {
   };
 }
 
-function statusActivityLogPlacement(trackWidth: number, dotSize: number, edgePad: number) {
-  const spans = PIPELINE.length - 1;
-  const span = (trackWidth - dotSize) / spans;
-  const interviewCenter = dotSize / 2 + span;
-  const offerCenter = dotSize / 2 + span * 2;
-  const width = offerCenter - interviewCenter;
-  const midpoint = (interviewCenter + offerCenter) / 2;
-  return {
-    width,
-    marginLeft: edgePad + midpoint - width / 2,
-  };
-}
-
 function activityLogRowKey(m: MeetingLogEntry) {
   if (m.type === "Offer" || m.type === "Placed") return `stage-${m.type}-${m.id}`;
   return `mtg-${m.id}`;
@@ -1830,8 +1817,8 @@ function RowExpandedPanel({
     entry.stage === "placed";
 
   const isMobile = useIsMobile();
-  const { trackWidth, edgePad, columnWidth, dotSize } = statusTrackLayout(true, isMobile);
-  const activityLogPlacement = statusActivityLogPlacement(trackWidth, dotSize, edgePad);
+  const { trackWidth, edgePad, columnWidth } = statusTrackLayout(true, isMobile);
+  const trackMidpoint = edgePad + trackWidth / 2;
 
   return (
     <div className="avid-expand" style={{ gridTemplateRows: statusOpen || editOpen ? "1fr" : "0fr" }}>
@@ -1921,7 +1908,10 @@ function RowExpandedPanel({
             <>
               <div className="avid-status-stack">
                 {placedConfetti ? <PlacedConfettiRain /> : null}
-                <div className="avid-status-align-column" style={{ width: columnWidth }}>
+                <div
+                  className="avid-status-align-column"
+                  style={{ width: columnWidth, marginLeft: `calc(50% - ${trackMidpoint}px)` }}
+                >
                   <StageProgress
                     t={t}
                     stage={entry.stage}
@@ -1933,10 +1923,7 @@ function RowExpandedPanel({
                     large
                   />
                   {showActivityLog ? (
-                    <div
-                      className="avid-status-activity-log"
-                      style={{ width: activityLogPlacement.width, marginLeft: activityLogPlacement.marginLeft }}
-                    >
+                    <div className="avid-status-activity-log" style={{ width: trackWidth, marginLeft: edgePad }}>
                       <ActivityLogPanel
                         S={S}
                         t={t}
