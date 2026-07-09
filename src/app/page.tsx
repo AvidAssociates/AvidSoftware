@@ -1776,6 +1776,32 @@ function RowExpandedPanel({
   onDeleteMeeting: (meetingId: string) => void;
   onUpdateMeetingDate: (meetingId: string, date: string) => void;
 }) {
+  const prevStageRef = useRef(entry.stage);
+  const prevEntryIdRef = useRef(entry.id);
+  const [placedConfetti, setPlacedConfetti] = useState(false);
+
+  useEffect(() => {
+    if (prevEntryIdRef.current !== entry.id) {
+      prevEntryIdRef.current = entry.id;
+      prevStageRef.current = entry.stage;
+      setPlacedConfetti(false);
+      return;
+    }
+    if (statusOpen && prevStageRef.current !== "placed" && entry.stage === "placed") {
+      setPlacedConfetti(true);
+      const timer = window.setTimeout(() => setPlacedConfetti(false), 2800);
+      prevStageRef.current = entry.stage;
+      return () => window.clearTimeout(timer);
+    }
+    prevStageRef.current = entry.stage;
+  }, [entry.id, entry.stage, statusOpen]);
+
+  const showActivityLog =
+    entry.meetingLog.length > 0 ||
+    entry.stage === "interview" ||
+    entry.stage === "offer" ||
+    entry.stage === "placed";
+
   return (
     <div className="avid-expand" style={{ gridTemplateRows: statusOpen || editOpen ? "1fr" : "0fr" }}>
       <div>
@@ -1862,31 +1888,31 @@ function RowExpandedPanel({
             )
           ) : (
             <>
-              <StageProgress
-                t={t}
-                stage={entry.stage}
-                declined={entry.declined}
-                declinedReason={entry.declinedReason}
-                onSetStage={onSetStage}
-                onRestore={onRestore}
-                onDecline={onDecline}
-                large
-              />
-              {(entry.meetingLog.length > 0 ||
-                entry.stage === "interview" ||
-                entry.stage === "offer" ||
-                entry.stage === "placed") && (
-                <div style={{ width: "100%", maxWidth: 380 }}>
-                  <ActivityLogPanel
-                    S={S}
+              <div className="avid-status-celebrate-zone">
+                {placedConfetti ? <PlacedConfettiRain /> : null}
+                <div className="avid-status-celebrate-content">
+                  <StageProgress
                     t={t}
-                    entry={entry}
-                    onLog={onLogMeeting}
-                    onDelete={onDeleteMeeting}
-                    onUpdateDate={onUpdateMeetingDate}
+                    stage={entry.stage}
+                    declined={entry.declined}
+                    declinedReason={entry.declinedReason}
+                    onSetStage={onSetStage}
+                    onRestore={onRestore}
+                    onDecline={onDecline}
+                    large
                   />
+                  {showActivityLog ? (
+                    <ActivityLogPanel
+                      S={S}
+                      t={t}
+                      entry={entry}
+                      onLog={onLogMeeting}
+                      onDelete={onDeleteMeeting}
+                      onUpdateDate={onUpdateMeetingDate}
+                    />
+                  ) : null}
                 </div>
-              )}
+              </div>
               <button type="button" className="avid-btn" style={{ ...S.ghostBtn, alignSelf: "flex-end" }} onClick={onCloseStatus}>
                 Done
               </button>
@@ -1905,72 +1931,38 @@ function RowExpandedPanel({
 // clicked.
 const PLACED_CONFETTI_COLORS = ["#FFFFFF", "#F5D547", "#FF8FA3", "#7DD3FC", "#C4B5FD", "#FDE68A", "#86EFAC", "#FCA5A5"];
 
-function RowConfetti() {
-  const pieces = useMemo(() => {
-    const out: {
-      id: number;
-      kind: "burst" | "fall" | "streamer";
-      left: number;
-      delay: number;
-      duration: number;
-      dx: number;
-      dy: number;
-      sway: number;
-      spin: number;
-      color: string;
-      w: number;
-      h: number;
-    }[] = [];
-
-    for (let i = 0; i < 18; i++) {
-      const angle = (i / 18) * Math.PI * 2 + 0.2;
-      const dist = 28 + (i % 5) * 9;
-      out.push({
-        id: i,
-        kind: "burst",
-        left: 50,
-        delay: (i % 4) * 0.02,
-        duration: 0.72 + (i % 3) * 0.08,
-        dx: Math.cos(angle) * dist,
-        dy: Math.sin(angle) * dist * 0.55 - 8,
-        sway: 0,
-        spin: (i % 2 === 0 ? 1 : -1) * (220 + (i % 5) * 70),
-        color: PLACED_CONFETTI_COLORS[i % PLACED_CONFETTI_COLORS.length],
-        w: 4 + (i % 3),
-        h: 3 + (i % 2),
-      });
-    }
-
-    for (let i = 0; i < 24; i++) {
-      const streamer = i % 4 === 0;
-      out.push({
-        id: 100 + i,
-        kind: streamer ? "streamer" : "fall",
-        left: 4 + ((i * 13.7) % 92),
-        delay: 0.04 + (i % 8) * 0.035,
-        duration: 1.05 + (i % 6) * 0.14,
-        dx: 0,
-        dy: 0,
-        sway: -16 + (i % 11) * 3.2,
-        spin: (i % 2 === 0 ? 1 : -1) * (360 + (i % 7) * 80),
-        color: PLACED_CONFETTI_COLORS[(i + 2) % PLACED_CONFETTI_COLORS.length],
-        w: streamer ? 2 : 4 + (i % 3),
-        h: streamer ? 9 + (i % 3) * 2 : 3 + (i % 2),
-      });
-    }
-
-    return out;
-  }, []);
+function PlacedConfettiRain() {
+  const pieces = useMemo(
+    () =>
+      Array.from({ length: 52 }, (_, i) => {
+        const streamer = i % 5 === 0;
+        const wave = Math.floor(i / 13);
+        return {
+          id: i,
+          left: 1 + ((i * 17.9 + wave * 7) % 98),
+          delay: wave * 0.22 + (i % 13) * 0.045,
+          duration: 1.35 + (i % 8) * 0.16,
+          sway: -26 + (i % 17) * 3.2,
+          spin: (i % 2 === 0 ? 1 : -1) * (240 + (i % 9) * 70),
+          fall: 150 + wave * 38 + (i % 5) * 14,
+          color: PLACED_CONFETTI_COLORS[i % PLACED_CONFETTI_COLORS.length],
+          w: streamer ? 2 : 4 + (i % 3),
+          h: streamer ? 11 + (i % 3) * 2 : 3 + (i % 2),
+          streamer,
+        };
+      }),
+    []
+  );
 
   return (
-    <div className="avid-activity-confetti" aria-hidden>
+    <div className="avid-placed-confetti" aria-hidden>
       {pieces.map((p) => (
         <span
           key={p.id}
           className={[
-            "avid-activity-confetti-piece",
-            `avid-activity-confetti-piece--${p.kind}`,
-            p.kind === "burst" && p.id % 3 === 0 ? "avid-activity-confetti-piece--round" : "",
+            "avid-placed-confetti-piece",
+            p.streamer ? "avid-placed-confetti-piece--streamer" : "",
+            !p.streamer && p.id % 4 === 0 ? "avid-placed-confetti-piece--round" : "",
           ]
             .filter(Boolean)
             .join(" ")}
@@ -1979,10 +1971,9 @@ function RowConfetti() {
               "--left": `${p.left}%`,
               "--delay": `${p.delay}s`,
               "--duration": `${p.duration}s`,
-              "--dx": `${p.dx}px`,
-              "--dy": `${p.dy}px`,
               "--sway": `${p.sway}px`,
               "--spin": `${p.spin}deg`,
+              "--fall": `${p.fall}px`,
               "--color": p.color,
               "--w": `${p.w}px`,
               "--h": `${p.h}px`,
@@ -2021,19 +2012,6 @@ function ActivityLogPanel({
   const prevStageRef = useRef(entry.stage);
   const [enteringLogIds, setEnteringLogIds] = useState<Set<string>>(() => new Set());
   const [exitingLogIds, setExitingLogIds] = useState<Set<string>>(() => new Set());
-  const [celebratingLogIds, setCelebratingLogIds] = useState<Set<string>>(() => new Set());
-
-  const celebratePlaced = (id: string) => {
-    setCelebratingLogIds((prev) => new Set(prev).add(id));
-    window.setTimeout(() => {
-      setCelebratingLogIds((prev) => {
-        if (!prev.has(id)) return prev;
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    }, 2200);
-  };
 
   const handleLog = () => {
     const type = draftType;
@@ -2076,7 +2054,6 @@ function ActivityLogPanel({
       prevStageRef.current = entry.stage;
       setEnteringLogIds(new Set());
       setExitingLogIds(new Set());
-      setCelebratingLogIds(new Set());
       const last = [...entry.meetingLog].reverse().find((m) => m.type !== "Offer" && m.type !== "Placed");
       const type = last?.type || "Phone";
       setDraftType(type);
@@ -2089,9 +2066,6 @@ function ActivityLogPanel({
     if (len > prevLogLenRef.current) {
       const added = entry.meetingLog.slice(prevLogLenRef.current);
       setEnteringLogIds((prev) => new Set([...prev, ...added.map((m) => m.id)]));
-      for (const m of added) {
-        if (m.type === "Placed") celebratePlaced(m.id);
-      }
       prevLogLenRef.current = len;
       prevStageRef.current = entry.stage;
       return;
@@ -2102,7 +2076,6 @@ function ActivityLogPanel({
       const marker = [...entry.meetingLog].reverse().find((m) => m.type === markerType);
       if (marker) {
         setEnteringLogIds((prev) => new Set(prev).add(marker.id));
-        if (marker.type === "Placed") celebratePlaced(marker.id);
       }
     }
 
@@ -2138,15 +2111,11 @@ function ActivityLogPanel({
             const rowKey = activityLogRowKey(m);
             const isEntering = enteringLogIds.has(m.id);
             const isExiting = exitingLogIds.has(m.id);
-            const isPlaced = m.type === "Placed";
-            const isCelebrating = isPlaced && celebratingLogIds.has(m.id);
             return (
               <div
                 key={rowKey}
                 className={[
                   "avid-activity-log-row",
-                  isPlaced ? "avid-activity-log-row--placed" : "",
-                  isCelebrating ? "avid-activity-log-row--celebrate" : "",
                   isEntering ? "avid-activity-log-row--enter" : "",
                   isExiting ? "avid-activity-log-row--exit" : "",
                 ]
@@ -2158,7 +2127,6 @@ function ActivityLogPanel({
                   if (e.animationName === "avidActivityRowOut") finishDelete(m.id);
                 }}
               >
-                {isCelebrating ? <RowConfetti /> : null}
                 <span className="avid-activity-log-label" style={{ color: t.ink, fontWeight: 600 }}>
                   {activityLabel(m.type, m.round)}
                 </span>
