@@ -206,6 +206,10 @@ select::-ms-expand {
   overflow: hidden;
 }
 
+.avid-expand-panel {
+  overflow: visible;
+}
+
 /* Send-outs activity log: meeting compose slides down when leaving Interview. */
 .avid-activity-log-list {
   display: flex;
@@ -225,8 +229,8 @@ select::-ms-expand {
 .avid-status-celebrate-zone {
   position: relative;
   width: 100%;
-  max-width: 380px;
-  overflow: hidden;
+  max-width: 100%;
+  overflow: visible;
 }
 
 .avid-status-celebrate-content {
@@ -235,6 +239,13 @@ select::-ms-expand {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  overflow: visible;
+}
+
+.avid-stage-progress-shell {
+  align-self: center;
+  overflow: visible;
+  flex-shrink: 0;
 }
 
 .avid-placed-confetti {

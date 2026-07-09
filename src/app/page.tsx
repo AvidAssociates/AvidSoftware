@@ -1806,10 +1806,10 @@ function RowExpandedPanel({
     <div className="avid-expand" style={{ gridTemplateRows: statusOpen || editOpen ? "1fr" : "0fr" }}>
       <div>
         <div
+          className="avid-expand-panel"
           style={{
-            // Enough top headroom that a hover-grown stage dot never reaches
-            // the .avid-expand overflow boundary and gets clipped.
-            padding: "12px 22px 20px",
+            // Headroom so hover-grown stage dots and edge labels are not clipped.
+            padding: "16px 30px 20px",
             borderBottom: `1px solid ${t.border}`,
             display: "flex",
             flexDirection: "column",
@@ -3155,6 +3155,8 @@ function StageProgress({
   const dotSize = large ? 22 : 13;
   const lineH = large ? 5 : 3;
   const inset = dotSize / 2;
+  const edgePad = large ? dotSize / 2 + 6 : 0;
+  const declineReserve = large ? 108 : 0;
 
   // Replays the "pop" bounce on whichever dot just became active, without
   // ever remounting a dot — remounting skipped the color/border transition
@@ -3224,9 +3226,18 @@ function StageProgress({
   // whether "Declined" is showing.
   return (
     <div
+      className={large ? "avid-stage-progress-shell" : undefined}
       style={
         large
-          ? { position: "relative", width: trackWidth }
+          ? {
+              position: "relative",
+              width: trackWidth + declineReserve,
+              maxWidth: "100%",
+              paddingLeft: edgePad,
+              paddingTop: 8,
+              paddingBottom: 4,
+              boxSizing: "content-box",
+            }
           : { display: "flex", alignItems: "flex-start", gap: 14 }
       }
     >
@@ -3301,8 +3312,6 @@ function StageProgress({
                   color: i === idx && !declined ? color : t.mutedSoft,
                   width: dotSize + 34,
                   textAlign: i === 0 ? "left" : i === PIPELINE.length - 1 ? "right" : "center",
-                  marginLeft: i === 0 ? -dotSize / 2 : 0,
-                  marginRight: i === PIPELINE.length - 1 ? -dotSize / 2 : 0,
                 }}
               >
                 {s.label}
