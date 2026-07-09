@@ -2008,6 +2008,8 @@ function PlacedConfettiRain() {
   );
 }
 
+const ACTIVITY_COMPOSE_DELAY_MS = 520;
+
 function ActivityLogPanel({
   S,
   t,
@@ -2030,6 +2032,7 @@ function ActivityLogPanel({
   const [draftDate, setDraftDate] = useState(todayISO());
   const canCompose = entry.stage === "interview" && !entry.declined;
   const [composeEverShown, setComposeEverShown] = useState(canCompose);
+  const [composeExiting, setComposeExiting] = useState(false);
   const panelEntryIdRef = useRef(entry.id);
   const prevLogLenRef = useRef(entry.meetingLog.length);
   const prevStageRef = useRef(entry.stage);
@@ -2082,6 +2085,7 @@ function ActivityLogPanel({
       setDraftType(type);
       setDraftRound(nextRoundForType(entry, type));
       setComposeEverShown(entry.stage === "interview" && !entry.declined);
+      setComposeExiting(false);
       return;
     }
 
@@ -2107,10 +2111,19 @@ function ActivityLogPanel({
   }, [entry.id, entry.meetingLog, entry.stage, entry.declined]);
 
   useEffect(() => {
-    if (canCompose) setComposeEverShown(true);
-  }, [canCompose]);
+    if (canCompose) {
+      setComposeEverShown(true);
+      setComposeExiting(false);
+      return;
+    }
+    if (!composeEverShown || composeExiting) return;
 
-  const composeCollapsed = composeEverShown && !canCompose;
+    const delayTimer = window.setTimeout(() => {
+      setComposeExiting(true);
+    }, ACTIVITY_COMPOSE_DELAY_MS);
+
+    return () => window.clearTimeout(delayTimer);
+  }, [canCompose, composeEverShown, composeExiting]);
 
   return (
     <div className="avid-activity-log">
@@ -2183,7 +2196,7 @@ function ActivityLogPanel({
       )}
       {composeEverShown ? (
         <div
-          className={`avid-activity-compose-wrap${composeCollapsed ? " avid-activity-compose-wrap--exit" : ""}`}
+          className={`avid-activity-compose-wrap${composeExiting ? " avid-activity-compose-wrap--exit" : ""}`}
           style={{ borderTopColor: t.border }}
         >
           <div>
