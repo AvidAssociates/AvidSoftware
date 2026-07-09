@@ -1947,11 +1947,23 @@ function RowExpandedPanel({
                       />
                     </div>
                   ) : null}
+                  <button
+                    type="button"
+                    className="avid-btn"
+                    style={{
+                      ...S.ghostBtn,
+                      width: trackWidth,
+                      marginLeft: edgePad,
+                      textAlign: "center" as const,
+                      padding: "8px 10px",
+                      fontSize: 12.5,
+                    }}
+                    onClick={onCloseStatus}
+                  >
+                    Done
+                  </button>
                 </div>
               </div>
-              <button type="button" className="avid-btn" style={{ ...S.ghostBtn, alignSelf: "flex-end" }} onClick={onCloseStatus}>
-                Done
-              </button>
             </>
           )}
         </div>
