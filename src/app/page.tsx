@@ -1888,20 +1888,20 @@ function RowExpandedPanel({
             )
           ) : (
             <>
-              <div className="avid-status-celebrate-zone">
+              <div className="avid-status-stack">
                 {placedConfetti ? <PlacedConfettiRain /> : null}
-                <div className="avid-status-celebrate-content">
-                  <StageProgress
-                    t={t}
-                    stage={entry.stage}
-                    declined={entry.declined}
-                    declinedReason={entry.declinedReason}
-                    onSetStage={onSetStage}
-                    onRestore={onRestore}
-                    onDecline={onDecline}
-                    large
-                  />
-                  {showActivityLog ? (
+                <StageProgress
+                  t={t}
+                  stage={entry.stage}
+                  declined={entry.declined}
+                  declinedReason={entry.declinedReason}
+                  onSetStage={onSetStage}
+                  onRestore={onRestore}
+                  onDecline={onDecline}
+                  large
+                />
+                {showActivityLog ? (
+                  <div style={{ width: "100%", maxWidth: 380 }}>
                     <ActivityLogPanel
                       S={S}
                       t={t}
@@ -1910,8 +1910,8 @@ function RowExpandedPanel({
                       onDelete={onDeleteMeeting}
                       onUpdateDate={onUpdateMeetingDate}
                     />
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
               </div>
               <button type="button" className="avid-btn" style={{ ...S.ghostBtn, alignSelf: "flex-end" }} onClick={onCloseStatus}>
                 Done
