@@ -74,12 +74,7 @@ select::-ms-expand {
 }
 
 /* ---- app-wide interaction polish ---- */
-.avid-row {
-  transition: background-color 0.18s ease;
-}
-.avid-row:hover {
-  background-color: rgba(140, 146, 240, 0.05);
-}
+/* Table rows (send-outs, billings): no hover tint — keeps the grid clean. */
 
 /* The app-wide "you can click me" cue: anything interactive grows a touch
    and brightens on hover -- bold enough to notice, small enough to stay
