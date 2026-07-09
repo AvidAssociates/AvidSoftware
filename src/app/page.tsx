@@ -1651,6 +1651,20 @@ function nextRoundForType(entry: Entry, type: string) {
   return maxRoundForType(entry, type) + 1;
 }
 
+function statusTrackLayout(large: boolean | undefined, isMobile: boolean) {
+  const trackWidth = large ? (isMobile ? 240 : 340) : 220;
+  const dotSize = large ? 22 : 13;
+  const edgePad = large ? dotSize / 2 + 6 : 0;
+  const declineReserve = large ? 108 : 0;
+  return {
+    trackWidth,
+    edgePad,
+    declineReserve,
+    dotSize,
+    columnWidth: edgePad + trackWidth + declineReserve,
+  };
+}
+
 function activityLogRowKey(m: MeetingLogEntry) {
   if (m.type === "Offer" || m.type === "Placed") return `stage-${m.type}-${m.id}`;
   return `mtg-${m.id}`;
@@ -1802,6 +1816,9 @@ function RowExpandedPanel({
     entry.stage === "offer" ||
     entry.stage === "placed";
 
+  const isMobile = useIsMobile();
+  const { trackWidth, edgePad, columnWidth } = statusTrackLayout(true, isMobile);
+
   return (
     <div className="avid-expand" style={{ gridTemplateRows: statusOpen || editOpen ? "1fr" : "0fr" }}>
       <div>
@@ -1890,28 +1907,30 @@ function RowExpandedPanel({
             <>
               <div className="avid-status-stack">
                 {placedConfetti ? <PlacedConfettiRain /> : null}
-                <StageProgress
-                  t={t}
-                  stage={entry.stage}
-                  declined={entry.declined}
-                  declinedReason={entry.declinedReason}
-                  onSetStage={onSetStage}
-                  onRestore={onRestore}
-                  onDecline={onDecline}
-                  large
-                />
-                {showActivityLog ? (
-                  <div style={{ width: "100%", maxWidth: 380 }}>
-                    <ActivityLogPanel
-                      S={S}
-                      t={t}
-                      entry={entry}
-                      onLog={onLogMeeting}
-                      onDelete={onDeleteMeeting}
-                      onUpdateDate={onUpdateMeetingDate}
-                    />
-                  </div>
-                ) : null}
+                <div className="avid-status-align-column" style={{ width: columnWidth }}>
+                  <StageProgress
+                    t={t}
+                    stage={entry.stage}
+                    declined={entry.declined}
+                    declinedReason={entry.declinedReason}
+                    onSetStage={onSetStage}
+                    onRestore={onRestore}
+                    onDecline={onDecline}
+                    large
+                  />
+                  {showActivityLog ? (
+                    <div className="avid-status-activity-log" style={{ width: trackWidth, marginLeft: edgePad }}>
+                      <ActivityLogPanel
+                        S={S}
+                        t={t}
+                        entry={entry}
+                        onLog={onLogMeeting}
+                        onDelete={onDeleteMeeting}
+                        onUpdateDate={onUpdateMeetingDate}
+                      />
+                    </div>
+                  ) : null}
+                </div>
               </div>
               <button type="button" className="avid-btn" style={{ ...S.ghostBtn, alignSelf: "flex-end" }} onClick={onCloseStatus}>
                 Done
@@ -3151,12 +3170,9 @@ function StageProgress({
   const isMobile = useIsMobile();
   // 340px + the absolutely-positioned decline button would overflow a
   // 390px phone; 240px leaves room for it inside the panel padding.
-  const trackWidth = large ? (isMobile ? 240 : 340) : 220;
-  const dotSize = large ? 22 : 13;
+  const { trackWidth, edgePad, declineReserve, dotSize } = statusTrackLayout(large, isMobile);
   const lineH = large ? 5 : 3;
   const inset = dotSize / 2;
-  const edgePad = large ? dotSize / 2 + 6 : 0;
-  const declineReserve = large ? 108 : 0;
 
   // Replays the "pop" bounce on whichever dot just became active, without
   // ever remounting a dot — remounting skipped the color/border transition
