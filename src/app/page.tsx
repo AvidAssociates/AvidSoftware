@@ -2046,6 +2046,7 @@ function ActivityLogRow({
   onRequestDelete: () => void;
 }) {
   const [enterOpen, setEnterOpen] = useState(!entering);
+  const [exitClosing, setExitClosing] = useState(false);
   const enterDoneRef = useRef(false);
   const exitDoneRef = useRef(false);
   const onEnterDoneRef = useRef(onEnterDone);
@@ -2074,9 +2075,25 @@ function ActivityLogRow({
 
   useLayoutEffect(() => {
     exitDoneRef.current = false;
+    if (!exiting) {
+      setExitClosing(false);
+      return;
+    }
+    setExitClosing(false);
+    let cancelled = false;
+    const frame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) setExitClosing(true);
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
   }, [exiting, m.id]);
 
-  const revealClosed = (entering && !enterOpen) || exiting;
+  const revealClosed = entering && !enterOpen;
+  const showExit = exiting && exitClosing;
 
   useEffect(() => {
     if (!entering || !enterOpen || enterDoneRef.current) return;
@@ -2089,14 +2106,14 @@ function ActivityLogRow({
   }, [entering, enterOpen, m.id]);
 
   useEffect(() => {
-    if (!exiting || exitDoneRef.current) return;
+    if (!exiting || !exitClosing || exitDoneRef.current) return;
     const timer = window.setTimeout(() => {
       if (exitDoneRef.current) return;
       exitDoneRef.current = true;
       onExitDoneRef.current();
     }, ACTIVITY_LOG_REVEAL_MS + 40);
     return () => window.clearTimeout(timer);
-  }, [exiting, m.id]);
+  }, [exiting, exitClosing, m.id]);
 
   const handleRevealTransitionEnd = (e: TransitionEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget || e.propertyName !== "grid-template-rows") return;
@@ -2105,14 +2122,14 @@ function ActivityLogRow({
       onEnterDoneRef.current();
       return;
     }
-    if (exiting && !exitDoneRef.current) {
+    if (showExit && !exitDoneRef.current) {
       exitDoneRef.current = true;
       onExitDoneRef.current();
     }
   };
 
   return (
-    <div className={`avid-activity-log-row${exiting ? " avid-activity-log-row--exiting" : ""}`}>
+    <div className={`avid-activity-log-row${showExit ? " avid-activity-log-row--exiting" : ""}`}>
       <div
         className={`avid-activity-log-row-reveal${revealClosed ? " avid-activity-log-row-reveal--closed" : ""}`}
         onTransitionEnd={handleRevealTransitionEnd}
@@ -2138,6 +2155,7 @@ function ActivityLogRow({
               type="button"
               className="avid-btn"
               onClick={onRequestDelete}
+              disabled={entering || exiting}
               title="Remove this entry"
               style={{ border: "none", background: "none", padding: 2, cursor: "pointer", color: t.mutedSoft, display: "flex" }}
             >
@@ -2178,6 +2196,27 @@ function ActivityLogPanel({
   const prevStageRef = useRef(entry.stage);
   const [enteringLogIds, setEnteringLogIds] = useState<Set<string>>(() => new Set());
   const [exitingLogIds, setExitingLogIds] = useState<Set<string>>(() => new Set());
+  const [exitingSnapshots, setExitingSnapshots] = useState<Map<string, MeetingLogEntry>>(() => new Map());
+  const finishDeleteRef = useRef(new Set<string>());
+
+  const visibleLogs = useMemo(() => {
+    const rows: MeetingLogEntry[] = [];
+    const seen = new Set<string>();
+    for (const m of entry.meetingLog) {
+      const snap = exitingSnapshots.get(m.id);
+      rows.push(snap ?? m);
+      seen.add(m.id);
+    }
+    for (const id of exitingLogIds) {
+      if (seen.has(id)) continue;
+      const snap = exitingSnapshots.get(id);
+      if (snap) {
+        rows.push(snap);
+        seen.add(id);
+      }
+    }
+    return rows;
+  }, [entry.meetingLog, exitingLogIds, exitingSnapshots]);
 
   const handleLog = () => {
     const type = draftType;
@@ -2200,17 +2239,29 @@ function ActivityLogPanel({
 
   const requestDelete = (id: string) => {
     if (exitingLogIds.has(id)) return;
+    const row = entry.meetingLog.find((m) => m.id === id);
+    if (!row) return;
+    setExitingSnapshots((prev) => new Map(prev).set(id, row));
     setExitingLogIds((prev) => new Set(prev).add(id));
   };
 
   const finishDelete = (id: string) => {
+    if (finishDeleteRef.current.has(id)) return;
+    finishDeleteRef.current.add(id);
+    onDelete(id);
+    finishDeleteRef.current.delete(id);
     setExitingLogIds((prev) => {
       if (!prev.has(id)) return prev;
       const next = new Set(prev);
       next.delete(id);
       return next;
     });
-    onDelete(id);
+    setExitingSnapshots((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Map(prev);
+      next.delete(id);
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -2220,6 +2271,7 @@ function ActivityLogPanel({
       prevStageRef.current = entry.stage;
       setEnteringLogIds(new Set());
       setExitingLogIds(new Set());
+      setExitingSnapshots(new Map());
       const last = [...entry.meetingLog].reverse().find((m) => m.type !== "Offer" && m.type !== "Placed");
       const type = last?.type || "Phone";
       setDraftType(type);
@@ -2279,11 +2331,11 @@ function ActivityLogPanel({
       >
         Activity log
       </div>
-      {entry.meetingLog.length === 0 ? (
+      {visibleLogs.length === 0 ? (
         <div style={{ fontSize: 12, color: t.mutedSoft, marginBottom: 10 }}>Nothing logged yet.</div>
       ) : (
         <div className="avid-activity-log-list">
-          {entry.meetingLog.map((m) => (
+          {visibleLogs.map((m) => (
             <ActivityLogRow
               key={activityLogRowKey(m)}
               S={S}

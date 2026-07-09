@@ -258,7 +258,7 @@ select::-ms-expand {
 
 .avid-activity-log-row--exiting .avid-activity-log-row-inner {
   opacity: 0;
-  transform: translateY(-3px);
+  transform: translateY(4px);
 }
 
 .avid-status-stack {
