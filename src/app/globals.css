@@ -226,33 +226,34 @@ select::-ms-expand {
 }
 
 .avid-activity-log-row--placed {
-  padding: 6px 8px;
-  margin: 0 -8px;
+  padding: 7px 10px;
+  margin: 0 -10px;
   border-radius: 8px;
 }
 
 .avid-activity-log-row--celebrate {
-  background: color-mix(in srgb, var(--placed-glow, #4fbf82) 14%, transparent);
-  animation: avidPlacedRowGlow 1.1s cubic-bezier(0.16, 1, 0.3, 1);
+  background: color-mix(in srgb, #ffffff 10%, transparent);
+  animation: avidPlacedRowGlow 1.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes avidPlacedRowGlow {
   0% {
-    background: color-mix(in srgb, var(--placed-glow, #4fbf82) 26%, transparent);
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--placed-glow, #4fbf82) 24%, transparent);
+    background: color-mix(in srgb, #ffffff 18%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, #ffffff 22%, transparent);
   }
-  45% {
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--placed-glow, #4fbf82) 16%, transparent);
+  35% {
+    background: color-mix(in srgb, #ffffff 12%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, #ffffff 14%, transparent);
   }
   100% {
-    background: color-mix(in srgb, var(--placed-glow, #4fbf82) 8%, transparent);
-    box-shadow: 0 0 0 0 transparent;
+    background: transparent;
+    box-shadow: inset 0 0 0 1px transparent;
   }
 }
 
 .avid-activity-confetti {
   position: absolute;
-  inset: 0;
+  inset: -2px 0;
   overflow: hidden;
   pointer-events: none;
   z-index: 2;
@@ -261,32 +262,62 @@ select::-ms-expand {
 
 .avid-activity-confetti-piece {
   position: absolute;
-  top: 55%;
-  left: var(--left);
   width: var(--w);
   height: var(--h);
   background: var(--color);
   opacity: 0;
-  transform: translate(-50%, -50%) rotate(0deg) scale(0.6);
-  animation: avidRowConfetti var(--duration) cubic-bezier(0.22, 0.84, 0.36, 1) var(--delay) forwards;
+  will-change: transform, opacity;
 }
 
 .avid-activity-confetti-piece--round {
   border-radius: 999px;
 }
 
-@keyframes avidRowConfetti {
+.avid-activity-confetti-piece--burst {
+  top: 50%;
+  left: 50%;
+  animation: avidConfettiBurst var(--duration) cubic-bezier(0.15, 0.9, 0.2, 1) var(--delay) forwards;
+}
+
+.avid-activity-confetti-piece--fall,
+.avid-activity-confetti-piece--streamer {
+  top: 18%;
+  left: var(--left);
+  animation: avidConfettiFall var(--duration) cubic-bezier(0.33, 0.86, 0.36, 1) var(--delay) forwards;
+}
+
+.avid-activity-confetti-piece--streamer {
+  border-radius: 1px;
+  opacity: 0.95;
+}
+
+@keyframes avidConfettiBurst {
   0% {
     opacity: 0;
-    transform: translate(-50%, -50%) rotate(0deg) scale(0.5);
+    transform: translate(-50%, -50%) scale(0.2) rotate(0deg);
   }
-  12% {
+  18% {
     opacity: 1;
-    transform: translate(-50%, -50%) rotate(0deg) scale(1);
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
   }
   100% {
     opacity: 0;
-    transform: translate(calc(-50% + var(--drift)), calc(-50% + var(--lift))) rotate(var(--spin)) scale(0.75);
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.85) rotate(var(--spin));
+  }
+}
+
+@keyframes avidConfettiFall {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -8px) rotate(0deg) scale(0.7);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(-50%, 0) rotate(0deg) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--sway)), 38px) rotate(var(--spin)) scale(0.9);
   }
 }
 

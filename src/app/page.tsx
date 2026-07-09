@@ -1903,45 +1903,89 @@ function RowExpandedPanel({
 // next meeting while still in Interview. Each entry can be deleted (logged
 // by mistake); the date defaults to today and only opens a picker if
 // clicked.
-const PLACED_CONFETTI_COLORS = ["#4FBF82", "#6FD89A", "#3AAE72", "#F5D547", "#8BE8B0", "#2E9B64", "#FFD966"];
+const PLACED_CONFETTI_COLORS = ["#FFFFFF", "#F5D547", "#FF8FA3", "#7DD3FC", "#C4B5FD", "#FDE68A", "#86EFAC", "#FCA5A5"];
 
-function RowConfetti({ color }: { color: string }) {
-  const pieces = useMemo(
-    () =>
-      Array.from({ length: 22 }, (_, i) => ({
+function RowConfetti() {
+  const pieces = useMemo(() => {
+    const out: {
+      id: number;
+      kind: "burst" | "fall" | "streamer";
+      left: number;
+      delay: number;
+      duration: number;
+      dx: number;
+      dy: number;
+      sway: number;
+      spin: number;
+      color: string;
+      w: number;
+      h: number;
+    }[] = [];
+
+    for (let i = 0; i < 18; i++) {
+      const angle = (i / 18) * Math.PI * 2 + 0.2;
+      const dist = 28 + (i % 5) * 9;
+      out.push({
         id: i,
-        left: 8 + ((i * 17) % 84),
-        delay: (i % 7) * 0.03,
-        duration: 0.85 + (i % 5) * 0.12,
-        drift: -18 + (i % 9) * 4.5,
-        lift: -10 - (i % 6) * 5,
-        spin: (i % 2 === 0 ? 1 : -1) * (280 + (i % 4) * 90),
+        kind: "burst",
+        left: 50,
+        delay: (i % 4) * 0.02,
+        duration: 0.72 + (i % 3) * 0.08,
+        dx: Math.cos(angle) * dist,
+        dy: Math.sin(angle) * dist * 0.55 - 8,
+        sway: 0,
+        spin: (i % 2 === 0 ? 1 : -1) * (220 + (i % 5) * 70),
         color: PLACED_CONFETTI_COLORS[i % PLACED_CONFETTI_COLORS.length],
         w: 4 + (i % 3),
         h: 3 + (i % 2),
-        round: i % 3 === 0,
-      })),
-    []
-  );
+      });
+    }
+
+    for (let i = 0; i < 24; i++) {
+      const streamer = i % 4 === 0;
+      out.push({
+        id: 100 + i,
+        kind: streamer ? "streamer" : "fall",
+        left: 4 + ((i * 13.7) % 92),
+        delay: 0.04 + (i % 8) * 0.035,
+        duration: 1.05 + (i % 6) * 0.14,
+        dx: 0,
+        dy: 0,
+        sway: -16 + (i % 11) * 3.2,
+        spin: (i % 2 === 0 ? 1 : -1) * (360 + (i % 7) * 80),
+        color: PLACED_CONFETTI_COLORS[(i + 2) % PLACED_CONFETTI_COLORS.length],
+        w: streamer ? 2 : 4 + (i % 3),
+        h: streamer ? 9 + (i % 3) * 2 : 3 + (i % 2),
+      });
+    }
+
+    return out;
+  }, []);
 
   return (
     <div className="avid-activity-confetti" aria-hidden>
       {pieces.map((p) => (
         <span
           key={p.id}
-          className={`avid-activity-confetti-piece${p.round ? " avid-activity-confetti-piece--round" : ""}`}
+          className={[
+            "avid-activity-confetti-piece",
+            `avid-activity-confetti-piece--${p.kind}`,
+            p.kind === "burst" && p.id % 3 === 0 ? "avid-activity-confetti-piece--round" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
           style={
             {
               "--left": `${p.left}%`,
               "--delay": `${p.delay}s`,
               "--duration": `${p.duration}s`,
-              "--drift": `${p.drift}px`,
-              "--lift": `${p.lift}px`,
+              "--dx": `${p.dx}px`,
+              "--dy": `${p.dy}px`,
+              "--sway": `${p.sway}px`,
               "--spin": `${p.spin}deg`,
               "--color": p.color,
               "--w": `${p.w}px`,
               "--h": `${p.h}px`,
-              "--glow": color,
             } as CSSProperties
           }
         />
@@ -1988,7 +2032,7 @@ function ActivityLogPanel({
         next.delete(id);
         return next;
       });
-    }, 1500);
+    }, 2200);
   };
 
   const handleLog = () => {
@@ -2096,7 +2140,6 @@ function ActivityLogPanel({
             const isExiting = exitingLogIds.has(m.id);
             const isPlaced = m.type === "Placed";
             const isCelebrating = isPlaced && celebratingLogIds.has(m.id);
-            const labelColor = isPlaced ? STAGE_COLOR.placed : m.type === "Offer" ? STAGE_COLOR.offer : t.ink;
             return (
               <div
                 key={rowKey}
@@ -2109,18 +2152,14 @@ function ActivityLogPanel({
                 ]
                   .filter(Boolean)
                   .join(" ")}
-                style={isCelebrating ? ({ ["--placed-glow" as string]: STAGE_COLOR.placed } as CSSProperties) : undefined}
                 onAnimationEnd={(e) => {
                   if (e.target !== e.currentTarget) return;
                   if (e.animationName === "avidActivityRowIn") clearEntering(m.id);
                   if (e.animationName === "avidActivityRowOut") finishDelete(m.id);
                 }}
               >
-                {isCelebrating ? <RowConfetti color={STAGE_COLOR.placed} /> : null}
-                <span
-                  className="avid-activity-log-label"
-                  style={{ color: labelColor, fontWeight: isPlaced || m.type === "Offer" ? 800 : 600 }}
-                >
+                {isCelebrating ? <RowConfetti /> : null}
+                <span className="avid-activity-log-label" style={{ color: t.ink, fontWeight: 600 }}>
                   {activityLabel(m.type, m.round)}
                 </span>
                 <div className="avid-activity-log-actions">
