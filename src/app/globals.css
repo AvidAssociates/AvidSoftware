@@ -215,54 +215,52 @@ select::-ms-expand {
 }
 
 .avid-activity-log-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 4px 0;
-  overflow: hidden;
 }
 
 .avid-activity-log-label {
   font-size: 12.5px;
   font-weight: 600;
-  flex-shrink: 0;
+  min-width: 0;
 }
 
 .avid-activity-log-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
 }
 
-.avid-activity-log-label--enter {
-  animation: avidActivityLabelIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+.avid-activity-log-row--enter .avid-activity-log-label {
+  animation: avidActivityLabelIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.avid-activity-log-actions--enter {
-  animation: avidActivityActionsIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+.avid-activity-log-row--enter .avid-activity-log-actions {
+  animation: avidActivityActionsIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes avidActivityLabelIn {
   from {
     opacity: 0;
-    transform: translateX(-24px);
+    transform: translate3d(-12px, 0, 0);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
 @keyframes avidActivityActionsIn {
   from {
     opacity: 0;
-    transform: translateX(24px);
+    transform: translate3d(12px, 0, 0);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
@@ -270,7 +268,7 @@ select::-ms-expand {
   display: grid;
   grid-template-rows: 1fr;
   border-top: 1px solid;
-  transition: grid-template-rows 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: grid-template-rows 0.45s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .avid-activity-compose-wrap > * {
@@ -287,12 +285,7 @@ select::-ms-expand {
   flex-direction: column;
   gap: 8px;
   padding-top: 10px;
-  transition: transform 0.38s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.34s ease;
-}
-
-.avid-activity-compose-wrap--exit .avid-activity-compose {
-  transform: translateY(18px);
-  opacity: 0;
+  padding-bottom: 2px;
 }
 
 /* Send-Outs ↔ Billings slide (toolbar stays put). */
@@ -647,9 +640,8 @@ select::-ms-expand {
   .avid-stage-dot,
   .avid-expand,
   .avid-activity-compose-wrap,
-  .avid-activity-compose,
-  .avid-activity-log-label--enter,
-  .avid-activity-log-actions--enter {
+  .avid-activity-log-row--enter .avid-activity-log-label,
+  .avid-activity-log-row--enter .avid-activity-log-actions {
     transition: none !important;
     animation: none !important;
   }

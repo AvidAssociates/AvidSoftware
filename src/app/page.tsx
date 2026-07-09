@@ -1590,6 +1590,11 @@ function activityLabel(type: string, round: number) {
   return `${MEETING_TYPE_CODE[type] ?? type[0]}(${round})`;
 }
 
+function activityLogRowKey(m: MeetingLogEntry, index: number) {
+  if (m.type === "Offer" || m.type === "Placed") return `stage-${m.type}-${m.date}`;
+  return `mtg-${m.type}-${m.round}-${m.date}-${index}`;
+}
+
 // The next round for a given meeting type, tracked independently per type --
 // Phone 1 then Phone 2 suggests Phone 3, but switching to Video or
 // Face-to-Face (which haven't happened yet, or stopped at a different
@@ -1816,8 +1821,8 @@ function RowExpandedPanel({
 // by mistake); the date defaults to today and only opens a picker if
 // clicked.
 const ACTIVITY_COMPOSE_DELAY_MS = 520;
-const ACTIVITY_COMPOSE_EXIT_MS = 380;
-const ACTIVITY_ROW_ENTER_MS = 380;
+const ACTIVITY_COMPOSE_EXIT_MS = 450;
+const ACTIVITY_ROW_ENTER_MS = 420;
 
 function ActivityLogPanel({
   S,
@@ -1842,33 +1847,30 @@ function ActivityLogPanel({
   const [composeShown, setComposeShown] = useState(canCompose);
   const [composeExiting, setComposeExiting] = useState(false);
   const panelEntryIdRef = useRef(entry.id);
-  const seenLogIdsRef = useRef<Set<string>>(new Set(entry.meetingLog.map((m) => m.id)));
-  const [enteringLogIds, setEnteringLogIds] = useState<Set<string>>(() => new Set());
+  const prevLogLenRef = useRef(entry.meetingLog.length);
+  const [enteringRowKeys, setEnteringRowKeys] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     if (panelEntryIdRef.current !== entry.id) {
       panelEntryIdRef.current = entry.id;
-      seenLogIdsRef.current = new Set(entry.meetingLog.map((m) => m.id));
-      setEnteringLogIds(new Set());
+      prevLogLenRef.current = entry.meetingLog.length;
+      setEnteringRowKeys(new Set());
       return;
     }
 
-    const fresh = entry.meetingLog.filter((m) => !seenLogIdsRef.current.has(m.id));
-    if (fresh.length === 0) return;
+    const len = entry.meetingLog.length;
+    if (len > prevLogLenRef.current) {
+      const start = prevLogLenRef.current;
+      const keys = entry.meetingLog
+        .slice(start)
+        .map((m, offset) => activityLogRowKey(m, start + offset));
+      setEnteringRowKeys(new Set(keys));
+      const timer = window.setTimeout(() => setEnteringRowKeys(new Set()), ACTIVITY_ROW_ENTER_MS);
+      prevLogLenRef.current = len;
+      return () => window.clearTimeout(timer);
+    }
 
-    for (const m of fresh) seenLogIdsRef.current.add(m.id);
-    const freshIds = new Set(fresh.map((m) => m.id));
-    setEnteringLogIds((prev) => new Set([...prev, ...freshIds]));
-
-    const timer = window.setTimeout(() => {
-      setEnteringLogIds((prev) => {
-        const next = new Set(prev);
-        for (const id of freshIds) next.delete(id);
-        return next;
-      });
-    }, ACTIVITY_ROW_ENTER_MS);
-
-    return () => window.clearTimeout(timer);
+    prevLogLenRef.current = len;
   }, [entry.id, entry.meetingLog]);
 
   useEffect(() => {
@@ -1913,17 +1915,15 @@ function ActivityLogPanel({
         <div style={{ fontSize: 12, color: t.mutedSoft, marginBottom: 10 }}>Nothing logged yet.</div>
       ) : (
         <div className="avid-activity-log-list">
-          {entry.meetingLog.map((m) => {
-            const isEntering = enteringLogIds.has(m.id);
+          {entry.meetingLog.map((m, index) => {
+            const rowKey = activityLogRowKey(m, index);
+            const isEntering = enteringRowKeys.has(rowKey);
             return (
-              <div key={m.id} className="avid-activity-log-row">
-                <span
-                  className={`avid-activity-log-label${isEntering ? " avid-activity-log-label--enter" : ""}`}
-                  style={{ color: t.ink }}
-                >
+              <div key={rowKey} className={`avid-activity-log-row${isEntering ? " avid-activity-log-row--enter" : ""}`}>
+                <span className="avid-activity-log-label" style={{ color: t.ink }}>
                   {activityLabel(m.type, m.round)}
                 </span>
-                <div className={`avid-activity-log-actions${isEntering ? " avid-activity-log-actions--enter" : ""}`}>
+                <div className="avid-activity-log-actions">
                   <GlassDatePicker
                     value={m.date}
                     onChange={(iso) => onUpdateDate(m.id, iso)}
