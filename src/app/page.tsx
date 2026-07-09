@@ -45,6 +45,7 @@ import { BillingsGoalStats, BillingsTable } from "@/components/BillingsSummary";
 import LeaderboardView from "@/components/LeaderboardView";
 import SettingsModal from "@/components/SettingsModal";
 import SearchesView from "@/components/SearchesView";
+import { buildYearReport } from "@/lib/report-metrics";
 
 type Styles = ReturnType<typeof makeStyles>;
 
@@ -680,7 +681,14 @@ function Dashboard({
     [billings, reportYear]
   );
   const reportStats = useMemo(() => {
-    const total = yearBillings.reduce((s, b) => s + b.amount, 0);
+    const report = buildYearReport({
+      billings,
+      entries,
+      searches,
+      teamNames,
+      year: reportYear,
+      goals: reportGoals,
+    });
     const byPerson: Record<string, number> = {};
     for (const b of yearBillings) for (const name of b.team) byPerson[name] = (byPerson[name] || 0) + b.amount;
     let topName = "—";
@@ -691,8 +699,15 @@ function Dashboard({
         topAmount = amount;
       }
     }
-    return { total, deals: yearBillings.length, topName };
-  }, [yearBillings]);
+    return {
+      total: report.kpis.billed,
+      deals: report.kpis.deals,
+      sendOuts: report.kpis.sendOuts,
+      offers: report.kpis.offers,
+      placements: report.kpis.placements,
+      topName,
+    };
+  }, [billings, entries, searches, teamNames, reportYear, reportGoals, yearBillings]);
 
   const leaderboardStats = useMemo(() => {
     const firstTimeCount = monthEntries.filter((e) => e.firstTime).length;
@@ -769,7 +784,9 @@ function Dashboard({
             <h1 className="avid-hero-title" style={S.heroInlineTitle}>Production Reports</h1>
             <div className="avid-hero-stats" style={S.heroStatsRow}>
               <HeroStat S={S} label="Billed YTD" value={money(reportStats.total)} color={STAGE_COLOR.placed} />
-              <HeroStat S={S} label="Deals" value={String(reportStats.deals)} />
+              <HeroStat S={S} label="Send-Outs" value={String(reportStats.sendOuts)} color={STAGE_COLOR.sent} />
+              <HeroStat S={S} label="Offers" value={String(reportStats.offers)} color={STAGE_COLOR.offer} />
+              <HeroStat S={S} label="Placed" value={String(reportStats.placements)} color={STAGE_COLOR.placed} />
               <HeroStat S={S} label="Top Producer" value={reportStats.topName} color={t.accent} />
             </div>
             <div />
@@ -913,7 +930,16 @@ function Dashboard({
           <div style={S.empty}>Loading…</div>
         ) : view === "report" ? (
           <div style={S.reportPad}>
-            <ReportView billings={billings} teamNames={teamNames} year={reportYear} goals={reportGoals} t={t} isDark={isDark} />
+            <ReportView
+              billings={billings}
+              entries={entries}
+              searches={searches}
+              teamNames={teamNames}
+              year={reportYear}
+              goals={reportGoals}
+              t={t}
+              isDark={isDark}
+            />
           </div>
         ) : view === "leaderboard" ? (
           <div style={S.reportPad}>

@@ -2621,6 +2621,219 @@ body:has(.login-root) {
   }
 }
 
+/* ---- Reports tab ---- */
+.avid-report {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.avid-report-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.avid-report-toolbar-sub {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.45;
+  max-width: 52ch;
+}
+
+.avid-report-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.avid-report-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid;
+  min-height: 72px;
+}
+
+.avid-report-kpi-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.avid-report-kpi-value {
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.avid-report-section {
+  scroll-margin-top: 24px;
+}
+
+.avid-report-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-bottom: 40px;
+}
+
+.avid-report-section--half {
+  margin-bottom: 0;
+}
+
+.avid-report-funnel {
+  border: 1px solid;
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.avid-report-funnel-row {
+  display: grid;
+  grid-template-columns: 72px 1fr 36px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.avid-report-funnel-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.avid-report-funnel-track {
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.avid-report-funnel-fill {
+  height: 100%;
+  border-radius: 999px;
+  min-width: 4px;
+  transition: width 0.35s ease;
+}
+
+.avid-report-funnel-count {
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.avid-report-funnel-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.avid-report-search-snapshot {
+  border: 1px solid;
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.avid-report-search-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px 40px;
+}
+
+.avid-report-search-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.avid-report-search-stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.avid-report-search-stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.avid-report-pill-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.avid-report-pill-heading {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.avid-report-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.avid-report-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.avid-report-pill strong {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+  .avid-report-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .avid-report-split {
+    grid-template-columns: 1fr;
+    margin-bottom: 0;
+  }
+
+  .avid-report-section--half {
+    margin-bottom: 40px;
+  }
+}
+
+@media (max-width: 520px) {
+  .avid-report-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .avid-report-funnel-row {
+    grid-template-columns: 64px 1fr 28px;
+    gap: 8px;
+  }
+}
+
 /* ---- print / PDF export (Report tab) ---- */
 .print-only {
   display: none;
