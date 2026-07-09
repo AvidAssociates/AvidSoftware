@@ -221,18 +221,89 @@ select::-ms-expand {
   gap: 12px;
   padding: 4px 0;
   overflow: hidden;
+  position: relative;
+  isolation: isolate;
+}
+
+.avid-activity-log-row--placed {
+  padding: 6px 8px;
+  margin: 0 -8px;
+  border-radius: 8px;
+}
+
+.avid-activity-log-row--celebrate {
+  background: color-mix(in srgb, var(--placed-glow, #4fbf82) 14%, transparent);
+  animation: avidPlacedRowGlow 1.1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes avidPlacedRowGlow {
+  0% {
+    background: color-mix(in srgb, var(--placed-glow, #4fbf82) 26%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--placed-glow, #4fbf82) 24%, transparent);
+  }
+  45% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--placed-glow, #4fbf82) 16%, transparent);
+  }
+  100% {
+    background: color-mix(in srgb, var(--placed-glow, #4fbf82) 8%, transparent);
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+.avid-activity-confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 2;
+  border-radius: inherit;
+}
+
+.avid-activity-confetti-piece {
+  position: absolute;
+  top: 55%;
+  left: var(--left);
+  width: var(--w);
+  height: var(--h);
+  background: var(--color);
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(0deg) scale(0.6);
+  animation: avidRowConfetti var(--duration) cubic-bezier(0.22, 0.84, 0.36, 1) var(--delay) forwards;
+}
+
+.avid-activity-confetti-piece--round {
+  border-radius: 999px;
+}
+
+@keyframes avidRowConfetti {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(0deg) scale(0.5);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(0deg) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--drift)), calc(-50% + var(--lift))) rotate(var(--spin)) scale(0.75);
+  }
 }
 
 .avid-activity-log-label {
   font-size: 12.5px;
   font-weight: 600;
   min-width: 0;
+  position: relative;
+  z-index: 3;
 }
 
 .avid-activity-log-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  position: relative;
+  z-index: 3;
 }
 
 .avid-activity-log-row--enter {
@@ -660,7 +731,9 @@ select::-ms-expand {
   .avid-expand,
   .avid-activity-compose-wrap,
   .avid-activity-log-row--enter,
-  .avid-activity-log-row--exit {
+  .avid-activity-log-row--exit,
+  .avid-activity-log-row--celebrate,
+  .avid-activity-confetti-piece {
     transition: none !important;
     animation: none !important;
   }

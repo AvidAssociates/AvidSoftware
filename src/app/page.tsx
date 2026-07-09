@@ -1872,7 +1872,10 @@ function RowExpandedPanel({
                 onDecline={onDecline}
                 large
               />
-              {(entry.stage === "interview" || entry.meetingLog.length > 0) && entry.stage !== "placed" && (
+              {(entry.meetingLog.length > 0 ||
+                entry.stage === "interview" ||
+                entry.stage === "offer" ||
+                entry.stage === "placed") && (
                 <div style={{ width: "100%", maxWidth: 380 }}>
                   <ActivityLogPanel
                     S={S}
@@ -1900,6 +1903,53 @@ function RowExpandedPanel({
 // next meeting while still in Interview. Each entry can be deleted (logged
 // by mistake); the date defaults to today and only opens a picker if
 // clicked.
+const PLACED_CONFETTI_COLORS = ["#4FBF82", "#6FD89A", "#3AAE72", "#F5D547", "#8BE8B0", "#2E9B64", "#FFD966"];
+
+function RowConfetti({ color }: { color: string }) {
+  const pieces = useMemo(
+    () =>
+      Array.from({ length: 22 }, (_, i) => ({
+        id: i,
+        left: 8 + ((i * 17) % 84),
+        delay: (i % 7) * 0.03,
+        duration: 0.85 + (i % 5) * 0.12,
+        drift: -18 + (i % 9) * 4.5,
+        lift: -10 - (i % 6) * 5,
+        spin: (i % 2 === 0 ? 1 : -1) * (280 + (i % 4) * 90),
+        color: PLACED_CONFETTI_COLORS[i % PLACED_CONFETTI_COLORS.length],
+        w: 4 + (i % 3),
+        h: 3 + (i % 2),
+        round: i % 3 === 0,
+      })),
+    []
+  );
+
+  return (
+    <div className="avid-activity-confetti" aria-hidden>
+      {pieces.map((p) => (
+        <span
+          key={p.id}
+          className={`avid-activity-confetti-piece${p.round ? " avid-activity-confetti-piece--round" : ""}`}
+          style={
+            {
+              "--left": `${p.left}%`,
+              "--delay": `${p.delay}s`,
+              "--duration": `${p.duration}s`,
+              "--drift": `${p.drift}px`,
+              "--lift": `${p.lift}px`,
+              "--spin": `${p.spin}deg`,
+              "--color": p.color,
+              "--w": `${p.w}px`,
+              "--h": `${p.h}px`,
+              "--glow": color,
+            } as CSSProperties
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
 function ActivityLogPanel({
   S,
   t,
@@ -1927,6 +1977,19 @@ function ActivityLogPanel({
   const prevStageRef = useRef(entry.stage);
   const [enteringLogIds, setEnteringLogIds] = useState<Set<string>>(() => new Set());
   const [exitingLogIds, setExitingLogIds] = useState<Set<string>>(() => new Set());
+  const [celebratingLogIds, setCelebratingLogIds] = useState<Set<string>>(() => new Set());
+
+  const celebratePlaced = (id: string) => {
+    setCelebratingLogIds((prev) => new Set(prev).add(id));
+    window.setTimeout(() => {
+      setCelebratingLogIds((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }, 1500);
+  };
 
   const handleLog = () => {
     const type = draftType;
@@ -1969,6 +2032,7 @@ function ActivityLogPanel({
       prevStageRef.current = entry.stage;
       setEnteringLogIds(new Set());
       setExitingLogIds(new Set());
+      setCelebratingLogIds(new Set());
       const last = [...entry.meetingLog].reverse().find((m) => m.type !== "Offer" && m.type !== "Placed");
       const type = last?.type || "Phone";
       setDraftType(type);
@@ -1981,6 +2045,9 @@ function ActivityLogPanel({
     if (len > prevLogLenRef.current) {
       const added = entry.meetingLog.slice(prevLogLenRef.current);
       setEnteringLogIds((prev) => new Set([...prev, ...added.map((m) => m.id)]));
+      for (const m of added) {
+        if (m.type === "Placed") celebratePlaced(m.id);
+      }
       prevLogLenRef.current = len;
       prevStageRef.current = entry.stage;
       return;
@@ -1991,6 +2058,7 @@ function ActivityLogPanel({
       const marker = [...entry.meetingLog].reverse().find((m) => m.type === markerType);
       if (marker) {
         setEnteringLogIds((prev) => new Set(prev).add(marker.id));
+        if (marker.type === "Placed") celebratePlaced(marker.id);
       }
     }
 
@@ -2026,23 +2094,33 @@ function ActivityLogPanel({
             const rowKey = activityLogRowKey(m);
             const isEntering = enteringLogIds.has(m.id);
             const isExiting = exitingLogIds.has(m.id);
+            const isPlaced = m.type === "Placed";
+            const isCelebrating = isPlaced && celebratingLogIds.has(m.id);
+            const labelColor = isPlaced ? STAGE_COLOR.placed : m.type === "Offer" ? STAGE_COLOR.offer : t.ink;
             return (
               <div
                 key={rowKey}
                 className={[
                   "avid-activity-log-row",
+                  isPlaced ? "avid-activity-log-row--placed" : "",
+                  isCelebrating ? "avid-activity-log-row--celebrate" : "",
                   isEntering ? "avid-activity-log-row--enter" : "",
                   isExiting ? "avid-activity-log-row--exit" : "",
                 ]
                   .filter(Boolean)
                   .join(" ")}
+                style={isCelebrating ? ({ ["--placed-glow" as string]: STAGE_COLOR.placed } as CSSProperties) : undefined}
                 onAnimationEnd={(e) => {
                   if (e.target !== e.currentTarget) return;
                   if (e.animationName === "avidActivityRowIn") clearEntering(m.id);
                   if (e.animationName === "avidActivityRowOut") finishDelete(m.id);
                 }}
               >
-                <span className="avid-activity-log-label" style={{ color: t.ink }}>
+                {isCelebrating ? <RowConfetti color={STAGE_COLOR.placed} /> : null}
+                <span
+                  className="avid-activity-log-label"
+                  style={{ color: labelColor, fontWeight: isPlaced || m.type === "Offer" ? 800 : 600 }}
+                >
                   {activityLabel(m.type, m.round)}
                 </span>
                 <div className="avid-activity-log-actions">
