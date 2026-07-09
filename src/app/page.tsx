@@ -1,8 +1,8 @@
 "use client";
 
-import { Fragment, useState, useEffect, useMemo, useRef } from "react";
+import { Fragment, useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
-import type { ChangeEvent, CSSProperties, ReactNode } from "react";
+import type { ChangeEvent, CSSProperties, ReactNode, TransitionEvent } from "react";
 import {
   Plus,
   Search,
@@ -2022,6 +2022,133 @@ function PlacedConfettiRain() {
 }
 
 const ACTIVITY_COMPOSE_DELAY_MS = 520;
+const ACTIVITY_LOG_REVEAL_MS = 380;
+
+function ActivityLogRow({
+  S,
+  t,
+  entry: m,
+  entering,
+  exiting,
+  onEnterDone,
+  onExitDone,
+  onUpdateDate,
+  onRequestDelete,
+}: {
+  S: Styles;
+  t: Theme;
+  entry: MeetingLogEntry;
+  entering: boolean;
+  exiting: boolean;
+  onEnterDone: () => void;
+  onExitDone: () => void;
+  onUpdateDate: (date: string) => void;
+  onRequestDelete: () => void;
+}) {
+  const [enterOpen, setEnterOpen] = useState(!entering);
+  const enterDoneRef = useRef(false);
+  const exitDoneRef = useRef(false);
+  const onEnterDoneRef = useRef(onEnterDone);
+  const onExitDoneRef = useRef(onExitDone);
+  onEnterDoneRef.current = onEnterDone;
+  onExitDoneRef.current = onExitDone;
+
+  useLayoutEffect(() => {
+    enterDoneRef.current = false;
+    if (!entering) {
+      setEnterOpen(true);
+      return;
+    }
+    setEnterOpen(false);
+    let cancelled = false;
+    const frame = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!cancelled) setEnterOpen(true);
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
+  }, [entering, m.id]);
+
+  useLayoutEffect(() => {
+    exitDoneRef.current = false;
+  }, [exiting, m.id]);
+
+  const revealClosed = (entering && !enterOpen) || exiting;
+
+  useEffect(() => {
+    if (!entering || !enterOpen || enterDoneRef.current) return;
+    const timer = window.setTimeout(() => {
+      if (enterDoneRef.current) return;
+      enterDoneRef.current = true;
+      onEnterDoneRef.current();
+    }, ACTIVITY_LOG_REVEAL_MS + 40);
+    return () => window.clearTimeout(timer);
+  }, [entering, enterOpen, m.id]);
+
+  useEffect(() => {
+    if (!exiting || exitDoneRef.current) return;
+    const timer = window.setTimeout(() => {
+      if (exitDoneRef.current) return;
+      exitDoneRef.current = true;
+      onExitDoneRef.current();
+    }, ACTIVITY_LOG_REVEAL_MS + 40);
+    return () => window.clearTimeout(timer);
+  }, [exiting, m.id]);
+
+  const handleRevealTransitionEnd = (e: TransitionEvent<HTMLDivElement>) => {
+    if (e.target !== e.currentTarget || e.propertyName !== "grid-template-rows") return;
+    if (entering && enterOpen && !enterDoneRef.current) {
+      enterDoneRef.current = true;
+      onEnterDoneRef.current();
+      return;
+    }
+    if (exiting && !exitDoneRef.current) {
+      exitDoneRef.current = true;
+      onExitDoneRef.current();
+    }
+  };
+
+  return (
+    <div className={`avid-activity-log-row${exiting ? " avid-activity-log-row--exiting" : ""}`}>
+      <div
+        className={`avid-activity-log-row-reveal${revealClosed ? " avid-activity-log-row-reveal--closed" : ""}`}
+        onTransitionEnd={handleRevealTransitionEnd}
+      >
+        <div className="avid-activity-log-row-inner">
+          <span className="avid-activity-log-label" style={{ color: t.ink, fontWeight: 600 }}>
+            {activityLabel(m.type, m.round)}
+          </span>
+          <div className="avid-activity-log-actions">
+            <GlassDatePicker
+              value={m.date}
+              onChange={onUpdateDate}
+              triggerStyle={{
+                ...S.input,
+                padding: "2px 7px",
+                fontSize: 12,
+                color: t.muted,
+                fontVariantNumeric: "tabular-nums",
+                minWidth: 0,
+              }}
+            />
+            <button
+              type="button"
+              className="avid-btn"
+              onClick={onRequestDelete}
+              title="Remove this entry"
+              style={{ border: "none", background: "none", padding: 2, cursor: "pointer", color: t.mutedSoft, display: "flex" }}
+            >
+              <X size={12} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ActivityLogPanel({
   S,
@@ -2156,63 +2283,20 @@ function ActivityLogPanel({
         <div style={{ fontSize: 12, color: t.mutedSoft, marginBottom: 10 }}>Nothing logged yet.</div>
       ) : (
         <div className="avid-activity-log-list">
-          {entry.meetingLog.map((m) => {
-            const rowKey = activityLogRowKey(m);
-            const isEntering = enteringLogIds.has(m.id);
-            const isExiting = exitingLogIds.has(m.id);
-            return (
-              <div
-                key={rowKey}
-                className={[
-                  "avid-activity-log-row",
-                  isEntering ? "avid-activity-log-row--enter" : "",
-                  isExiting ? "avid-activity-log-row--exit" : "",
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                onAnimationEnd={(e) => {
-                  if (e.animationName === "avidActivityRowOut" && e.target === e.currentTarget) {
-                    finishDelete(m.id);
-                  }
-                }}
-              >
-                <div
-                  className="avid-activity-log-row-inner"
-                  onAnimationEnd={(e) => {
-                    if (e.target !== e.currentTarget) return;
-                    if (e.animationName === "avidActivityRowIn") clearEntering(m.id);
-                  }}
-                >
-                  <span className="avid-activity-log-label" style={{ color: t.ink, fontWeight: 600 }}>
-                    {activityLabel(m.type, m.round)}
-                  </span>
-                  <div className="avid-activity-log-actions">
-                    <GlassDatePicker
-                      value={m.date}
-                      onChange={(iso) => onUpdateDate(m.id, iso)}
-                      triggerStyle={{
-                        ...S.input,
-                        padding: "2px 7px",
-                        fontSize: 12,
-                        color: t.muted,
-                        fontVariantNumeric: "tabular-nums",
-                        minWidth: 0,
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className="avid-btn"
-                      onClick={() => requestDelete(m.id)}
-                      title="Remove this entry"
-                      style={{ border: "none", background: "none", padding: 2, cursor: "pointer", color: t.mutedSoft, display: "flex" }}
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {entry.meetingLog.map((m) => (
+            <ActivityLogRow
+              key={activityLogRowKey(m)}
+              S={S}
+              t={t}
+              entry={m}
+              entering={enteringLogIds.has(m.id)}
+              exiting={exitingLogIds.has(m.id)}
+              onEnterDone={() => clearEntering(m.id)}
+              onExitDone={() => finishDelete(m.id)}
+              onUpdateDate={(iso) => onUpdateDate(m.id, iso)}
+              onRequestDelete={() => requestDelete(m.id)}
+            />
+          ))}
         </div>
       )}
       {composeEverShown ? (
