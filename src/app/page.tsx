@@ -495,7 +495,20 @@ function Dashboard({
     await send(`/api/billings/${id}`, "DELETE");
   };
   const advanceBillingCollection = async (billing: Billing, stage: BillingCollectionStage) => {
-    const res = await send(`/api/billings/${billing.id}/collection`, "PATCH", { stage, stageDate: todayISO() });
+    const stageDate = todayISO();
+    let collectionLog = billing.collectionLog;
+    if (stage === "collected" && billing.collectionStage !== "collected") {
+      if (collectionLog.some((e) => e.type === "Collected")) {
+        collectionLog = collectionLog.map((e) => (e.type === "Collected" ? { ...e, date: stageDate } : e));
+      } else {
+        collectionLog = [...collectionLog, { id: uid(), type: "Collected", date: stageDate }];
+      }
+    }
+    if (stage === "invoiced" && billing.collectionStage === "collected") {
+      collectionLog = collectionLog.filter((e) => e.type !== "Collected");
+    }
+    applyBilling({ ...billing, collectionStage: stage, collectionLog });
+    const res = await send(`/api/billings/${billing.id}/collection`, "PATCH", { stage, stageDate });
     if (res.ok) applyBilling(await res.json());
   };
   const updateBillingCollectionDate = async (billing: Billing, logId: string, date: string) => {
@@ -2691,8 +2704,8 @@ function BillingCollectionProgress({
                     width: dotSize,
                     height: dotSize,
                     borderRadius: "50%",
-                    border: `2px solid ${i <= idx ? s.color : t.trackBg}`,
-                    background: i <= idx ? s.color : t.surface,
+                    border: `2px solid ${i <= idx ? color : t.trackBg}`,
+                    background: i <= idx ? color : t.surface,
                     cursor: "pointer",
                     padding: 0,
                     transform: hoverIdx === i ? "scale(1.25)" : "scale(1)",
@@ -2710,7 +2723,7 @@ function BillingCollectionProgress({
                 style={{
                   fontSize: 12.5,
                   fontWeight: i === idx ? 700 : 500,
-                  color: i === idx ? s.color : t.mutedSoft,
+                  color: i === idx ? color : t.mutedSoft,
                   width: dotSize + 34,
                   textAlign: i === 0 ? "left" : i === BILLING_COLLECTION.length - 1 ? "right" : "center",
                   marginLeft: i === 0 ? -dotSize / 2 : 0,
