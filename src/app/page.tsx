@@ -352,7 +352,7 @@ function Dashboard({
       getJSON<Billing[]>("/api/billings", []),
       getJSON<RetainedSearch[]>("/api/searches", []),
     ]);
-    setEntries(e);
+    setEntries((prev) => (silent ? mergeEntries(prev, e) : e));
     setBillings(b);
     setSearches(s);
     if (!silent) setLoading(false);
@@ -405,16 +405,31 @@ function Dashboard({
   const advanceStage = async (entry: Entry, stage: Stage) => {
     const stageDate = todayISO();
     let meetingLog = entry.meetingLog;
+    let offerClientId: string | null = null;
+    let placedClientId: string | null = null;
     if (stage === "offer" && entry.stage !== "offer") {
-      meetingLog = [...meetingLog, { id: uid(), type: "Offer", round: 0, date: stageDate }];
+      offerClientId = uid();
+      meetingLog = [...meetingLog, { id: offerClientId, type: "Offer", round: 0, date: stageDate }];
     }
     if (stage === "placed" && entry.stage !== "placed") {
-      meetingLog = [...meetingLog, { id: uid(), type: "Placed", round: 0, date: stageDate }];
+      placedClientId = uid();
+      meetingLog = [...meetingLog, { id: placedClientId, type: "Placed", round: 0, date: stageDate }];
     }
     const optimistic = { ...entry, stage, declined: false, meetingLog };
     applyEntry(optimistic);
     const res = await send(`/api/entries/${entry.id}`, "PUT", { ...optimistic, stageDate });
-    if (res.ok) applyEntryMutation(await res.json());
+    if (res.ok) {
+      const data = await res.json();
+      const normalized = normalizeEntryMutation(data);
+      let saved = normalized.entry;
+      if (offerClientId) {
+        saved = preserveStageLogId(saved, "Offer", offerClientId);
+      }
+      if (placedClientId) {
+        saved = preserveStageLogId(saved, "Placed", placedClientId);
+      }
+      applyEntryMutation({ ...normalized, entry: saved });
+    }
   };
   const deleteEntry = async (id: string) => {
     setEntries((prev) => prev.filter((e) => e.id !== id));
@@ -466,7 +481,16 @@ function Dashboard({
     };
     applyEntry(optimistic);
     const res = await send(`/api/entries/${entry.id}/meeting-log/${meetingId}`, "DELETE");
-    if (res.ok) applyEntry(await res.json());
+    if (res.ok) {
+      const saved = (await res.json()) as Entry;
+      if (saved.meetingLog.some((m) => m.id === meetingId)) {
+        applyEntry(optimistic);
+        return;
+      }
+      applyEntry(saved);
+    } else {
+      applyEntry(entry);
+    }
   };
   const updateMeetingDate = async (entry: Entry, meetingId: string, date: string) => {
     const meetingLog = entry.meetingLog.map((m) => (m.id === meetingId ? { ...m, date } : m));
@@ -1645,6 +1669,44 @@ function activityLogRowKey(m: MeetingLogEntry) {
   return `mtg-${m.id}`;
 }
 
+// Background polls must not resurrect meeting-log rows the user just deleted
+// while the DELETE is still in flight.
+function mergeEntries(local: Entry[], remote: Entry[]): Entry[] {
+  const remoteById = new Map(remote.map((e) => [e.id, e]));
+  const merged = local.map((le) => {
+    const re = remoteById.get(le.id);
+    if (!re) return le;
+    remoteById.delete(le.id);
+
+    const localIds = new Set(le.meetingLog.map((m) => m.id));
+    const localIsSubset = le.meetingLog.every((m) => re.meetingLog.some((r) => r.id === m.id));
+    const hasPendingDeletes = localIsSubset && le.meetingLog.length < re.meetingLog.length;
+
+    if (hasPendingDeletes) {
+      return {
+        ...re,
+        meetingLog: le.meetingLog,
+        stage: le.stage,
+        interviewType: le.interviewType,
+        round: le.round,
+      };
+    }
+    return re;
+  });
+
+  for (const re of remoteById.values()) merged.push(re);
+  return merged;
+}
+
+function preserveStageLogId(entry: Entry, type: "Offer" | "Placed", clientId: string): Entry {
+  const idx = entry.meetingLog.map((m) => m.type).lastIndexOf(type);
+  if (idx === -1) return entry;
+  return {
+    ...entry,
+    meetingLog: entry.meetingLog.map((m, i) => (i === idx ? { ...m, id: clientId } : m)),
+  };
+}
+
 // A compact status icon standing in for the whole process — click it to
 // expand the row into the full timeline (Sent date, Interview's activity
 // log, Offer, Placed) instead of opening a floating popover. While in
@@ -1861,9 +1923,6 @@ function RowExpandedPanel({
 // next meeting while still in Interview. Each entry can be deleted (logged
 // by mistake); the date defaults to today and only opens a picker if
 // clicked.
-const ACTIVITY_COMPOSE_DELAY_MS = 520;
-const ACTIVITY_COMPOSE_EXIT_MS = 450;
-
 function ActivityLogPanel({
   S,
   t,
@@ -1885,11 +1944,12 @@ function ActivityLogPanel({
   const [draftRound, setDraftRound] = useState(() => nextRoundForType(entry, defaultType));
   const [draftDate, setDraftDate] = useState(todayISO());
   const canCompose = entry.stage === "interview" && !entry.declined;
-  const [composeShown, setComposeShown] = useState(canCompose);
-  const [composeExiting, setComposeExiting] = useState(false);
+  const [composeEverShown, setComposeEverShown] = useState(canCompose);
   const panelEntryIdRef = useRef(entry.id);
   const prevLogLenRef = useRef(entry.meetingLog.length);
+  const prevStageRef = useRef(entry.stage);
   const [enteringLogIds, setEnteringLogIds] = useState<Set<string>>(() => new Set());
+  const [exitingLogIds, setExitingLogIds] = useState<Set<string>>(() => new Set());
 
   const handleLog = () => {
     const type = draftType;
@@ -1910,15 +1970,33 @@ function ActivityLogPanel({
     });
   };
 
+  const requestDelete = (id: string) => {
+    if (exitingLogIds.has(id)) return;
+    setExitingLogIds((prev) => new Set(prev).add(id));
+  };
+
+  const finishDelete = (id: string) => {
+    setExitingLogIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    onDelete(id);
+  };
+
   useEffect(() => {
     if (panelEntryIdRef.current !== entry.id) {
       panelEntryIdRef.current = entry.id;
       prevLogLenRef.current = entry.meetingLog.length;
+      prevStageRef.current = entry.stage;
       setEnteringLogIds(new Set());
+      setExitingLogIds(new Set());
       const last = [...entry.meetingLog].reverse().find((m) => m.type !== "Offer" && m.type !== "Placed");
       const type = last?.type || "Phone";
       setDraftType(type);
       setDraftRound(nextRoundForType(entry, type));
+      setComposeEverShown(entry.stage === "interview" && !entry.declined);
       return;
     }
 
@@ -1927,35 +2005,27 @@ function ActivityLogPanel({
       const added = entry.meetingLog.slice(prevLogLenRef.current);
       setEnteringLogIds((prev) => new Set([...prev, ...added.map((m) => m.id)]));
       prevLogLenRef.current = len;
+      prevStageRef.current = entry.stage;
       return;
+    }
+
+    if (entry.stage !== prevStageRef.current && (entry.stage === "offer" || entry.stage === "placed")) {
+      const markerType = entry.stage === "offer" ? "Offer" : "Placed";
+      const marker = [...entry.meetingLog].reverse().find((m) => m.type === markerType);
+      if (marker) {
+        setEnteringLogIds((prev) => new Set(prev).add(marker.id));
+      }
     }
 
     prevLogLenRef.current = len;
-  }, [entry.id, entry.meetingLog]);
+    prevStageRef.current = entry.stage;
+  }, [entry.id, entry.meetingLog, entry.stage, entry.declined]);
 
   useEffect(() => {
-    if (canCompose) {
-      setComposeShown(true);
-      setComposeExiting(false);
-      return;
-    }
-    if (!composeShown || composeExiting) return;
+    if (canCompose) setComposeEverShown(true);
+  }, [canCompose]);
 
-    const delayTimer = window.setTimeout(() => {
-      setComposeExiting(true);
-    }, ACTIVITY_COMPOSE_DELAY_MS);
-
-    return () => window.clearTimeout(delayTimer);
-  }, [canCompose, composeShown, composeExiting]);
-
-  useEffect(() => {
-    if (!composeExiting) return;
-    const exitTimer = window.setTimeout(() => {
-      setComposeShown(false);
-      setComposeExiting(false);
-    }, ACTIVITY_COMPOSE_EXIT_MS);
-    return () => window.clearTimeout(exitTimer);
-  }, [composeExiting]);
+  const composeCollapsed = composeEverShown && !canCompose;
 
   return (
     <div className="avid-activity-log">
@@ -1978,12 +2048,21 @@ function ActivityLogPanel({
           {entry.meetingLog.map((m) => {
             const rowKey = activityLogRowKey(m);
             const isEntering = enteringLogIds.has(m.id);
+            const isExiting = exitingLogIds.has(m.id);
             return (
               <div
                 key={rowKey}
-                className={`avid-activity-log-row${isEntering ? " avid-activity-log-row--enter" : ""}`}
+                className={[
+                  "avid-activity-log-row",
+                  isEntering ? "avid-activity-log-row--enter" : "",
+                  isExiting ? "avid-activity-log-row--exit" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
                 onAnimationEnd={(e) => {
+                  if (e.target !== e.currentTarget) return;
                   if (e.animationName === "avidActivityRowIn") clearEntering(m.id);
+                  if (e.animationName === "avidActivityRowOut") finishDelete(m.id);
                 }}
               >
                 <span className="avid-activity-log-label" style={{ color: t.ink }}>
@@ -2005,7 +2084,7 @@ function ActivityLogPanel({
                   <button
                     type="button"
                     className="avid-btn"
-                    onClick={() => onDelete(m.id)}
+                    onClick={() => requestDelete(m.id)}
                     title="Remove this entry"
                     style={{ border: "none", background: "none", padding: 2, cursor: "pointer", color: t.mutedSoft, display: "flex" }}
                   >
@@ -2017,9 +2096,9 @@ function ActivityLogPanel({
           })}
         </div>
       )}
-      {composeShown ? (
+      {composeEverShown ? (
         <div
-          className={`avid-activity-compose-wrap${composeExiting ? " avid-activity-compose-wrap--exit" : ""}`}
+          className={`avid-activity-compose-wrap${composeCollapsed ? " avid-activity-compose-wrap--exit" : ""}`}
           style={{ borderTopColor: t.border }}
         >
           <div>

@@ -220,6 +220,7 @@ select::-ms-expand {
   align-items: center;
   gap: 12px;
   padding: 4px 0;
+  overflow: hidden;
 }
 
 .avid-activity-log-label {
@@ -235,13 +236,18 @@ select::-ms-expand {
 }
 
 .avid-activity-log-row--enter {
-  animation: avidActivityRowIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: avidActivityRowIn 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.avid-activity-log-row--exit {
+  animation: avidActivityRowOut 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
 }
 
 @keyframes avidActivityRowIn {
   from {
     opacity: 0;
-    transform: translateY(5px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -249,11 +255,28 @@ select::-ms-expand {
   }
 }
 
+@keyframes avidActivityRowOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 36px;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+}
+
 .avid-activity-compose-wrap {
   display: grid;
   grid-template-rows: 1fr;
   border-top: 1px solid;
-  transition: grid-template-rows 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: grid-template-rows 0.38s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .avid-activity-compose-wrap > * {
@@ -263,6 +286,7 @@ select::-ms-expand {
 
 .avid-activity-compose-wrap--exit {
   grid-template-rows: 0fr;
+  border-top-color: transparent !important;
 }
 
 .avid-activity-compose {
@@ -271,6 +295,16 @@ select::-ms-expand {
   gap: 8px;
   padding-top: 10px;
   padding-bottom: 2px;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.avid-activity-compose-wrap--exit .avid-activity-compose {
+  opacity: 0;
+  transform: translateY(8px);
 }
 
 /* Send-Outs ↔ Billings slide (toolbar stays put). */
@@ -625,7 +659,8 @@ select::-ms-expand {
   .avid-stage-dot,
   .avid-expand,
   .avid-activity-compose-wrap,
-  .avid-activity-log-row--enter {
+  .avid-activity-log-row--enter,
+  .avid-activity-log-row--exit {
     transition: none !important;
     animation: none !important;
   }
