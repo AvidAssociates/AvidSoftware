@@ -1837,7 +1837,6 @@ function RowExpandedPanel({
 // clicked.
 const ACTIVITY_COMPOSE_DELAY_MS = 520;
 const ACTIVITY_COMPOSE_EXIT_MS = 450;
-const ACTIVITY_ROW_ENTER_MS = 420;
 
 function ActivityLogPanel({
   S,
@@ -1876,6 +1875,15 @@ function ActivityLogPanel({
     setDraftRound(nextRoundForType({ ...entry, meetingLog: [...entry.meetingLog, peek] }, type));
   };
 
+  const clearEntering = (id: string) => {
+    setEnteringLogIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
+
   useEffect(() => {
     if (panelEntryIdRef.current !== entry.id) {
       panelEntryIdRef.current = entry.id;
@@ -1891,10 +1899,9 @@ function ActivityLogPanel({
     const len = entry.meetingLog.length;
     if (len > prevLogLenRef.current) {
       const added = entry.meetingLog.slice(prevLogLenRef.current);
-      setEnteringLogIds(new Set(added.map((m) => m.id)));
-      const timer = window.setTimeout(() => setEnteringLogIds(new Set()), ACTIVITY_ROW_ENTER_MS);
+      setEnteringLogIds((prev) => new Set([...prev, ...added.map((m) => m.id)]));
       prevLogLenRef.current = len;
-      return () => window.clearTimeout(timer);
+      return;
     }
 
     prevLogLenRef.current = len;
@@ -1946,7 +1953,13 @@ function ActivityLogPanel({
             const rowKey = activityLogRowKey(m);
             const isEntering = enteringLogIds.has(m.id);
             return (
-              <div key={rowKey} className={`avid-activity-log-row${isEntering ? " avid-activity-log-row--enter" : ""}`}>
+              <div
+                key={rowKey}
+                className={`avid-activity-log-row${isEntering ? " avid-activity-log-row--enter" : ""}`}
+                onAnimationEnd={(e) => {
+                  if (e.animationName === "avidActivityRowIn") clearEntering(m.id);
+                }}
+              >
                 <span className="avid-activity-log-label" style={{ color: t.ink }}>
                   {activityLabel(m.type, m.round)}
                 </span>
