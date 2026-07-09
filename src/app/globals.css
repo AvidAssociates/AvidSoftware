@@ -246,6 +246,17 @@ select::-ms-expand {
 
 .avid-status-activity-log {
   flex-shrink: 0;
+  min-width: 0;
+}
+
+.avid-status-activity-log .avid-activity-log-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.avid-status-activity-log .avid-activity-log-actions {
+  flex-shrink: 0;
 }
 
 .avid-stage-progress-shell {
