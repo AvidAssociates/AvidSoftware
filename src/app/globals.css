@@ -209,27 +209,42 @@ select::-ms-expand {
 .avid-activity-log-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 0;
   margin-bottom: 10px;
 }
 
 .avid-activity-log-row {
   min-height: 0;
+  margin-bottom: 2px;
+  overflow: hidden;
+  transition: margin-bottom 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.avid-activity-log-row:last-child {
+  margin-bottom: 0;
 }
 
 .avid-activity-log-row--exiting {
   pointer-events: none;
+  margin-bottom: 0;
 }
 
 /* Height reveal (0fr → 1fr) — same smooth grid trick as the compose panel. */
 .avid-activity-log-row-reveal {
   display: grid;
   grid-template-rows: 1fr;
-  transition: grid-template-rows 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: grid-template-rows 0.4s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
-.avid-activity-log-row-reveal--closed {
+.avid-activity-log-row-reveal--closed,
+.avid-activity-log-row--exiting .avid-activity-log-row-reveal {
   grid-template-rows: 0fr;
+}
+
+/* Direct grid child must have no padding — padding on inner content gets clipped cleanly. */
+.avid-activity-log-row-clip {
+  overflow: hidden;
+  min-height: 0;
 }
 
 .avid-activity-log-row-inner {
@@ -237,26 +252,15 @@ select::-ms-expand {
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 12px;
-  min-height: 0;
-  overflow: hidden;
   padding: 4px 0;
   opacity: 1;
   transform: translateY(0);
   transition:
-    opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-    transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
+    opacity 0.32s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 .avid-activity-log-row-reveal--closed .avid-activity-log-row-inner {
-  opacity: 0;
-  transform: translateY(4px);
-}
-
-.avid-activity-log-row--exiting .avid-activity-log-row-reveal {
-  grid-template-rows: 0fr;
-}
-
-.avid-activity-log-row--exiting .avid-activity-log-row-inner {
   opacity: 0;
   transform: translateY(4px);
 }
@@ -729,6 +733,7 @@ select::-ms-expand {
   .avid-stage-dot,
   .avid-expand,
   .avid-activity-compose-wrap,
+  .avid-activity-log-row,
   .avid-activity-log-row-reveal,
   .avid-activity-log-row-inner,
   .avid-placed-confetti-piece {

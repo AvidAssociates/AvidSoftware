@@ -2022,7 +2022,7 @@ function PlacedConfettiRain() {
 }
 
 const ACTIVITY_COMPOSE_DELAY_MS = 520;
-const ACTIVITY_LOG_REVEAL_MS = 380;
+const ACTIVITY_LOG_REVEAL_MS = 400;
 
 function ActivityLogRow({
   S,
@@ -2134,33 +2134,35 @@ function ActivityLogRow({
         className={`avid-activity-log-row-reveal${revealClosed ? " avid-activity-log-row-reveal--closed" : ""}`}
         onTransitionEnd={handleRevealTransitionEnd}
       >
-        <div className="avid-activity-log-row-inner">
-          <span className="avid-activity-log-label" style={{ color: t.ink, fontWeight: 600 }}>
-            {activityLabel(m.type, m.round)}
-          </span>
-          <div className="avid-activity-log-actions">
-            <GlassDatePicker
-              value={m.date}
-              onChange={onUpdateDate}
-              triggerStyle={{
-                ...S.input,
-                padding: "2px 7px",
-                fontSize: 12,
-                color: t.muted,
-                fontVariantNumeric: "tabular-nums",
-                minWidth: 0,
-              }}
-            />
-            <button
-              type="button"
-              className="avid-btn"
-              onClick={onRequestDelete}
-              disabled={entering || exiting}
-              title="Remove this entry"
-              style={{ border: "none", background: "none", padding: 2, cursor: "pointer", color: t.mutedSoft, display: "flex" }}
-            >
-              <X size={12} />
-            </button>
+        <div className="avid-activity-log-row-clip">
+          <div className="avid-activity-log-row-inner">
+            <span className="avid-activity-log-label" style={{ color: t.ink, fontWeight: 600 }}>
+              {activityLabel(m.type, m.round)}
+            </span>
+            <div className="avid-activity-log-actions">
+              <GlassDatePicker
+                value={m.date}
+                onChange={onUpdateDate}
+                triggerStyle={{
+                  ...S.input,
+                  padding: "2px 7px",
+                  fontSize: 12,
+                  color: t.muted,
+                  fontVariantNumeric: "tabular-nums",
+                  minWidth: 0,
+                }}
+              />
+              <button
+                type="button"
+                className="avid-btn"
+                onClick={onRequestDelete}
+                disabled={entering || exiting}
+                title="Remove this entry"
+                style={{ border: "none", background: "none", padding: 2, cursor: "pointer", color: t.mutedSoft, display: "flex" }}
+              >
+                <X size={12} />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -2248,19 +2250,23 @@ function ActivityLogPanel({
   const finishDelete = (id: string) => {
     if (finishDeleteRef.current.has(id)) return;
     finishDeleteRef.current.add(id);
-    onDelete(id);
-    finishDeleteRef.current.delete(id);
-    setExitingLogIds((prev) => {
-      if (!prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-    setExitingSnapshots((prev) => {
-      if (!prev.has(id)) return prev;
-      const next = new Map(prev);
-      next.delete(id);
-      return next;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        onDelete(id);
+        finishDeleteRef.current.delete(id);
+        setExitingLogIds((prev) => {
+          if (!prev.has(id)) return prev;
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        setExitingSnapshots((prev) => {
+          if (!prev.has(id)) return prev;
+          const next = new Map(prev);
+          next.delete(id);
+          return next;
+        });
+      });
     });
   };
 
