@@ -2171,36 +2171,44 @@ function ActivityLogPanel({
                   .filter(Boolean)
                   .join(" ")}
                 onAnimationEnd={(e) => {
-                  if (e.target !== e.currentTarget) return;
-                  if (e.animationName === "avidActivityRowIn") clearEntering(m.id);
-                  if (e.animationName === "avidActivityRowOut") finishDelete(m.id);
+                  if (e.animationName === "avidActivityRowOut" && e.target === e.currentTarget) {
+                    finishDelete(m.id);
+                  }
                 }}
               >
-                <span className="avid-activity-log-label" style={{ color: t.ink, fontWeight: 600 }}>
-                  {activityLabel(m.type, m.round)}
-                </span>
-                <div className="avid-activity-log-actions">
-                  <GlassDatePicker
-                    value={m.date}
-                    onChange={(iso) => onUpdateDate(m.id, iso)}
-                    triggerStyle={{
-                      ...S.input,
-                      padding: "2px 7px",
-                      fontSize: 12,
-                      color: t.muted,
-                      fontVariantNumeric: "tabular-nums",
-                      minWidth: 0,
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="avid-btn"
-                    onClick={() => requestDelete(m.id)}
-                    title="Remove this entry"
-                    style={{ border: "none", background: "none", padding: 2, cursor: "pointer", color: t.mutedSoft, display: "flex" }}
-                  >
-                    <X size={12} />
-                  </button>
+                <div
+                  className="avid-activity-log-row-inner"
+                  onAnimationEnd={(e) => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.animationName === "avidActivityRowIn") clearEntering(m.id);
+                  }}
+                >
+                  <span className="avid-activity-log-label" style={{ color: t.ink, fontWeight: 600 }}>
+                    {activityLabel(m.type, m.round)}
+                  </span>
+                  <div className="avid-activity-log-actions">
+                    <GlassDatePicker
+                      value={m.date}
+                      onChange={(iso) => onUpdateDate(m.id, iso)}
+                      triggerStyle={{
+                        ...S.input,
+                        padding: "2px 7px",
+                        fontSize: 12,
+                        color: t.muted,
+                        fontVariantNumeric: "tabular-nums",
+                        minWidth: 0,
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="avid-btn"
+                      onClick={() => requestDelete(m.id)}
+                      title="Remove this entry"
+                      style={{ border: "none", background: "none", padding: 2, cursor: "pointer", color: t.mutedSoft, display: "flex" }}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
