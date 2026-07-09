@@ -427,15 +427,27 @@ function Dashboard({
   // of writing a whole new send-out entry — the fixed 4-stage tracker never
   // changes, only the log inside the Interview stage grows.
   const logMeeting = async (entry: Entry, type: string, round: number, date: string) => {
+    const clientId = uid();
     const optimistic = {
       ...entry,
       interviewType: type,
       round,
-      meetingLog: [...entry.meetingLog, { id: uid(), type, round, date }],
+      meetingLog: [...entry.meetingLog, { id: clientId, type, round, date }],
     };
     applyEntry(optimistic);
     const res = await send(`/api/entries/${entry.id}/meeting-log`, "PATCH", { type, round, date });
-    if (res.ok) applyEntry(await res.json());
+    if (res.ok) {
+      const saved = (await res.json()) as Entry;
+      const tail = saved.meetingLog[saved.meetingLog.length - 1];
+      if (tail && tail.type === type && tail.round === round && tail.date === date && tail.id !== clientId) {
+        applyEntry({
+          ...saved,
+          meetingLog: saved.meetingLog.map((m, i) => (i === saved.meetingLog.length - 1 ? { ...m, id: clientId } : m)),
+        });
+      } else {
+        applyEntry(saved);
+      }
+    }
   };
   const deleteMeeting = async (entry: Entry, meetingId: string) => {
     const deleted = entry.meetingLog.find((m) => m.id === meetingId);
@@ -1590,18 +1602,21 @@ function activityLabel(type: string, round: number) {
   return `${MEETING_TYPE_CODE[type] ?? type[0]}(${round})`;
 }
 
-function activityLogRowKey(m: MeetingLogEntry, index: number) {
-  if (m.type === "Offer" || m.type === "Placed") return `stage-${m.type}-${m.date}`;
-  return `mtg-${m.type}-${m.round}-${m.date}-${index}`;
+// round) should suggest round 1 for that type, not continue Phone's count.
+function maxRoundForType(entry: Entry, type: string) {
+  const rounds = entry.meetingLog
+    .filter((m) => m.type === type && m.type !== "Offer" && m.type !== "Placed")
+    .map((m) => m.round);
+  return rounds.length ? Math.max(...rounds) : 0;
 }
 
-// The next round for a given meeting type, tracked independently per type --
-// Phone 1 then Phone 2 suggests Phone 3, but switching to Video or
-// Face-to-Face (which haven't happened yet, or stopped at a different
-// round) should suggest round 1 for that type, not continue Phone's count.
 function nextRoundForType(entry: Entry, type: string) {
-  const last = [...entry.meetingLog].reverse().find((m) => m.type === type);
-  return last ? last.round + 1 : 1;
+  return maxRoundForType(entry, type) + 1;
+}
+
+function activityLogRowKey(m: MeetingLogEntry) {
+  if (m.type === "Offer" || m.type === "Placed") return `stage-${m.type}-${m.id}`;
+  return `mtg-${m.id}`;
 }
 
 // A compact status icon standing in for the whole process — click it to
@@ -1840,32 +1855,44 @@ function ActivityLogPanel({
   onUpdateDate: (meetingId: string, date: string) => void;
 }) {
   const lastMeeting = [...entry.meetingLog].reverse().find((m) => m.type !== "Offer" && m.type !== "Placed");
-  const [draftType, setDraftType] = useState(lastMeeting?.type || "Phone");
-  const [draftRound, setDraftRound] = useState(() => nextRoundForType(entry, draftType));
+  const defaultType = lastMeeting?.type || "Phone";
+  const [draftType, setDraftType] = useState(defaultType);
+  const [draftRound, setDraftRound] = useState(() => nextRoundForType(entry, defaultType));
   const [draftDate, setDraftDate] = useState(todayISO());
   const canCompose = entry.stage === "interview" && !entry.declined;
   const [composeShown, setComposeShown] = useState(canCompose);
   const [composeExiting, setComposeExiting] = useState(false);
   const panelEntryIdRef = useRef(entry.id);
   const prevLogLenRef = useRef(entry.meetingLog.length);
-  const [enteringRowKeys, setEnteringRowKeys] = useState<Set<string>>(() => new Set());
+  const [enteringLogIds, setEnteringLogIds] = useState<Set<string>>(() => new Set());
+
+  const handleLog = () => {
+    const type = draftType;
+    const round = draftRound;
+    const date = draftDate;
+    onLog(type, round, date);
+    const peek: MeetingLogEntry = { id: "_peek", type, round, date };
+    setDraftType(type);
+    setDraftRound(nextRoundForType({ ...entry, meetingLog: [...entry.meetingLog, peek] }, type));
+  };
 
   useEffect(() => {
     if (panelEntryIdRef.current !== entry.id) {
       panelEntryIdRef.current = entry.id;
       prevLogLenRef.current = entry.meetingLog.length;
-      setEnteringRowKeys(new Set());
+      setEnteringLogIds(new Set());
+      const last = [...entry.meetingLog].reverse().find((m) => m.type !== "Offer" && m.type !== "Placed");
+      const type = last?.type || "Phone";
+      setDraftType(type);
+      setDraftRound(nextRoundForType(entry, type));
       return;
     }
 
     const len = entry.meetingLog.length;
     if (len > prevLogLenRef.current) {
-      const start = prevLogLenRef.current;
-      const keys = entry.meetingLog
-        .slice(start)
-        .map((m, offset) => activityLogRowKey(m, start + offset));
-      setEnteringRowKeys(new Set(keys));
-      const timer = window.setTimeout(() => setEnteringRowKeys(new Set()), ACTIVITY_ROW_ENTER_MS);
+      const added = entry.meetingLog.slice(prevLogLenRef.current);
+      setEnteringLogIds(new Set(added.map((m) => m.id)));
+      const timer = window.setTimeout(() => setEnteringLogIds(new Set()), ACTIVITY_ROW_ENTER_MS);
       prevLogLenRef.current = len;
       return () => window.clearTimeout(timer);
     }
@@ -1915,9 +1942,9 @@ function ActivityLogPanel({
         <div style={{ fontSize: 12, color: t.mutedSoft, marginBottom: 10 }}>Nothing logged yet.</div>
       ) : (
         <div className="avid-activity-log-list">
-          {entry.meetingLog.map((m, index) => {
-            const rowKey = activityLogRowKey(m, index);
-            const isEntering = enteringRowKeys.has(rowKey);
+          {entry.meetingLog.map((m) => {
+            const rowKey = activityLogRowKey(m);
+            const isEntering = enteringLogIds.has(m.id);
             return (
               <div key={rowKey} className={`avid-activity-log-row${isEntering ? " avid-activity-log-row--enter" : ""}`}>
                 <span className="avid-activity-log-label" style={{ color: t.ink }}>
@@ -1985,7 +2012,7 @@ function ActivityLogPanel({
                 type="button"
                 className="avid-btn"
                 style={{ ...S.ghostBtn, textAlign: "center" as const, padding: "8px 10px", fontSize: 12.5 }}
-                onClick={() => onLog(draftType, draftRound, draftDate)}
+                onClick={handleLog}
               >
                 + Log meeting
               </button>
