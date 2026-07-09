@@ -48,8 +48,8 @@ function toEntry(row: EntryRow): Entry {
 // The activity log's entries are either a logged meeting (Phone/Video/
 // Face-to-Face + round) or a stage marker like "Offer" (round unused) —
 // same shape, so both render in one chronological list.
-function activityEntry(type: string, round: number, date: string): MeetingLogEntry {
-  return { id: uid(), type, round, date };
+function activityEntry(type: string, round: number, date: string, id?: string): MeetingLogEntry {
+  return { id: id?.trim() || uid(), type, round, date };
 }
 
 function todayISO() {
@@ -137,6 +137,8 @@ export async function updateEntry(
     // (e.g. Vercel's server clock is UTC, which is already "tomorrow" for
     // anyone in the US once it's evening locally).
     stageDate?: string;
+    // Client-generated id for the Offer/Placed marker appended on stage change.
+    stageLogId?: string;
   }
 ): Promise<EntryMutationResult | null> {
   const db = getDb();
@@ -167,10 +169,10 @@ export async function updateEntry(
   // history lookup) so it can't inherit a stale date from a prior visit.
   let meetingLog = existing.meeting_log ?? [];
   if (input.stage === "offer" && existing.stage !== "offer") {
-    meetingLog = [...meetingLog, activityEntry("Offer", 0, newStageDate)];
+    meetingLog = [...meetingLog, activityEntry("Offer", 0, newStageDate, input.stageLogId)];
   }
   if (input.stage === "placed" && existing.stage !== "placed") {
-    meetingLog = [...meetingLog, activityEntry("Placed", 0, newStageDate)];
+    meetingLog = [...meetingLog, activityEntry("Placed", 0, newStageDate, input.stageLogId)];
   }
 
   const [row] = (await db.sql`
@@ -218,7 +220,8 @@ export async function logMeeting(
   id: string,
   type: string,
   round: number,
-  date: string
+  date: string,
+  meetingId?: string
 ): Promise<Entry | null> {
   const db = getDb();
   const [existing] = (await db.sql`
@@ -226,7 +229,14 @@ export async function logMeeting(
   `) as { meeting_log: MeetingLogEntry[] }[];
   if (!existing) return null;
 
-  const meetingLog = [...(existing.meeting_log ?? []), { id: uid(), type, round, date }];
+  const log = existing.meeting_log ?? [];
+  const entryId = meetingId?.trim() || uid();
+  if (log.some((m) => m.id === entryId)) {
+    const [row] = (await db.sql`SELECT * FROM pipeline_entries WHERE id = ${id}`) as EntryRow[];
+    return row ? toEntry(row) : null;
+  }
+
+  const meetingLog = [...log, { id: entryId, type, round, date }];
   const [row] = (await db.sql`
     UPDATE pipeline_entries SET meeting_log = ${JSON.stringify(meetingLog)}, interview_type = ${type}, round = ${round}
     WHERE id = ${id}
@@ -246,6 +256,8 @@ export async function deleteMeetingLogEntry(id: string, meetingId: string): Prom
   if (!existing) return null;
 
   const deleted = (existing.meeting_log ?? []).find((m) => m.id === meetingId);
+  if (!deleted) return null;
+
   const meetingLog = (existing.meeting_log ?? []).filter((m) => m.id !== meetingId);
   const lastMeeting = [...meetingLog].reverse().find((m) => m.type !== "Offer" && m.type !== "Placed");
   const interviewType = lastMeeting?.type ?? existing.interview_type;

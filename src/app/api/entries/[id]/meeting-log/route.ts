@@ -16,7 +16,7 @@ export async function PATCH(
       { status: 400 }
     );
   }
-  const entry = await logMeeting(id, body.type, Number(body.round), body.date);
+  const entry = await logMeeting(id, body.type, Number(body.round), body.date, body.id);
   if (!entry) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

@@ -298,8 +298,6 @@ function Dashboard({
     yearlyGoal: null,
     monthlyGoal: null,
   });
-  const serverMeetingIdsRef = useRef(new Map<string, string>());
-  const suppressedMeetingsRef = useRef(new Set<string>());
 
   const isAdmin = user === ADMIN;
   const monthKey = `${monthCursor.getFullYear()}-${String(monthCursor.getMonth() + 1).padStart(2, "0")}`;
@@ -354,7 +352,7 @@ function Dashboard({
       getJSON<Billing[]>("/api/billings", []),
       getJSON<RetainedSearch[]>("/api/searches", []),
     ]);
-    setEntries((prev) => (silent ? mergeEntries(prev, e, suppressedMeetingsRef.current) : e));
+    setEntries((prev) => (silent ? mergeEntries(prev, e) : e));
     setBillings(b);
     setSearches(s);
     if (!silent) setLoading(false);
@@ -407,31 +405,19 @@ function Dashboard({
   const advanceStage = async (entry: Entry, stage: Stage) => {
     const stageDate = todayISO();
     let meetingLog = entry.meetingLog;
-    let offerClientId: string | null = null;
-    let placedClientId: string | null = null;
+    let stageLogId: string | undefined;
     if (stage === "offer" && entry.stage !== "offer") {
-      offerClientId = uid();
-      meetingLog = [...meetingLog, { id: offerClientId, type: "Offer", round: 0, date: stageDate }];
+      stageLogId = uid();
+      meetingLog = [...meetingLog, { id: stageLogId, type: "Offer", round: 0, date: stageDate }];
     }
     if (stage === "placed" && entry.stage !== "placed") {
-      placedClientId = uid();
-      meetingLog = [...meetingLog, { id: placedClientId, type: "Placed", round: 0, date: stageDate }];
+      stageLogId = uid();
+      meetingLog = [...meetingLog, { id: stageLogId, type: "Placed", round: 0, date: stageDate }];
     }
     const optimistic = { ...entry, stage, declined: false, meetingLog };
     applyEntry(optimistic);
-    const res = await send(`/api/entries/${entry.id}`, "PUT", { ...optimistic, stageDate });
-    if (res.ok) {
-      const data = await res.json();
-      const normalized = normalizeEntryMutation(data);
-      let saved = normalized.entry;
-      if (offerClientId) {
-        saved = preserveStageLogId(saved, "Offer", offerClientId);
-      }
-      if (placedClientId) {
-        saved = preserveStageLogId(saved, "Placed", placedClientId);
-      }
-      applyEntryMutation({ ...normalized, entry: saved });
-    }
+    const res = await send(`/api/entries/${entry.id}`, "PUT", { ...optimistic, stageDate, stageLogId });
+    if (res.ok) applyEntryMutation(await res.json());
   };
   const deleteEntry = async (id: string) => {
     setEntries((prev) => prev.filter((e) => e.id !== id));
@@ -446,9 +432,6 @@ function Dashboard({
   // changes, only the log inside the Interview stage grows.
   const logMeeting = async (entry: Entry, type: string, round: number, date: string) => {
     const clientId = uid();
-    const contentKey = meetingContentKey(entry.id, { type, round, date });
-    suppressedMeetingsRef.current.delete(contentKey);
-
     const optimistic = {
       ...entry,
       interviewType: type,
@@ -456,43 +439,26 @@ function Dashboard({
       meetingLog: [...entry.meetingLog, { id: clientId, type, round, date }],
     };
     applyEntry(optimistic);
-    const res = await send(`/api/entries/${entry.id}/meeting-log`, "PATCH", { type, round, date });
+    const res = await send(`/api/entries/${entry.id}/meeting-log`, "PATCH", { id: clientId, type, round, date });
     if (!res.ok) return;
 
     const saved = (await res.json()) as Entry;
-    const tail = saved.meetingLog[saved.meetingLog.length - 1];
-    if (tail && meetingsMatch(tail, { type, round, date })) {
-      serverMeetingIdsRef.current.set(`${entry.id}|${clientId}`, tail.id);
-    }
-
     setEntries((prev) => {
-      const idx = prev.findIndex((e) => e.id === entry.id);
-      if (idx === -1) return prev;
-      const current = prev[idx];
-
-      if (suppressedMeetingsRef.current.has(contentKey) || !current.meetingLog.some((m) => m.id === clientId)) {
-        if (tail && meetingsMatch(tail, { type, round, date })) {
-          void send(`/api/entries/${entry.id}/meeting-log/${tail.id}`, "DELETE");
-        }
+      const current = prev.find((e) => e.id === entry.id);
+      if (!current?.meetingLog.some((m) => m.id === clientId)) {
+        void send(`/api/entries/${entry.id}/meeting-log/${clientId}`, "DELETE");
         return prev;
       }
-
-      let meetingLog = saved.meetingLog;
-      if (tail && meetingsMatch(tail, { type, round, date }) && tail.id !== clientId) {
-        meetingLog = meetingLog.map((m) => (m.id === tail.id ? { ...m, id: clientId } : m));
-      }
-
+      const idx = prev.findIndex((e) => e.id === entry.id);
+      if (idx === -1) return prev;
       const next = [...prev];
-      next[idx] = { ...saved, meetingLog };
+      next[idx] = saved;
       return next;
     });
   };
   const deleteMeeting = async (entry: Entry, meetingId: string) => {
     const deleted = entry.meetingLog.find((m) => m.id === meetingId);
     if (!deleted) return;
-
-    const contentKey = meetingContentKey(entry.id, deleted);
-    suppressedMeetingsRef.current.add(contentKey);
 
     const meetingLog = entry.meetingLog.filter((m) => m.id !== meetingId);
     const lastMeeting = [...meetingLog].reverse().find((m) => m.type !== "Offer" && m.type !== "Placed");
@@ -507,31 +473,10 @@ function Dashboard({
       round: lastMeeting?.round ?? entry.round,
     };
     applyEntry(optimistic);
-
-    const deleteOnServer = async (id: string) => send(`/api/entries/${entry.id}/meeting-log/${id}`, "DELETE");
-
-    const serverId = serverMeetingIdsRef.current.get(`${entry.id}|${meetingId}`);
-    let res = await deleteOnServer(serverId ?? meetingId);
-    if (!res.ok) {
-      return;
-    }
-
-    let saved = (await res.json()) as Entry;
-    const orphan = saved.meetingLog.find((m) => meetingsMatch(m, deleted));
-    if (orphan) {
-      res = await deleteOnServer(orphan.id);
-      if (!res.ok) {
-        return;
-      }
-      saved = (await res.json()) as Entry;
-    }
-
-    if (saved.meetingLog.some((m) => meetingsMatch(m, deleted))) {
-      return;
-    }
-
-    suppressedMeetingsRef.current.delete(contentKey);
-    serverMeetingIdsRef.current.delete(`${entry.id}|${meetingId}`);
+    const res = await send(`/api/entries/${entry.id}/meeting-log/${meetingId}`, "DELETE");
+    if (!res.ok) return;
+    const saved = (await res.json()) as Entry;
+    if (saved.meetingLog.some((m) => m.id === meetingId)) return;
     applyEntry(saved);
   };
   const updateMeetingDate = async (entry: Entry, meetingId: string, date: string) => {
@@ -1711,26 +1656,17 @@ function activityLogRowKey(m: MeetingLogEntry) {
   return `mtg-${m.id}`;
 }
 
-function meetingContentKey(entryId: string, m: Pick<MeetingLogEntry, "type" | "round" | "date">) {
-  return `${entryId}|${m.type}|${m.round}|${m.date}`;
-}
-
-function meetingsMatch(a: Pick<MeetingLogEntry, "type" | "round" | "date">, b: Pick<MeetingLogEntry, "type" | "round" | "date">) {
-  return a.type === b.type && a.round === b.round && a.date === b.date;
-}
-
 // Background polls must not resurrect meeting-log rows the user just deleted
-// while the DELETE is still in flight (including when client/server ids differ).
-function mergeEntries(local: Entry[], remote: Entry[], suppressed: ReadonlySet<string> = new Set()): Entry[] {
+// while the DELETE is still in flight.
+function mergeEntries(local: Entry[], remote: Entry[]): Entry[] {
   const remoteById = new Map(remote.map((e) => [e.id, e]));
   const merged = local.map((le) => {
     const re = remoteById.get(le.id);
     if (!re) return le;
     remoteById.delete(le.id);
 
-    const localIsSubset = le.meetingLog.every((m) => re.meetingLog.some((r) => meetingsMatch(m, r)));
-    const remoteHasExtra = re.meetingLog.some((r) => !le.meetingLog.some((m) => meetingsMatch(m, r)));
-    const hasPendingDeletes = localIsSubset && remoteHasExtra && le.meetingLog.length < re.meetingLog.length;
+    const localIsSubset = le.meetingLog.every((m) => re.meetingLog.some((r) => r.id === m.id));
+    const hasPendingDeletes = localIsSubset && le.meetingLog.length < re.meetingLog.length;
 
     if (hasPendingDeletes) {
       return {
@@ -1741,25 +1677,11 @@ function mergeEntries(local: Entry[], remote: Entry[], suppressed: ReadonlySet<s
         round: le.round,
       };
     }
-
-    const filteredLog = re.meetingLog.filter((m) => !suppressed.has(meetingContentKey(le.id, m)));
-    if (filteredLog.length !== re.meetingLog.length) {
-      return { ...re, meetingLog: filteredLog };
-    }
     return re;
   });
 
   for (const re of remoteById.values()) merged.push(re);
   return merged;
-}
-
-function preserveStageLogId(entry: Entry, type: "Offer" | "Placed", clientId: string): Entry {
-  const idx = entry.meetingLog.map((m) => m.type).lastIndexOf(type);
-  if (idx === -1) return entry;
-  return {
-    ...entry,
-    meetingLog: entry.meetingLog.map((m, i) => (i === idx ? { ...m, id: clientId } : m)),
-  };
 }
 
 // A compact status icon standing in for the whole process — click it to

@@ -24,6 +24,7 @@ export async function PUT(
     notes: body.notes,
     firstTime: body.firstTime === undefined ? true : Boolean(body.firstTime),
     stageDate: body.stageDate,
+    stageLogId: body.stageLogId,
   });
   if (!result) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
