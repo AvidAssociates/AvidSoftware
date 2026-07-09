@@ -216,7 +216,6 @@ select::-ms-expand {
 .avid-activity-log-row {
   min-height: 0;
   margin-bottom: 2px;
-  overflow: hidden;
   transition: margin-bottom 0.4s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
@@ -227,6 +226,7 @@ select::-ms-expand {
 .avid-activity-log-row--exiting {
   pointer-events: none;
   margin-bottom: 0;
+  overflow: hidden;
 }
 
 /* Height reveal (0fr → 1fr) — same smooth grid trick as the compose panel. */
@@ -241,10 +241,14 @@ select::-ms-expand {
   grid-template-rows: 0fr;
 }
 
-/* Direct grid child must have no padding — padding on inner content gets clipped cleanly. */
+/* Masked only during height collapse — overflow:visible keeps hover scales unclipped. */
 .avid-activity-log-row-clip {
-  overflow: hidden;
   min-height: 0;
+  overflow: visible;
+}
+
+.avid-activity-log-row-clip--mask {
+  overflow: hidden;
 }
 
 .avid-activity-log-row-inner {
@@ -344,6 +348,7 @@ select::-ms-expand {
   display: flex;
   align-items: center;
   gap: 8px;
+  overflow: visible;
 }
 
 .avid-activity-compose-wrap {

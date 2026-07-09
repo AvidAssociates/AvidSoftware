@@ -2106,6 +2106,7 @@ function ActivityLogRow({
 
   const revealClosed = entering && !enterOpen;
   const showExit = exiting && exitClosing;
+  const maskClip = revealClosed || showExit;
 
   useEffect(() => {
     if (!entering || !enterOpen || enterDoneRef.current) return;
@@ -2146,7 +2147,7 @@ function ActivityLogRow({
         className={`avid-activity-log-row-reveal${revealClosed ? " avid-activity-log-row-reveal--closed" : ""}`}
         onTransitionEnd={handleRevealTransitionEnd}
       >
-        <div className="avid-activity-log-row-clip">
+        <div className={`avid-activity-log-row-clip${maskClip ? " avid-activity-log-row-clip--mask" : ""}`}>
           <div className="avid-activity-log-row-inner">
             <span className="avid-activity-log-label" style={{ color: t.ink, fontWeight: 600 }}>
               {activityLabel(m.type, m.round)}
